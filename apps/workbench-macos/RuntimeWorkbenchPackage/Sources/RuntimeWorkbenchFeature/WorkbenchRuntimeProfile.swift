@@ -6,6 +6,9 @@ import NMPNativeRuntimeApple
 /// Every window and workspace slot borrows this same native profile. The app,
 /// rather than any napplet view, owns final shutdown.
 public final class WorkbenchRuntimeProfile: @unchecked Sendable {
+    static let productionPermissionMode =
+        NativeRuntimePermissionMode.interactive
+
     struct OperatorNetworkInputs: Equatable {
         let indexerRelays: [String]
         let appRelays: [String]
@@ -42,7 +45,7 @@ public final class WorkbenchRuntimeProfile: @unchecked Sendable {
             accountPersistence: keychainPersistence(
                 storageRoot: storageRoot
             ),
-            permissionMode: .demoPinnedGoodMorning
+            permissionMode: productionPermissionMode
         )
     }
 
