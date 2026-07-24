@@ -347,7 +347,7 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         )
         accountSwitcher.click()
 
-        let addSigner = app.buttons["Signer-backed Account…"]
+        let addSigner = app.menuItems["Signer-backed Account…"]
         XCTAssertTrue(addSigner.waitForExistence(timeout: 2))
         addSigner.click()
 
