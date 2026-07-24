@@ -16,6 +16,16 @@ private enum InspectorTab: String, CaseIterable, Identifiable {
     }
 }
 
+private enum InstalledArtifactPresentation {
+    case immediate
+    case afterCatalogDismiss
+    case restoration
+
+    var focusesExistingWindow: Bool {
+        self != .restoration
+    }
+}
+
 public struct ContentView: View {
     private static let workspaceID = "default"
 
@@ -38,8 +48,10 @@ public struct ContentView: View {
         WorkbenchExactBuildIdentity?
     @State private var runningArtifacts:
         [WorkbenchExactBuildIdentity: NappletArtifact] = [:]
-    @State private var reacquiringIdentity: WorkbenchExactBuildIdentity?
-    @State private var launchingIdentity: WorkbenchExactBuildIdentity?
+    @State private var reacquiringIdentities:
+        Set<WorkbenchExactBuildIdentity> = []
+    @State private var launchingIdentities:
+        Set<WorkbenchExactBuildIdentity> = []
     @State private var layout: WorkbenchLayoutModel
     @State private var fullWindowRootID: WorkbenchWindowID?
     @State private var fullWindowPath: [WorkbenchWindowID] = []
@@ -234,6 +246,9 @@ public struct ContentView: View {
                     handleNativeAction(action)
                 }
             }
+            if await restorePersistedCanvasWindows() {
+                return
+            }
             guard
                 ProcessInfo.processInfo.environment[
                     "NMP_WORKBENCH_UI_TEST_SCENARIO"
@@ -286,7 +301,12 @@ public struct ContentView: View {
                 return
             }
             deferredLibraryOpenIdentity = nil
-            reacquireInstalledArtifact(identity)
+            Task {
+                await reacquireInstalledArtifact(
+                    identity,
+                    presentation: .immediate
+                )
+            }
         }
         .onChange(of: isSettingsSheetPresented) { _, isPresented in
             var route = settingsRoute
@@ -755,7 +775,8 @@ public struct ContentView: View {
             nappletSurface(artifact, title: window.title)
         } else if
             let identity = window.exactBuild,
-            launchingIdentity == identity || reacquiringIdentity == identity
+            launchingIdentities.contains(identity)
+                || reacquiringIdentities.contains(identity)
         {
             VStack(spacing: 12) {
                 ProgressView()
@@ -794,7 +815,12 @@ public struct ContentView: View {
                 )
             } actions: {
                 Button("Open Installed Napplet") {
-                    reacquireInstalledArtifact(identity)
+                    Task {
+                        await reacquireInstalledArtifact(
+                            identity,
+                            presentation: .immediate
+                        )
+                    }
                 }
                 .accessibilityIdentifier("reopen-installed-napplet")
             }
@@ -903,7 +929,7 @@ public struct ContentView: View {
             try prepareInstalledArtifact(
                 installed,
                 identity: identity,
-                deferPermissionPresentation: true
+                presentation: .afterCatalogDismiss
             )
         } catch {
             activity = "Refused: \(error.localizedDescription)"
@@ -914,7 +940,7 @@ public struct ContentView: View {
     private func prepareInstalledArtifact(
         _ installed: NativeRuntimeInstalledArtifact,
         identity: WorkbenchExactBuildIdentity,
-        deferPermissionPresentation: Bool = false
+        presentation: InstalledArtifactPresentation = .immediate
     ) throws {
         guard let profile else {
             throw RuntimeWorkbenchPermissionError.malformed(
@@ -926,8 +952,10 @@ public struct ContentView: View {
         if let existing = layout.windows.first(where: {
             $0.exactBuild == identity
         }) {
-            mutateLayout {
-                $0.bringToFront(existing.id)
+            if presentation.focusesExistingWindow {
+                mutateLayout {
+                    $0.bringToFront(existing.id)
+                }
             }
             targetWindowID = existing.id
         } else {
@@ -974,49 +1002,82 @@ public struct ContentView: View {
             launchInstalledIfPermitted(identity)
         } else {
             activity = "Permission review required before launch"
-            if deferPermissionPresentation {
-                deferredPermissionIdentity = identity
-            } else {
+            switch presentation {
+            case .immediate:
                 isPermissionSheetPresented = true
+            case .afterCatalogDismiss:
+                deferredPermissionIdentity = identity
+            case .restoration:
+                break
             }
         }
     }
 
     @MainActor
+    @discardableResult
     private func reacquireInstalledArtifact(
-        _ identity: WorkbenchExactBuildIdentity
-    ) {
+        _ identity: WorkbenchExactBuildIdentity,
+        presentation: InstalledArtifactPresentation
+    ) async -> Bool {
         guard let profile else {
             activity = "Refused: the application runtime profile is unavailable"
-            return
+            return false
         }
         guard
-            reacquiringIdentity != identity,
-            launchingIdentity != identity
+            !reacquiringIdentities.contains(identity),
+            !launchingIdentities.contains(identity)
         else {
-            return
+            return false
         }
-        reacquiringIdentity = identity
+        reacquiringIdentities.insert(identity)
         activity = "Reopening installed exact build"
-        Task {
-            let result = await Task.detached {
-                profile.reacquireInstalledArtifact(for: identity)
-            }.value
-            reacquiringIdentity = nil
-            switch result {
-            case let .refused(failure):
-                activity = "Refused: \(failure.code): \(failure.detail)"
-            case let .installed(installation):
-                do {
-                    try prepareInstalledArtifact(
-                        installation.installedArtifact,
-                        identity: identity
-                    )
-                } catch {
-                    activity = "Refused: \(error.localizedDescription)"
-                }
+        let result = await Task.detached {
+            profile.reacquirePersistedCanvasArtifact(for: identity)
+        }.value
+        reacquiringIdentities.remove(identity)
+        switch result {
+        case let .refused(failure):
+            activity = "Refused: \(failure.code): \(failure.detail)"
+            return false
+        case let .installed(installation):
+            guard
+                presentation != .restoration
+                    || layout.windows.contains(where: {
+                        $0.exactBuild == identity
+                    })
+            else {
+                return false
+            }
+            do {
+                try prepareInstalledArtifact(
+                    installation.installedArtifact,
+                    identity: identity,
+                    presentation: presentation
+                )
+                return true
+            } catch {
+                activity = "Refused: \(error.localizedDescription)"
+                return false
             }
         }
+    }
+
+    @MainActor
+    private func restorePersistedCanvasWindows() async -> Bool {
+        let plan = WorkbenchRestoredCanvasLaunchPlan(layout: layout)
+        guard !plan.identities.isEmpty else {
+            return false
+        }
+        activity =
+            "Reopening \(plan.identities.count) persisted napplet"
+            + (plan.identities.count == 1 ? "" : "s")
+        for identity in plan.identities {
+            _ = await reacquireInstalledArtifact(
+                identity,
+                presentation: .restoration
+            )
+        }
+        return true
     }
 
     @MainActor
@@ -1028,7 +1089,7 @@ public struct ContentView: View {
             let installed =
                 installedArtifacts[identity]
                 ?? profile.installedCatalogArtifact(for: identity),
-            launchingIdentity != identity,
+            !launchingIdentities.contains(identity),
             runningArtifacts[identity] == nil
         else {
             return
@@ -1042,14 +1103,19 @@ public struct ContentView: View {
             activity = "Permission review still requires a decision"
             return
         }
-        launchingIdentity = identity
+        launchingIdentities.insert(identity)
         activity = "Launching signed exact build"
         Task {
-            defer { launchingIdentity = nil }
+            defer { launchingIdentities.remove(identity) }
             do {
                 let launched = try await Task.detached {
                     try profile.native.launchInstalled(installed)
                 }.value
+                guard layout.windows.contains(where: {
+                    $0.exactBuild == identity
+                }) else {
+                    return
+                }
                 runningArtifacts[identity] = launched
                 if permissionTargetIdentity == identity {
                     permissionTargetIdentity = nil
@@ -1218,6 +1284,8 @@ public struct ContentView: View {
         if let identity = window.exactBuild {
             runningArtifacts.removeValue(forKey: identity)
             installedArtifacts.removeValue(forKey: identity)
+            reacquiringIdentities.remove(identity)
+            launchingIdentities.remove(identity)
             if permissionTargetIdentity == identity {
                 permissionTargetIdentity = nil
             }

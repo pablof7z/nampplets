@@ -173,6 +173,83 @@ import Testing
     #expect(first.id.rawValue.count == 72)
 }
 
+@Test func restoredCanvasLaunchPlanIsBoundedOrderedAndDeduplicated() {
+    let first = WorkbenchExactBuildIdentity(
+        manifestAuthor: String(repeating: "a", count: 64),
+        dTag: "first",
+        aggregateHash: String(repeating: "1", count: 64)
+    )
+    let second = WorkbenchExactBuildIdentity(
+        manifestAuthor: String(repeating: "b", count: 64),
+        dTag: "second",
+        aggregateHash: String(repeating: "2", count: 64)
+    )
+    let windows = [
+        WorkbenchCanvasWindow(
+            id: WorkbenchWindowID(rawValue: "native"),
+            componentID: WorkbenchComponentID(rawValue: "native"),
+            title: "Native",
+            frame: .init(x: 0, y: 0, width: 480, height: 360),
+            stackingOrder: 0
+        ),
+        WorkbenchCanvasWindow(
+            id: WorkbenchWindowID(rawValue: "first"),
+            componentID: WorkbenchComponentID(rawValue: "first"),
+            exactBuild: first,
+            title: "First",
+            frame: .init(x: 20, y: 20, width: 480, height: 360),
+            stackingOrder: 1
+        ),
+        WorkbenchCanvasWindow(
+            id: WorkbenchWindowID(rawValue: "duplicate-first"),
+            componentID: WorkbenchComponentID(rawValue: "duplicate-first"),
+            exactBuild: first,
+            title: "First Duplicate",
+            frame: .init(x: 40, y: 40, width: 480, height: 360),
+            stackingOrder: 2
+        ),
+        WorkbenchCanvasWindow(
+            id: WorkbenchWindowID(rawValue: "second"),
+            componentID: WorkbenchComponentID(rawValue: "second"),
+            exactBuild: second,
+            title: "Second",
+            frame: .init(x: 60, y: 60, width: 480, height: 360),
+            stackingOrder: 3
+        ),
+    ]
+    let layout = WorkbenchLayoutModel(
+        snapshot: WorkbenchLayoutSnapshot(
+            mode: .freeform,
+            windows: windows,
+            selectedWindowID: windows.last?.id
+        )
+    )
+
+    let plan = WorkbenchRestoredCanvasLaunchPlan(layout: layout)
+
+    #expect(plan.identities == [first, second])
+    #expect(
+        plan.identities.count
+            <= WorkbenchLayoutSnapshot.maximumWindowCount
+    )
+    #expect(
+        WorkbenchRestoredCanvasLaunchPlan.reviewMatchesPersistedBuild(
+            manifestAuthor: first.manifestAuthor,
+            dTag: first.dTag,
+            aggregateHash: first.aggregateHash,
+            identity: first
+        )
+    )
+    #expect(
+        !WorkbenchRestoredCanvasLaunchPlan.reviewMatchesPersistedBuild(
+            manifestAuthor: first.manifestAuthor,
+            dTag: first.dTag,
+            aggregateHash: second.aggregateHash,
+            identity: first
+        )
+    )
+}
+
 @Test func canvasRefusesWindowsBeyondItsPersistedBound() {
     var layout = WorkbenchLayoutModel()
     for index in 0 ..< WorkbenchLayoutSnapshot.maximumWindowCount {

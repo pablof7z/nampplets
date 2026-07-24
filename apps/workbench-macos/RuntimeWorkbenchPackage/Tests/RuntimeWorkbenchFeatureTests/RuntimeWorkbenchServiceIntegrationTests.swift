@@ -1,4 +1,5 @@
 import Foundation
+import NMPNativeRuntimeApple
 @testable import RuntimeWorkbenchFeature
 import Testing
 
@@ -91,6 +92,103 @@ import Testing
 }
 
 @MainActor
+@Test
+func persistedInstalledCanvasBuildIsPlannedReacquiredAndLaunched() throws {
+    let root = temporaryRuntimeRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let fixture = try GoodMorningFixture.load()
+    let identity = WorkbenchExactBuildIdentity(
+        manifestAuthor: GoodMorningFixture.author,
+        dTag: GoodMorningFixture.dTag,
+        aggregateHash: GoodMorningFixture.aggregateHash
+    )
+    let expected = WorkbenchLayoutSnapshot(
+        mode: .freeform,
+        windows: [.goodMorning],
+        selectedWindowID: WorkbenchCanvasWindow.goodMorning.id
+    )
+
+    do {
+        let profile = try WorkbenchRuntimeProfile.open(storageRoot: root)
+        _ = try installApproveAndLaunchGoodMorning(
+            fixture: fixture,
+            profile: profile
+        )
+        let store = RuntimeWorkbenchLayoutStore(profile: profile)
+        try store.saveLayout(expected, workspaceID: "default")
+        profile.close()
+    }
+
+    do {
+        let profile = try WorkbenchRuntimeProfile.open(
+            storageRoot: root,
+            persistedArtifactResolver: { native, _ in
+                do {
+                    let installed = try native.installSignedNamed(
+                        title: "Good Morning Protocol",
+                        eventJSON: fixture.eventJSON,
+                        author: GoodMorningFixture.author,
+                        dTag: GoodMorningFixture.dTag,
+                        blobsBySHA256: [
+                            GoodMorningFixture.indexDigest:
+                                fixture.indexHTML,
+                        ]
+                    )
+                    return native.reacquireInstalledArtifact(
+                        installed.permissionCoordinate
+                    )
+                } catch {
+                    return .refused(
+                        NativeRuntimeCatalogFailure(
+                            code: "test-source-refused",
+                            detail: error.localizedDescription,
+                            provenance: []
+                        )
+                    )
+                }
+            }
+        )
+        defer { profile.close() }
+        let store = RuntimeWorkbenchLayoutStore(profile: profile)
+        let restored = try #require(
+            try store.loadLayout(workspaceID: "default")
+        )
+        let plan = WorkbenchRestoredCanvasLaunchPlan(
+            layout: WorkbenchLayoutModel(snapshot: restored)
+        )
+        #expect(plan.identities == [identity])
+
+        guard case let .refused(directFailure) =
+            profile.reacquireInstalledArtifact(for: identity)
+        else {
+            Issue.record(
+                "A restarted profile unexpectedly retained an executable handle"
+            )
+            return
+        }
+        #expect(directFailure.code == "artifact-handle-unavailable")
+
+        let installation = try #require(
+            reacquiredInstallation(
+                profile.reacquirePersistedCanvasArtifact(
+                    for: plan.identities[0]
+                )
+            )
+        )
+        let review = profile.native.permissionReview(
+            for: installation.installedArtifact.permissionCoordinate
+        )
+        #expect(review.refusal == nil)
+        #expect(review.review?.launchPermitted == true)
+
+        let launched = try profile.native.launchInstalled(
+            installation.installedArtifact
+        )
+        #expect(launched.title == "Good Morning Protocol")
+    }
+}
+
+@MainActor
 @Test func nativeLayoutAdapterPersistsRetainedReceiptIDsForRestart() throws {
     let root = temporaryRuntimeRoot()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -145,4 +243,15 @@ private func temporaryRuntimeRoot() -> URL {
             "nmp-native-runtime-workbench-\(UUID().uuidString)",
             isDirectory: true
         )
+}
+
+private func reacquiredInstallation(
+    _ result: NativeRuntimeCatalogInstallResult
+) -> NativeRuntimeCatalogInstallation? {
+    switch result {
+    case let .installed(installation):
+        installation
+    case .refused:
+        nil
+    }
 }
