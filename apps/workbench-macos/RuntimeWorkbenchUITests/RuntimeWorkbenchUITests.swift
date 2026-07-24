@@ -5,6 +5,10 @@ final class RuntimeWorkbenchUITests: XCTestCase {
     private static let liveCatalogOptInMarker =
         "/tmp/nampplets-run-live-catalog-ui-test"
     private static let maximumLiveReviewAttempts = 8
+    private static let uiTestSigningSecret =
+        String(repeating: "0", count: 63) + "1"
+    private static let uiTestSigningPublicKey =
+        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.
@@ -36,6 +40,12 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         let cancelInitialReview = app.buttons["Cancel"].firstMatch
         XCTAssertTrue(cancelInitialReview.waitForExistence(timeout: 2))
         cancelInitialReview.click()
+        XCTAssertTrue(
+            waitForNonexistence(of: initialPermissionConfirm, timeout: 10)
+        )
+
+        registerAndActivateDeterministicAccount(in: app)
+
         let reopenReview = app.buttons["Review Permissions"]
         XCTAssertTrue(
             reopenReview.waitForExistence(timeout: 10),
@@ -48,6 +58,7 @@ final class RuntimeWorkbenchUITests: XCTestCase {
                 "permission-decision-\(domain)"
             ]
             XCTAssertTrue(decision.waitForExistence(timeout: 10))
+            XCTAssertTrue(scrollToHittable(decision, in: app))
             decision.click()
             let allow = app.descendants(matching: .any)[
                 "permission-\(domain)-allowExactBuild"
@@ -59,6 +70,10 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         let confirm = app.descendants(matching: .any)["permission-confirm"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 2))
         confirm.click()
+        XCTAssertTrue(
+            waitForNonexistence(of: confirm, timeout: 20),
+            "The Good Morning exact permission batch must apply before launch"
+        )
 
         XCTAssertTrue(
             app.groups["bundled-napplet"].waitForExistence(timeout: 10)
@@ -84,7 +99,7 @@ final class RuntimeWorkbenchUITests: XCTestCase {
     }
 
     @MainActor
-    func testLiveCatalogOpensVerifiedNetworkNappletReview() throws {
+    func testLiveCatalogInstallsAndMountsVerifiedNetworkNapplet() throws {
         try XCTSkipUnless(
             Self.liveCatalogTestIsEnabled,
             "The live relay-backed catalog journey is opt-in. Set "
@@ -122,7 +137,7 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         let search = app.textFields["Search napplet catalog"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.click()
-        search.typeText("Chesslet")
+        search.typeText("STL Preview")
         app.buttons["Search"].click()
 
         let catalogEntries = app.buttons.matching(identifier: "catalog-entry")
@@ -191,48 +206,71 @@ final class RuntimeWorkbenchUITests: XCTestCase {
             "At least one bounded network candidate should complete exact verified installation"
         )
 
-        let renderedNapplet = app.groups["bundled-napplet"]
-        if renderedNapplet.waitForExistence(timeout: 30) {
-            XCTAssertTrue(
-                app.groups["napplet-canvas"].exists,
-                "A safely launchable network build must render inside the native canvas"
-            )
-            XCTAssertFalse(
-                app.descendants(matching: .any)
-                    .matching(
-                        NSPredicate(
-                            format: "label BEGINSWITH %@ OR value BEGINSWITH %@",
-                            "Refused:",
-                            "Refused:"
-                        )
-                    )
-                    .firstMatch
-                    .exists,
-                "The selected real build must not be reported as refused after rendering"
-            )
-            return
-        }
-
-        // Do not approve any capability for a network napplet in this test.
-        // Reaching Rust's exact permission review proves installation and is
-        // the furthest safe point when launch requires new grants.
         let permissionConfirm = app.buttons["permission-confirm"]
         XCTAssertTrue(
             permissionConfirm.waitForExistence(timeout: 10),
-            "An installed build that cannot launch grant-free must enter exact permission review"
+            "The installed STL Preview build must enter exact permission review"
         )
         XCTAssertTrue(
             permissionConfirm.isHittable,
             "Permission review must be visibly presented after the catalog closes"
         )
-        let cancelReview = app.buttons["Cancel"].firstMatch
-        XCTAssertTrue(cancelReview.waitForExistence(timeout: 2))
-        cancelReview.click()
+
+        for domain in ["inc", "link", "resource", "theme"] {
+            let decision = app.descendants(matching: .any)[
+                "permission-decision-\(domain)"
+            ]
+            XCTAssertTrue(
+                decision.waitForExistence(timeout: 10),
+                "STL Preview's signed manifest requires \(domain)"
+            )
+            XCTAssertTrue(
+                scrollToHittable(decision, in: app),
+                "The \(domain) decision must be reachable in the native review"
+            )
+            decision.click()
+            let allow = app.descendants(matching: .any)[
+                "permission-\(domain)-allowExactBuild"
+            ]
+            XCTAssertTrue(
+                allow.waitForExistence(timeout: 2),
+                "The runtime must offer an exact-build grant for \(domain)"
+            )
+            allow.click()
+        }
+
+        XCTAssertTrue(permissionConfirm.isEnabled)
+        permissionConfirm.click()
         XCTAssertTrue(
-            app.buttons["Review Permissions"].waitForExistence(
-                timeout: 10
-            ),
-            "The verified installation must remain as a recoverable canvas window"
+            waitForNonexistence(of: permissionConfirm, timeout: 20),
+            "The exact permission batch must apply before launch"
+        )
+
+        XCTAssertTrue(
+            app.groups["bundled-napplet"].waitForExistence(timeout: 30),
+            "The verified public artifact must create a trusted napplet surface"
+        )
+        XCTAssertTrue(
+            app.staticTexts["Waiting for an STL to preview..."]
+                .waitForExistence(timeout: 30),
+            "The signed public napplet's own DOM must mount and pass its NAP-INC readiness check"
+        )
+        XCTAssertTrue(
+            app.groups["napplet-canvas"].exists,
+            "The mounted public napplet must remain inside the native canvas"
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)
+                .matching(
+                    NSPredicate(
+                        format: "label BEGINSWITH %@ OR value BEGINSWITH %@",
+                        "Refused:",
+                        "Refused:"
+                    )
+                )
+                .firstMatch
+                .exists,
+            "The installed public build must not be reported as refused"
         )
     }
 
@@ -273,5 +311,87 @@ final class RuntimeWorkbenchUITests: XCTestCase {
             for: [expectation],
             timeout: timeout
         ) == .completed
+    }
+
+    @MainActor
+    private func scrollToHittable(
+        _ element: XCUIElement,
+        in app: XCUIApplication
+    ) -> Bool {
+        guard !element.isHittable else {
+            return true
+        }
+        let scrollView = app.scrollViews.firstMatch
+        guard scrollView.waitForExistence(timeout: 2) else {
+            return false
+        }
+        for _ in 0 ..< 6 {
+            scrollView.swipeUp()
+            if element.isHittable {
+                return true
+            }
+        }
+        return false
+    }
+
+    @MainActor
+    private func registerAndActivateDeterministicAccount(
+        in app: XCUIApplication
+    ) {
+        let accountSwitcher = app.descendants(matching: .any)[
+            "account-switcher"
+        ]
+        XCTAssertTrue(
+            accountSwitcher.waitForExistence(timeout: 10),
+            "The account switcher must be the first toolbar control"
+        )
+        accountSwitcher.click()
+
+        let addSigner = app.buttons["Signer-backed Account…"]
+        XCTAssertTrue(addSigner.waitForExistence(timeout: 2))
+        addSigner.click()
+
+        let secretField = app.secureTextFields["Secret key"]
+        XCTAssertTrue(secretField.waitForExistence(timeout: 10))
+        secretField.click()
+        secretField.typeText(Self.uiTestSigningSecret)
+
+        let register = app.buttons["Register Local Account"]
+        XCTAssertTrue(register.waitForExistence(timeout: 2))
+        XCTAssertTrue(register.isEnabled)
+        register.click()
+
+        let activate = app.buttons[
+            "Activate \(Self.uiTestSigningPublicKey)"
+        ]
+        XCTAssertTrue(
+            activate.waitForExistence(timeout: 10),
+            "Registration must project the deterministic signer without activating it"
+        )
+        XCTAssertTrue(
+            scrollToHittable(activate, in: app),
+            "The newly registered signer must be reachable in the account sheet"
+        )
+        activate.click()
+
+        let activePublicKey = app.staticTexts[
+            "Active account hexadecimal public key"
+        ]
+        XCTAssertTrue(
+            activePublicKey.waitForExistence(timeout: 10),
+            "Activation must project the selected public account identity"
+        )
+        XCTAssertEqual(
+            activePublicKey.value as? String,
+            Self.uiTestSigningPublicKey
+        )
+
+        let done = app.buttons["Done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 2))
+        done.click()
+        XCTAssertTrue(
+            waitForNonexistence(of: activePublicKey, timeout: 10),
+            "The account sheet must close before permission review resumes"
+        )
     }
 }
