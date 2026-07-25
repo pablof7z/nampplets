@@ -154,7 +154,11 @@ struct WorkbenchWorkspaceView<WindowContent: View>: View {
                 width: fitted.width,
                 height: fitted.height
             )
-        case .tiling:
+        case .tiling, .fullWindow:
+            // `.fullWindow` is presented by a dedicated chrome-less screen on
+            // iOS (see WorkbenchFullWindowView); this tiling fallback only
+            // applies if the freeform/tiling canvas ever renders a workspace
+            // synced from a device that saved that mode.
             let ordered = layout.windows
             guard
                 let index = ordered.firstIndex(where: { $0.id == window.id })

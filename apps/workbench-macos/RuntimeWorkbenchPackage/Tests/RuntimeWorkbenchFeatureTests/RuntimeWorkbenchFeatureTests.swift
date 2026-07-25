@@ -97,6 +97,23 @@ import Testing
     #expect(restored == layout)
 }
 
+@Test func fullWindowModePersistsAndRoundTrips() throws {
+    var layout = WorkbenchLayoutModel()
+    let added = layout.addWindow(.goodMorning)
+    #expect(added)
+    layout.setMode(.fullWindow)
+
+    let data = try JSONEncoder().encode(layout.snapshot)
+    let decoded = try JSONDecoder().decode(
+        WorkbenchLayoutSnapshot.self,
+        from: data
+    )
+    let restored = WorkbenchLayoutModel(snapshot: decoded)
+
+    #expect(restored.mode == .fullWindow)
+    #expect(restored == layout)
+}
+
 @Test func networkDiscoveredExactBuildIdentityRoundTripsWithItsWindow() throws {
     var layout = WorkbenchLayoutModel()
     let exactBuild = WorkbenchExactBuildIdentity(

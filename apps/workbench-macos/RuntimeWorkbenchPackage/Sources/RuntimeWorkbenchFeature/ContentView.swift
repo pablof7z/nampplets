@@ -41,6 +41,8 @@ public struct ContentView: View {
     @State private var reacquiringIdentity: WorkbenchExactBuildIdentity?
     @State private var launchingIdentity: WorkbenchExactBuildIdentity?
     @State private var layout: WorkbenchLayoutModel
+    @State private var fullWindowRootID: WorkbenchWindowID?
+    @State private var fullWindowPath: [WorkbenchWindowID] = []
     @State private var layoutPersistenceError: String?
     @State private var pendingLayoutSave: DispatchWorkItem?
     @State private var accountSnapshot: WorkbenchAccountSnapshot
@@ -323,40 +325,51 @@ public struct ContentView: View {
     @ViewBuilder
     private var platformBody: some View {
         #if os(iOS)
-        NavigationStack {
-            canvasBody
-                .navigationTitle("Workbench")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        accountMenu
-                    }
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        Button {
-                            isCatalogSheetPresented = true
-                        } label: {
-                            Label("Add Napplet", systemImage: "plus")
+        if layout.mode == .fullWindow {
+            WorkbenchFullWindowView(
+                layout: $layout,
+                rootID: fullWindowRootID,
+                path: $fullWindowPath,
+                onExit: exitFullWindow,
+                windowContent: windowContent,
+                topBars: { topStatusBars }
+            )
+        } else {
+            NavigationStack {
+                canvasBody
+                    .navigationTitle("Workbench")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            accountMenu
                         }
-                        .accessibilityIdentifier("add-napplet")
-                        .accessibilityHint("Opens the network napplet catalog")
-
-                        workspaceActionsMenu
-
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                isInspectorPresented.toggle()
+                        ToolbarItemGroup(placement: .topBarTrailing) {
+                            Button {
+                                isCatalogSheetPresented = true
+                            } label: {
+                                Label("Add Napplet", systemImage: "plus")
                             }
-                        } label: {
-                            Label(
-                                isInspectorPresented ? "Hide Inspector" : "Show Inspector",
-                                systemImage: "sidebar.right"
-                            )
-                        }
-                        .accessibilityIdentifier("toggle-napplet-inspector")
+                            .accessibilityIdentifier("add-napplet")
+                            .accessibilityHint("Opens the network napplet catalog")
 
-                        layoutMenu
+                            workspaceActionsMenu
+
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    isInspectorPresented.toggle()
+                                }
+                            } label: {
+                                Label(
+                                    isInspectorPresented ? "Hide Inspector" : "Show Inspector",
+                                    systemImage: "sidebar.right"
+                                )
+                            }
+                            .accessibilityIdentifier("toggle-napplet-inspector")
+
+                            layoutMenu
+                        }
                     }
-                }
+            }
         }
         #else
         VStack(spacing: 0) {
@@ -366,20 +379,25 @@ public struct ContentView: View {
         #endif
     }
 
+    @ViewBuilder
+    private var topStatusBars: some View {
+        if let pendingWrite = pendingWrites.writes.first {
+            PendingWriteApprovalBar(write: pendingWrite) { approve in
+                pendingWrites.decide(
+                    pendingWrite,
+                    approve: approve,
+                    profile: profile
+                )
+            }
+        }
+        if let receipt = receipts.receipts.last {
+            ReceiptStatusBar(receipt: receipt)
+        }
+    }
+
     private var canvasBody: some View {
         VStack(spacing: 0) {
-            if let pendingWrite = pendingWrites.writes.first {
-                PendingWriteApprovalBar(write: pendingWrite) { approve in
-                    pendingWrites.decide(
-                        pendingWrite,
-                        approve: approve,
-                        profile: profile
-                    )
-                }
-            }
-            if let receipt = receipts.receipts.last {
-                ReceiptStatusBar(receipt: receipt)
-            }
+            topStatusBars
             HStack(spacing: 0) {
                 WorkbenchWorkspaceView(
                     layout: $layout,
@@ -546,12 +564,20 @@ public struct ContentView: View {
         )
     }
 
+    private var availableLayoutModes: [WorkbenchLayoutMode] {
+        #if os(iOS)
+        WorkbenchLayoutMode.allCases
+        #else
+        WorkbenchLayoutMode.allCases.filter { $0 != .fullWindow }
+        #endif
+    }
+
     private var layoutMenu: some View {
         Menu {
             Section("Window layout") {
-                ForEach(WorkbenchLayoutMode.allCases, id: \.self) { mode in
+                ForEach(availableLayoutModes, id: \.self) { mode in
                     Button {
-                        mutateLayout { $0.setMode(mode) }
+                        setLayoutMode(mode)
                     } label: {
                         if layout.mode == mode {
                             Label(mode.title, systemImage: "checkmark")
@@ -565,7 +591,8 @@ public struct ContentView: View {
             Label(layout.mode.title, systemImage: layout.mode.systemImage)
         }
         .accessibilityHint(
-            "Switches between freely arranged and automatically tiled napplet windows"
+            "Switches between freely arranged, automatically tiled, and full "
+                + "window napplet display"
         )
         .accessibilityIdentifier("layout-mode-menu")
     }
@@ -894,12 +921,15 @@ public struct ContentView: View {
                 "the application runtime profile is unavailable"
             )
         }
+        let previouslyDisplayed = fullWindowPath.last ?? fullWindowRootID
+        let targetWindowID: WorkbenchWindowID
         if let existing = layout.windows.first(where: {
             $0.exactBuild == identity
         }) {
             mutateLayout {
                 $0.bringToFront(existing.id)
             }
+            targetWindowID = existing.id
         } else {
             var next = layout
             let window = WorkbenchCanvasWindow.installed(
@@ -915,7 +945,12 @@ public struct ContentView: View {
             }
             layout = next
             scheduleLayoutSave()
+            targetWindowID = window.id
         }
+        pushFullWindowIfNeeded(
+            target: targetWindowID,
+            previouslyDisplayed: previouslyDisplayed
+        )
         installedArtifacts[identity] = installed
         permissionTargetIdentity = identity
         let principal = try permissionPrincipal(identity)
@@ -1250,9 +1285,53 @@ public struct ContentView: View {
             activity = "Refused: INC action payload was not recognized"
             return
         }
+        let previouslyDisplayed = fullWindowPath.last ?? fullWindowRootID
         nativeActionNotice = notice
         mutateLayout { $0.bringToFront(window.id) }
+        pushFullWindowIfNeeded(
+            target: window.id,
+            previouslyDisplayed: previouslyDisplayed
+        )
         isInspectorPresented = true
         activity = "\(notice.title) from \(window.title)"
+    }
+
+    /// Pushes onto the full-window navigation stack when a different napplet
+    /// becomes active while `.fullWindow` is engaged, so opening one napplet
+    /// from another reads as a normal iOS push rather than an in-place swap.
+    /// The very first napplet displayed becomes the stack root instead.
+    @MainActor
+    private func pushFullWindowIfNeeded(
+        target: WorkbenchWindowID,
+        previouslyDisplayed: WorkbenchWindowID?
+    ) {
+        guard layout.mode == .fullWindow else {
+            return
+        }
+        guard let previouslyDisplayed else {
+            fullWindowRootID = target
+            return
+        }
+        guard previouslyDisplayed != target else {
+            return
+        }
+        fullWindowPath.append(target)
+    }
+
+    @MainActor
+    private func setLayoutMode(_ mode: WorkbenchLayoutMode) {
+        mutateLayout { $0.setMode(mode) }
+        if mode == .fullWindow {
+            fullWindowRootID = layout.selectedWindow?.id
+            fullWindowPath = []
+        } else {
+            fullWindowRootID = nil
+            fullWindowPath = []
+        }
+    }
+
+    @MainActor
+    private func exitFullWindow() {
+        setLayoutMode(.freeform)
     }
 }

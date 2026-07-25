@@ -5,11 +5,16 @@ import Foundation
 public enum WorkbenchLayoutMode: String, CaseIterable, Codable, Hashable, Sendable {
     case freeform
     case tiling
+    /// The selected window fills the canvas edge-to-edge with no per-window
+    /// chrome. On iOS, opening another napplet while in this mode pushes a
+    /// new screen onto a navigation stack instead of adding a canvas window.
+    case fullWindow
 
     public var title: String {
         switch self {
         case .freeform: "Freeform"
         case .tiling: "Tiling"
+        case .fullWindow: "Full Window"
         }
     }
 
@@ -17,6 +22,7 @@ public enum WorkbenchLayoutMode: String, CaseIterable, Codable, Hashable, Sendab
         switch self {
         case .freeform: "macwindow.on.rectangle"
         case .tiling: "rectangle.split.2x2"
+        case .fullWindow: "rectangle.fill"
         }
     }
 }
