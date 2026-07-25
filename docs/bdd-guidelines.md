@@ -53,7 +53,7 @@ Bringing a new crate/package into scope means:
   that crate's `Cargo.toml`.
 - Step definitions live in `tests/bdd.rs` and drive the crate's existing
   integration-test fixtures — do not build a second, parallel bootstrap
-  path. In `crates/runtime-app`, both `tests/kernel.rs` (`#[test]`) and
+  path. In `crates/runtime-app`, both `tests/kernel_*.rs` (`#[test]`) and
   `tests/bdd.rs` (cucumber) share the exact same `Rig` harness from
   `tests/support/mod.rs`, so a scenario and a unit test exercise identical
   setup and dispatch code.

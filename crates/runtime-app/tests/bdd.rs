@@ -1,7 +1,7 @@
 //! Cucumber scenario runner for `crates/runtime-app`.
 //!
 //! Scenarios live under `tests/features/*.feature` as Gherkin. Every step
-//! below drives the same `Rig` test harness used by `tests/kernel.rs`
+//! below drives the same `Rig` test harness used by `tests/kernel_*.rs`
 //! (see `tests/support/mod.rs`), so a scenario and a `#[test]` exercise
 //! identical bootstrap and dispatch paths.
 

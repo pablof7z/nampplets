@@ -26,7 +26,7 @@ use nmp_native_nmp_adapter::{
 use parking_lot::Mutex;
 use thiserror::Error;
 
-use super::{RuntimeRefusal, now_millis};
+use super::{RuntimeRefusal, support::now_millis};
 
 const MAXIMUM_DIAGNOSTICS_OBSERVERS: usize = 8;
 
