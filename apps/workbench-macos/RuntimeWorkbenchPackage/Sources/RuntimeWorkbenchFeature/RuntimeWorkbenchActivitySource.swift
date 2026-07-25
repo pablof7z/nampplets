@@ -1,6 +1,22 @@
 import Foundation
 import NMPNativeRuntimeApple
 
+public extension ActivityDetailField {
+    /// Carry one runtime-classified detail into the presentation model.
+    ///
+    /// This is the only way a detail value becomes displayable here: the
+    /// runtime's visible/redacted decision is transcribed, never revisited.
+    /// Nothing in this layer inspects the key or the text to guess secrecy.
+    init?(_ detail: NativeRuntimeActivityDetail) {
+        switch detail.value {
+        case let .visible(text):
+            self.init(key: detail.key, value: .visible(text))
+        case .redacted:
+            self.init(key: detail.key, value: .redacted)
+        }
+    }
+}
+
 public enum RuntimeWorkbenchActivitySourceRefusal:
     Error,
     LocalizedError,
@@ -186,7 +202,10 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
         // those presentation fields empty instead of deriving policy in Swift
         // or exposing profile-global facts. `omittedFactCount` makes the
         // unsupported scoped records explicit until Rust supplies the typed
-        // screen-shaped projection.
+        // screen-shaped projection. Detail secrecy is no longer part of that
+        // gap: the runtime classifies each detail, and the
+        // `ActivityDetailField` conversion below only carries the decision
+        // across.
         return ActivitySnapshot(
             scope: scope,
             revision: projection.revision,

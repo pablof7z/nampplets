@@ -7,6 +7,7 @@ use std::sync::{
 
 use tokio::sync::watch;
 
+use crate::activity::RuntimeActivitySnapshot;
 use crate::{
     RuntimeCatalogFeedSnapshot, RuntimeExecutionProfile, RuntimeRefusal, support::bump_signal,
 };
@@ -162,17 +163,6 @@ pub struct RuntimeWorkspaceRestore {
     pub accepted: bool,
     pub workspaces: Vec<RuntimeWorkspaceDefinition>,
     pub refusal: Option<RuntimeRefusal>,
-}
-
-#[derive(Clone, Debug, uniffi::Record)]
-pub struct RuntimeActivitySnapshot {
-    pub author: String,
-    pub d_tag: String,
-    pub aggregate_hash: String,
-    pub category: String,
-    pub operation: String,
-    pub outcome: String,
-    pub occurred_at_millis: u64,
 }
 
 #[derive(Clone, Debug, uniffi::Record)]

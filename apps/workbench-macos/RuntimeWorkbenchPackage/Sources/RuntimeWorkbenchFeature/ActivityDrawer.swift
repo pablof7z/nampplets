@@ -309,7 +309,10 @@ private struct ActivityFactRow: View {
                     DisclosureGroup("Developer detail") {
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(detailFields) { field in
-                                LabeledContent(field.key, value: field.value)
+                                LabeledContent(
+                                    field.key,
+                                    value: field.displayValue
+                                )
                                     .font(.caption.monospaced())
                                     .textSelection(.enabled)
                             }

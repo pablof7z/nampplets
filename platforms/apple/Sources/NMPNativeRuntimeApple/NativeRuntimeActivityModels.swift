@@ -20,28 +20,6 @@ public struct NativeRuntimeActivityScope: Hashable, Sendable {
     }
 }
 
-/// A persisted, runtime-owned activity fact. Native code receives the
-/// classification strings verbatim and does not become an activity store.
-public struct NativeRuntimeActivityRecord: Sendable {
-    public let scope: NativeRuntimeActivityScope
-    public let category: String
-    public let operation: String
-    public let outcome: String
-    public let occurredAtMillis: UInt64
-
-    fileprivate init(_ record: RuntimeActivitySnapshot) {
-        scope = NativeRuntimeActivityScope(
-            manifestAuthor: record.author,
-            dTag: record.dTag,
-            aggregateHash: record.aggregateHash
-        )
-        category = record.category
-        operation = record.operation
-        outcome = record.outcome
-        occurredAtMillis = record.occurredAtMillis
-    }
-}
-
 /// A runtime-owned refusal or failure attributed to one exact build.
 ///
 /// Errors without a complete principal remain absent from the per-component

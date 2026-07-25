@@ -189,7 +189,10 @@ private func activitySnapshot(
         ) == nil
     )
     #expect(
-        ActivityDetailField(key: "detail", value: oversizedDetailValue) == nil
+        ActivityDetailField(
+            key: "detail",
+            value: .visible(oversizedDetailValue)
+        ) == nil
     )
     #expect(
         ActivityInventorySummary(
@@ -202,23 +205,27 @@ private func activitySnapshot(
 }
 
 @MainActor
-@Test func developerDetailIsGatedAndSensitiveValuesAreNeverRetained() {
-    let bearer = "Bearer super-secret-token"
-    let privateKey = "nsec1thismustneverappear"
+@Test func developerDetailIsGatedAndHonorsTheRuntimeClassification() {
+    // The runtime classified `authorization` as secret, so its bytes never
+    // reached this layer. It classified `token-relay` as public even though
+    // the old substring heuristic would have redacted it.
     let fields = [
-        ActivityDetailField(key: "authorization", value: bearer)!,
-        ActivityDetailField(key: "relay", value: "wss://relay.example")!,
+        ActivityDetailField(key: "authorization", value: .redacted)!,
+        ActivityDetailField(
+            key: "token-relay",
+            value: .visible("wss://relay.example")
+        )!,
     ]
     let fact = ActivityFact(
-        id: "secret-fact",
+        id: "classified-fact",
         scope: activityScope,
         ordinal: 1,
         severity: .debug,
         category: .provider,
         kind: .providerCall,
         title: "Provider detail",
-        summary: "authorization: \(privateKey)",
-        evidenceSummary: "token=\(bearer)",
+        summary: "Provider call completed",
+        evidenceSummary: "Bearer token withheld by the runtime",
         detailFields: fields
     )!
     let source = FakeActivitySource(
@@ -243,15 +250,17 @@ private func activitySnapshot(
     #expect(developerModel.detailFields(for: fact).isEmpty)
     developerModel.setDeveloperModeEnabled(true)
     #expect(
-        developerModel.detailFields(for: fact).map(\.value)
+        developerModel.detailFields(for: fact).map(\.displayValue)
             == ["[REDACTED]", "wss://relay.example"]
     )
+    #expect(developerModel.detailFields(for: fact).map(\.isRedacted)
+        == [true, false])
 
-    let retainedProjection = String(describing: fact)
-    #expect(!retainedProjection.contains(bearer))
-    #expect(!retainedProjection.contains(privateKey))
-    #expect(fact.summary == "[REDACTED]")
-    #expect(fact.evidenceSummary == "[REDACTED]")
+    // A withheld value has no bytes to retain, and the runtime-owned display
+    // strings are rendered exactly as the runtime produced them.
+    #expect(!String(describing: fact).contains("nsec1"))
+    #expect(fact.summary == "Provider call completed")
+    #expect(fact.evidenceSummary == "Bearer token withheld by the runtime")
 }
 
 @MainActor

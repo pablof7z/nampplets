@@ -11,9 +11,10 @@ use std::{
 use nmp_native_runtime_app::{AppSnapshot, InstalledBuildAvailability, PlatformCommand};
 
 use super::{ObserverPermit, RuntimeController};
+use crate::activity::activity_snapshot;
 use crate::{
-    ObservationStart, RuntimeActivitySnapshot, RuntimeBindingSnapshot, RuntimeErrorSnapshot,
-    RuntimeExactBuildCoordinate, RuntimeInstalledBuildAvailability, RuntimeInstalledBuildSnapshot,
+    ObservationStart, RuntimeBindingSnapshot, RuntimeErrorSnapshot, RuntimeExactBuildCoordinate,
+    RuntimeInstalledBuildAvailability, RuntimeInstalledBuildSnapshot,
     RuntimeInstalledLibrarySnapshot, RuntimeObservation, RuntimeObservationFrame, RuntimeObserver,
     RuntimePendingWriteSnapshot, RuntimeReceiptSnapshot, RuntimeRelayDiagnosticsObservationStart,
     RuntimeRelayDiagnosticsObserver, RuntimeRelayDiagnosticsSnapshot, RuntimeSessionSnapshot,
@@ -271,15 +272,7 @@ impl RuntimeController {
             recent_activity: snapshot
                 .recent_activity
                 .iter()
-                .map(|fact| RuntimeActivitySnapshot {
-                    author: fact.principal.manifest_author().to_owned(),
-                    d_tag: fact.principal.d_tag().to_owned(),
-                    aggregate_hash: fact.principal.aggregate_hash().to_owned(),
-                    category: fact.category.to_string(),
-                    operation: fact.operation.to_string(),
-                    outcome: fact.outcome.to_string(),
-                    occurred_at_millis: fact.occurred_at_millis,
-                })
+                .map(activity_snapshot)
                 .collect(),
             dropped_activity: snapshot.dropped_activity,
             recent_errors: snapshot

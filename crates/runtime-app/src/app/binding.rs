@@ -8,6 +8,7 @@ use nmp_native_runtime_core::{
 use nmp_native_surface::Binding;
 
 use super::{AppState, BindingOwner, RuntimeApp};
+use crate::activity::ActivityDetail;
 use crate::{
     commands::{PlatformEvent, ProviderOperationId},
     receipt::{AppReceipt, ReceiptFanout},
@@ -268,12 +269,24 @@ impl RuntimeApp {
             );
         }
         state.receipts.insert(accepted.receipt_id.clone(), receipt);
-        self.record_activity(
+        // The runtime classifies each detail where it produces it. The receipt
+        // id and the frozen account are runtime-owned identifiers and are safe
+        // to display. The approved draft is component-authored content the
+        // user reviewed once in the approval sheet; the runtime does not
+        // republish it into the activity surface, so it is classified secret
+        // and its bytes stop here rather than travelling and being filtered
+        // later.
+        self.record_activity_with_details(
             state,
             &principal,
             "write",
             "accept",
             "durable-obligation",
+            vec![
+                ActivityDetail::visible("receipt-id", accepted.receipt_id.0.as_ref()),
+                ActivityDetail::visible("frozen-account", accepted.frozen_account.0.as_ref()),
+                ActivityDetail::secret("approved-draft"),
+            ],
             now,
         );
         self.push_event(

@@ -8,10 +8,11 @@ use nmp_native_runtime_store::{ActivityRecord, StoreError};
 use nmp_native_surface::BindingError;
 
 use super::{AppState, RuntimeApp, install::installed_library_view};
+use crate::activity::{ActivityDetail, ActivityFact};
 use crate::{
     commands::{PlatformEvent, SequencedPlatformEvent},
     views::{
-        ActivityFact, AppErrorCode, AppErrorFact, AppSnapshot, BindingView, ProviderPushLaneView,
+        AppErrorCode, AppErrorFact, AppSnapshot, BindingView, ProviderPushLaneView,
         ProviderWriteProposalView, SessionDomainView, WorkspaceView,
     },
 };
@@ -119,7 +120,7 @@ impl RuntimeApp {
         );
     }
 
-    pub(super) fn record_activity(
+    pub(crate) fn record_activity(
         &self,
         state: &mut AppState,
         principal: &Principal,
@@ -128,13 +129,41 @@ impl RuntimeApp {
         outcome: &str,
         now: u64,
     ) {
-        let fact = ActivityFact {
-            principal: principal.clone(),
-            category: Arc::from(category),
-            operation: Arc::from(operation),
-            outcome: Arc::from(outcome),
-            occurred_at_millis: now,
-        };
+        self.record_activity_with_details(
+            state,
+            principal,
+            category,
+            operation,
+            outcome,
+            Vec::new(),
+            now,
+        );
+    }
+
+    /// Record one fact together with details the producer already classified.
+    ///
+    /// Only the retained in-memory fact carries details. The durable
+    /// `activity` table stores the three bounded strings it has always
+    /// stored; widening that schema belongs to the store workstream, and a
+    /// secret detail has no bytes to persist in any case.
+    pub(crate) fn record_activity_with_details(
+        &self,
+        state: &mut AppState,
+        principal: &Principal,
+        category: &str,
+        operation: &str,
+        outcome: &str,
+        details: Vec<ActivityDetail>,
+        now: u64,
+    ) {
+        let fact = ActivityFact::new(
+            principal.clone(),
+            category,
+            operation,
+            outcome,
+            details,
+            now,
+        );
         let persisted = ActivityRecord {
             principal: fact.principal.clone(),
             category: Arc::clone(&fact.category),

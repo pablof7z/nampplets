@@ -37,11 +37,12 @@ use tokio::sync::watch;
 
 use self::install::installed_library_view;
 use crate::{
+    activity::ActivityFact,
     bounded::BoundedFacts,
     commands::{EventBatch, PlatformCommand, ProviderOperationId, SequencedPlatformEvent},
     limits::{AppLimits, ExecutableArtifact, KernelClock, OpenError, RuntimeAppConfig},
     receipt::{AppReceipt, NoopBridgeActivity},
-    views::{ActivityFact, AppErrorCode, AppErrorFact, AppSnapshot},
+    views::{AppErrorCode, AppErrorFact, AppSnapshot},
 };
 
 #[derive(Debug)]
