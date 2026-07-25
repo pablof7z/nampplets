@@ -10,17 +10,38 @@ final class RuntimeWorkbenchUITests: XCTestCase {
     static let uiTestSigningPublicKey =
         "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
 
+    /// When the running test method started, so the app-liveness diagnostic
+    /// below can report *how far in* a failure landed. The reported deaths
+    /// are spread across the timeline (1.8s / 3s / 17s / 25s in #137), and
+    /// that spread is only interpretable against a start time.
+    private(set) var testStartedAt = Date()
+
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.
 
         // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
+        testStartedAt = Date()
 
         // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
     }
 
     override func tearDownWithError() throws {
         // Put teardown code here. This method is called after the invocation of each test method in the class.
+    }
+
+    /// Captures the app-liveness diagnostic at the instant a failure is
+    /// recorded.
+    ///
+    /// This override is the whole point: `record(_:)` runs while XCTest is
+    /// still recording the issue, which is early enough for "is the app
+    /// still there?" to have a meaningful answer. A `tearDown`-based check
+    /// would be worthless — by then XCTest may already have reaped the app,
+    /// so it would report "gone" for termination and connection loss alike,
+    /// which is precisely the distinction it exists to draw.
+    override func record(_ issue: XCTIssue) {
+        logAppLivenessDiagnostic(for: issue)
+        super.record(issue)
     }
 
     @MainActor
@@ -38,7 +59,10 @@ final class RuntimeWorkbenchUITests: XCTestCase {
             "The exact build must enter native permission review"
         )
         let cancelInitialReview = app.buttons["Cancel"].firstMatch
-        XCTAssertTrue(cancelInitialReview.waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            cancelInitialReview.waitForExistence(timeout: 10),
+            "The native permission review must offer a cancel control"
+        )
         cancelInitialReview.click()
         XCTAssertTrue(
             waitForNonexistence(of: initialPermissionConfirm, timeout: 10)
@@ -61,12 +85,15 @@ final class RuntimeWorkbenchUITests: XCTestCase {
             let allow = app.descendants(matching: .any)[
                 "permission-\(domain)-allowExactBuild"
             ]
-            XCTAssertTrue(openDecisionMenu(decision, revealing: allow))
+            XCTAssertTrue(openDecisionMenu(decision, revealing: allow, in: app))
             allow.click()
         }
 
         let confirm = app.descendants(matching: .any)["permission-confirm"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            confirm.waitForExistence(timeout: 10),
+            "The review must offer a confirmation control once every domain is decided"
+        )
         confirm.click()
         XCTAssertTrue(
             waitForNonexistence(of: confirm, timeout: 20),
@@ -224,7 +251,7 @@ final class RuntimeWorkbenchUITests: XCTestCase {
                 "permission-\(domain)-allowExactBuild"
             ]
             XCTAssertTrue(
-                openDecisionMenu(decision, revealing: allow),
+                openDecisionMenu(decision, revealing: allow, in: app),
                 "The runtime must offer an exact-build grant for \(domain)"
             )
             allow.click()
