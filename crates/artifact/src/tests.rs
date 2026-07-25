@@ -1,9 +1,11 @@
+use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt as _;
 
 use tempfile::TempDir;
 
 use super::*;
+use crate::file_cache::{CACHE_BLOBS_DIRECTORY, CACHE_INDEX_FILE};
 
 fn manifest_for(
     files: &[(String, Vec<u8>)],
