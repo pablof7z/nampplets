@@ -17,12 +17,12 @@ use nmp_native_providers::{
     ConfigProvider, ConfigProviderLimits, ShellProvider, ShellProviderLimits, StorageProvider,
     StorageProviderLimits, ThemeProvider, ThemeProviderLimits,
 };
-use nmp_native_runtime_app::{AppLimits, RuntimeApp, RuntimeAppConfig};
+use nmp_native_runtime_app::{AppLimits, BoundedFacts, RuntimeApp, RuntimeAppConfig};
 use nmp_native_runtime_core::{GrantLimits, ResourceLimits};
 use nmp_native_runtime_store::{RuntimeStore, StoreLimits};
 use nmp_native_surface::BindingLimits;
 use parking_lot::Mutex;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use tokio::sync::watch;
 
 use super::{RuntimeController, RuntimeShellEnvironment, SystemClock};
@@ -305,7 +305,7 @@ pub(super) fn open_runtime_controller(
         theme_provider,
         config_provider,
         artifacts: Mutex::new(BTreeMap::new()),
-        boundary_refusals: Mutex::new(VecDeque::with_capacity(config.maximum_boundary_events)),
+        boundary_refusals: Mutex::new(BoundedFacts::with_capacity(config.maximum_boundary_events)),
         maximum_boundary_events: config.maximum_boundary_events,
         signal,
         observers: Arc::new(AtomicUsize::new(0)),

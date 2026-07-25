@@ -15,7 +15,7 @@ mod session;
 mod workspace;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet},
     sync::Arc,
     thread::JoinHandle,
 };
@@ -37,6 +37,7 @@ use tokio::sync::watch;
 
 use self::install::installed_library_view;
 use crate::{
+    bounded::BoundedFacts,
     commands::{EventBatch, PlatformCommand, ProviderOperationId, SequencedPlatformEvent},
     limits::{AppLimits, ExecutableArtifact, KernelClock, OpenError, RuntimeAppConfig},
     receipt::{AppReceipt, NoopBridgeActivity},
@@ -99,9 +100,9 @@ pub(crate) struct AppState {
     receipts: BTreeMap<WriteReceiptId, Arc<AppReceipt>>,
     workspaces: BTreeMap<Arc<str>, WorkspaceRecord>,
     workspace_assignments: BTreeMap<Arc<str>, BTreeSet<Principal>>,
-    activity: VecDeque<ActivityFact>,
-    errors: VecDeque<AppErrorFact>,
-    events: VecDeque<SequencedPlatformEvent>,
+    activity: BoundedFacts<ActivityFact>,
+    errors: BoundedFacts<AppErrorFact>,
+    events: BoundedFacts<SequencedPlatformEvent>,
 }
 
 #[derive(Debug)]
@@ -218,7 +219,9 @@ impl RuntimeApp {
             workspaces: Vec::new(),
             resources: resources.census(),
             recent_activity: Vec::new(),
+            dropped_activity: 0,
             recent_errors: Vec::new(),
+            dropped_errors: 0,
         });
         let (snapshots, _) = watch::channel(initial);
         Ok(Arc::new(Self {
@@ -248,9 +251,9 @@ impl RuntimeApp {
                 receipts: BTreeMap::new(),
                 workspaces: BTreeMap::new(),
                 workspace_assignments: BTreeMap::new(),
-                activity: VecDeque::with_capacity(limits.maximum_activity_facts),
-                errors: VecDeque::with_capacity(limits.maximum_error_facts),
-                events: VecDeque::with_capacity(limits.maximum_platform_events),
+                activity: BoundedFacts::with_capacity(limits.maximum_activity_facts),
+                errors: BoundedFacts::with_capacity(limits.maximum_error_facts),
+                events: BoundedFacts::with_capacity(limits.maximum_platform_events),
             }),
             snapshots,
         }))
@@ -400,8 +403,9 @@ impl RuntimeApp {
         self.state.lock().receipts.get(receipt_id).cloned()
     }
 
-    /// Finite activity/event replay. A stale cursor is observable and the
-    /// caller must resynchronize from the current bounded snapshot.
+    /// Finite event replay. A stale cursor is observable, carries the exact
+    /// number of events lost before the batch (`oldest_available - cursor - 1`),
+    /// and the caller must resynchronize from the current bounded snapshot.
     pub fn events_after(&self, sequence: u64) -> EventBatch {
         let state = self.state.lock();
         let oldest_available = state
@@ -428,6 +432,7 @@ impl RuntimeApp {
             newest_available,
             events,
             cursor_was_stale,
+            lost_before_batch: oldest_available.saturating_sub(sequence).saturating_sub(1),
         }
     }
 }

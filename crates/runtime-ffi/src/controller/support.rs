@@ -138,13 +138,7 @@ impl RuntimeController {
         detail: impl Into<String>,
     ) -> RuntimeRefusal {
         let refusal = self.refusal(code, detail);
-        let mut refusals = self.boundary_refusals.lock();
-        if refusals.len() == self.maximum_boundary_events {
-            refusals.pop_front();
-        }
-        refusals.push_back(refusal.clone());
-        drop(refusals);
-        bump_signal(&self.signal);
+        self.record_boundary_refusal(refusal.clone());
         refusal
     }
 
@@ -154,13 +148,7 @@ impl RuntimeController {
         detail: impl Into<String>,
     ) -> RuntimeProviderUpdate {
         let refusal = self.refusal(code, detail);
-        let mut refusals = self.boundary_refusals.lock();
-        if refusals.len() == self.maximum_boundary_events {
-            refusals.pop_front();
-        }
-        refusals.push_back(refusal.clone());
-        drop(refusals);
-        bump_signal(&self.signal);
+        self.record_boundary_refusal(refusal.clone());
         RuntimeProviderUpdate {
             accepted: false,
             attempted: 0,
@@ -171,13 +159,15 @@ impl RuntimeController {
     }
 
     pub(super) fn record_refusal(&self, code: impl Into<String>, detail: impl Into<String>) {
-        let refusal = self.refusal(code, detail);
-        let mut refusals = self.boundary_refusals.lock();
-        if refusals.len() == self.maximum_boundary_events {
-            refusals.pop_front();
-        }
-        refusals.push_back(refusal);
-        drop(refusals);
+        self.record_boundary_refusal(self.refusal(code, detail));
+    }
+
+    /// The single bounded-append path for boundary refusals. Eviction past the
+    /// cap is counted, never silent: `dropped_boundary_refusals` reports it.
+    fn record_boundary_refusal(&self, refusal: RuntimeRefusal) {
+        self.boundary_refusals
+            .lock()
+            .push(self.maximum_boundary_events, refusal);
         bump_signal(&self.signal);
     }
 }

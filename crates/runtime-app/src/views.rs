@@ -194,6 +194,11 @@ pub struct AppSnapshot {
     pub receipts: Vec<ReceiptView>,
     pub workspaces: Vec<WorkspaceView>,
     pub resources: ResourceCensus,
+    /// Bounded tails. Each `dropped_*` is the cumulative number of facts the
+    /// ring evicted to stay bounded — those facts are gone, not merely left
+    /// out of this view — so zero means the list beside it is complete.
     pub recent_activity: Vec<ActivityFact>,
+    pub dropped_activity: u64,
     pub recent_errors: Vec<AppErrorFact>,
+    pub dropped_errors: u64,
 }

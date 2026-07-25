@@ -6,12 +6,14 @@
 //! [`HostDataPlane`].
 
 mod app;
+mod bounded;
 mod commands;
 mod limits;
 mod receipt;
 mod views;
 
 pub use app::{AppObserver, ObservationClosed, RuntimeApp};
+pub use bounded::BoundedFacts;
 pub use commands::{
     EventBatch, PlatformCommand, PlatformEvent, ProviderOperationId, SequencedPlatformEvent,
 };

@@ -12,7 +12,7 @@ mod support;
 mod workspace;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet},
     fmt,
     sync::{
         Arc,
@@ -26,7 +26,7 @@ use nmp_native_providers::{
     ConfigProvider, ShellEnvironment, ShellEnvironmentError, ShellEnvironmentLimits,
     ShellEnvironmentSource, ThemeProvider,
 };
-use nmp_native_runtime_app::{KernelClock, RuntimeApp};
+use nmp_native_runtime_app::{BoundedFacts, KernelClock, RuntimeApp};
 use nmp_native_runtime_core::{Capability, Principal, SessionId};
 use nmp_native_runtime_store::RuntimeStore;
 use parking_lot::Mutex;
@@ -58,7 +58,7 @@ pub struct RuntimeController {
     theme_provider: Option<Arc<ThemeProvider>>,
     config_provider: Option<Arc<ConfigProvider>>,
     pub(crate) artifacts: Mutex<BTreeMap<Principal, Arc<VerifiedArtifactHandle>>>,
-    boundary_refusals: Mutex<VecDeque<RuntimeRefusal>>,
+    boundary_refusals: Mutex<BoundedFacts<RuntimeRefusal>>,
     maximum_boundary_events: usize,
     signal: watch::Sender<u64>,
     observers: Arc<AtomicUsize>,

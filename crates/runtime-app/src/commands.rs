@@ -191,4 +191,7 @@ pub struct EventBatch {
     pub newest_available: u64,
     pub events: Vec<SequencedPlatformEvent>,
     pub cursor_was_stale: bool,
+    /// Events evicted between the caller's cursor and `oldest_available`, i.e.
+    /// `oldest_available - cursor - 1`. Zero when the cursor is still live.
+    pub lost_before_batch: u64,
 }

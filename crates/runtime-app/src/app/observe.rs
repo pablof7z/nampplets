@@ -1,6 +1,6 @@
 //! Snapshot publication plus the bounded activity, event, and refusal rings.
 
-use std::{collections::VecDeque, sync::Arc};
+use std::sync::Arc;
 
 use nmp_native_nap_bridge::BridgeError;
 use nmp_native_runtime_core::{Principal, SessionError, SessionId};
@@ -104,15 +104,16 @@ impl RuntimeApp {
                 .collect(),
             resources: self.resources.census(),
             recent_activity: state.activity.iter().cloned().collect(),
+            dropped_activity: state.activity.dropped(),
             recent_errors: state.errors.iter().cloned().collect(),
+            dropped_errors: state.errors.dropped(),
         }
     }
 
     pub(super) fn push_event(&self, state: &mut AppState, event: PlatformEvent) {
         state.next_event_sequence = state.next_event_sequence.saturating_add(1);
         let sequence = state.next_event_sequence;
-        push_bounded(
-            &mut state.events,
+        state.events.push(
             self.limits.maximum_platform_events,
             SequencedPlatformEvent { sequence, event },
         );
@@ -141,11 +142,9 @@ impl RuntimeApp {
             outcome: Arc::clone(&fact.outcome),
             occurred_at_millis: now,
         };
-        push_bounded(
-            &mut state.activity,
-            self.limits.maximum_activity_facts,
-            fact,
-        );
+        state
+            .activity
+            .push(self.limits.maximum_activity_facts, fact);
         if let Err(error) = self.store.append_activity(&persisted) {
             self.record_error(
                 state,
@@ -181,7 +180,7 @@ impl RuntimeApp {
     }
 
     pub(super) fn record_error(&self, state: &mut AppState, fact: AppErrorFact) {
-        push_bounded(&mut state.errors, self.limits.maximum_error_facts, fact);
+        state.errors.push(self.limits.maximum_error_facts, fact);
     }
 
     pub(super) fn refuse_store(
@@ -248,11 +247,4 @@ impl RuntimeApp {
             now,
         );
     }
-}
-
-fn push_bounded<T>(queue: &mut VecDeque<T>, maximum: usize, value: T) {
-    if queue.len() == maximum {
-        queue.pop_front();
-    }
-    queue.push_back(value);
 }

@@ -59,7 +59,8 @@ final class NativeRuntimeWriteReceiptObserverTests: RuntimeNappletSessionTestCas
                 events: [],
                 oldestAvailableEvent: 0,
                 newestAvailableEvent: 0,
-                eventCursorWasStale: false
+                eventCursorWasStale: false,
+                lostBeforeBatch: 0
             )
         )
 

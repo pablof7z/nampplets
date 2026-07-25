@@ -115,7 +115,8 @@ final class NativeRuntimeLibraryObserverTests: RuntimeNappletSessionTestCase {
                 events: [],
                 oldestAvailableEvent: 0,
                 newestAvailableEvent: 0,
-                eventCursorWasStale: false
+                eventCursorWasStale: false,
+                lostBeforeBatch: 0
             )
         )
         var latest = intermediate
@@ -128,7 +129,8 @@ final class NativeRuntimeLibraryObserverTests: RuntimeNappletSessionTestCase {
                 events: [],
                 oldestAvailableEvent: 0,
                 newestAvailableEvent: 0,
-                eventCursorWasStale: true
+                eventCursorWasStale: true,
+                lostBeforeBatch: 0
             )
         )
 

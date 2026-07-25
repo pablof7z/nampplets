@@ -4885,16 +4885,18 @@ public struct RuntimeObservationFrame {
     public var oldestAvailableEvent: UInt64
     public var newestAvailableEvent: UInt64
     public var eventCursorWasStale: Bool
+    public var lostBeforeBatch: UInt64
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(snapshot: RuntimeSnapshot, catalog: RuntimeCatalogFeedSnapshot, events: [RuntimeEvent], oldestAvailableEvent: UInt64, newestAvailableEvent: UInt64, eventCursorWasStale: Bool) {
+    public init(snapshot: RuntimeSnapshot, catalog: RuntimeCatalogFeedSnapshot, events: [RuntimeEvent], oldestAvailableEvent: UInt64, newestAvailableEvent: UInt64, eventCursorWasStale: Bool, lostBeforeBatch: UInt64) {
         self.snapshot = snapshot
         self.catalog = catalog
         self.events = events
         self.oldestAvailableEvent = oldestAvailableEvent
         self.newestAvailableEvent = newestAvailableEvent
         self.eventCursorWasStale = eventCursorWasStale
+        self.lostBeforeBatch = lostBeforeBatch
     }
 }
 
@@ -4923,6 +4925,9 @@ extension RuntimeObservationFrame: Equatable, Hashable {
         if lhs.eventCursorWasStale != rhs.eventCursorWasStale {
             return false
         }
+        if lhs.lostBeforeBatch != rhs.lostBeforeBatch {
+            return false
+        }
         return true
     }
 
@@ -4933,6 +4938,7 @@ extension RuntimeObservationFrame: Equatable, Hashable {
         hasher.combine(oldestAvailableEvent)
         hasher.combine(newestAvailableEvent)
         hasher.combine(eventCursorWasStale)
+        hasher.combine(lostBeforeBatch)
     }
 }
 
@@ -4950,7 +4956,8 @@ public struct FfiConverterTypeRuntimeObservationFrame: FfiConverterRustBuffer {
                 events: FfiConverterSequenceTypeRuntimeEvent.read(from: &buf),
                 oldestAvailableEvent: FfiConverterUInt64.read(from: &buf),
                 newestAvailableEvent: FfiConverterUInt64.read(from: &buf),
-                eventCursorWasStale: FfiConverterBool.read(from: &buf)
+                eventCursorWasStale: FfiConverterBool.read(from: &buf),
+                lostBeforeBatch: FfiConverterUInt64.read(from: &buf)
         )
     }
 
@@ -4961,6 +4968,7 @@ public struct FfiConverterTypeRuntimeObservationFrame: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.oldestAvailableEvent, into: &buf)
         FfiConverterUInt64.write(value.newestAvailableEvent, into: &buf)
         FfiConverterBool.write(value.eventCursorWasStale, into: &buf)
+        FfiConverterUInt64.write(value.lostBeforeBatch, into: &buf)
     }
 }
 
@@ -6741,15 +6749,18 @@ public struct RuntimeSnapshot {
     public var receipts: [RuntimeReceiptSnapshot]
     public var workspaces: [RuntimeWorkspaceDefinition]
     public var recentActivity: [RuntimeActivitySnapshot]
+    public var droppedActivity: UInt64
     public var recentErrors: [RuntimeErrorSnapshot]
+    public var droppedErrors: UInt64
     public var boundaryRefusals: [RuntimeRefusal]
+    public var droppedBoundaryRefusals: UInt64
     public var activeResources: UInt64
     public var resourceHighWatermark: UInt64
     public var resourceRefusalCount: UInt64
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(revision: UInt64, closed: Bool, installedLibrary: RuntimeInstalledLibrarySnapshot, sessions: [RuntimeSessionSnapshot], bindings: [RuntimeBindingSnapshot], pendingWrites: [RuntimePendingWriteSnapshot], receipts: [RuntimeReceiptSnapshot], workspaces: [RuntimeWorkspaceDefinition], recentActivity: [RuntimeActivitySnapshot], recentErrors: [RuntimeErrorSnapshot], boundaryRefusals: [RuntimeRefusal], activeResources: UInt64, resourceHighWatermark: UInt64, resourceRefusalCount: UInt64) {
+    public init(revision: UInt64, closed: Bool, installedLibrary: RuntimeInstalledLibrarySnapshot, sessions: [RuntimeSessionSnapshot], bindings: [RuntimeBindingSnapshot], pendingWrites: [RuntimePendingWriteSnapshot], receipts: [RuntimeReceiptSnapshot], workspaces: [RuntimeWorkspaceDefinition], recentActivity: [RuntimeActivitySnapshot], droppedActivity: UInt64, recentErrors: [RuntimeErrorSnapshot], droppedErrors: UInt64, boundaryRefusals: [RuntimeRefusal], droppedBoundaryRefusals: UInt64, activeResources: UInt64, resourceHighWatermark: UInt64, resourceRefusalCount: UInt64) {
         self.revision = revision
         self.closed = closed
         self.installedLibrary = installedLibrary
@@ -6759,8 +6770,11 @@ public struct RuntimeSnapshot {
         self.receipts = receipts
         self.workspaces = workspaces
         self.recentActivity = recentActivity
+        self.droppedActivity = droppedActivity
         self.recentErrors = recentErrors
+        self.droppedErrors = droppedErrors
         self.boundaryRefusals = boundaryRefusals
+        self.droppedBoundaryRefusals = droppedBoundaryRefusals
         self.activeResources = activeResources
         self.resourceHighWatermark = resourceHighWatermark
         self.resourceRefusalCount = resourceRefusalCount
@@ -6801,10 +6815,19 @@ extension RuntimeSnapshot: Equatable, Hashable {
         if lhs.recentActivity != rhs.recentActivity {
             return false
         }
+        if lhs.droppedActivity != rhs.droppedActivity {
+            return false
+        }
         if lhs.recentErrors != rhs.recentErrors {
             return false
         }
+        if lhs.droppedErrors != rhs.droppedErrors {
+            return false
+        }
         if lhs.boundaryRefusals != rhs.boundaryRefusals {
+            return false
+        }
+        if lhs.droppedBoundaryRefusals != rhs.droppedBoundaryRefusals {
             return false
         }
         if lhs.activeResources != rhs.activeResources {
@@ -6829,8 +6852,11 @@ extension RuntimeSnapshot: Equatable, Hashable {
         hasher.combine(receipts)
         hasher.combine(workspaces)
         hasher.combine(recentActivity)
+        hasher.combine(droppedActivity)
         hasher.combine(recentErrors)
+        hasher.combine(droppedErrors)
         hasher.combine(boundaryRefusals)
+        hasher.combine(droppedBoundaryRefusals)
         hasher.combine(activeResources)
         hasher.combine(resourceHighWatermark)
         hasher.combine(resourceRefusalCount)
@@ -6855,8 +6881,11 @@ public struct FfiConverterTypeRuntimeSnapshot: FfiConverterRustBuffer {
                 receipts: FfiConverterSequenceTypeRuntimeReceiptSnapshot.read(from: &buf),
                 workspaces: FfiConverterSequenceTypeRuntimeWorkspaceDefinition.read(from: &buf),
                 recentActivity: FfiConverterSequenceTypeRuntimeActivitySnapshot.read(from: &buf),
+                droppedActivity: FfiConverterUInt64.read(from: &buf),
                 recentErrors: FfiConverterSequenceTypeRuntimeErrorSnapshot.read(from: &buf),
+                droppedErrors: FfiConverterUInt64.read(from: &buf),
                 boundaryRefusals: FfiConverterSequenceTypeRuntimeRefusal.read(from: &buf),
+                droppedBoundaryRefusals: FfiConverterUInt64.read(from: &buf),
                 activeResources: FfiConverterUInt64.read(from: &buf),
                 resourceHighWatermark: FfiConverterUInt64.read(from: &buf),
                 resourceRefusalCount: FfiConverterUInt64.read(from: &buf)
@@ -6873,8 +6902,11 @@ public struct FfiConverterTypeRuntimeSnapshot: FfiConverterRustBuffer {
         FfiConverterSequenceTypeRuntimeReceiptSnapshot.write(value.receipts, into: &buf)
         FfiConverterSequenceTypeRuntimeWorkspaceDefinition.write(value.workspaces, into: &buf)
         FfiConverterSequenceTypeRuntimeActivitySnapshot.write(value.recentActivity, into: &buf)
+        FfiConverterUInt64.write(value.droppedActivity, into: &buf)
         FfiConverterSequenceTypeRuntimeErrorSnapshot.write(value.recentErrors, into: &buf)
+        FfiConverterUInt64.write(value.droppedErrors, into: &buf)
         FfiConverterSequenceTypeRuntimeRefusal.write(value.boundaryRefusals, into: &buf)
+        FfiConverterUInt64.write(value.droppedBoundaryRefusals, into: &buf)
         FfiConverterUInt64.write(value.activeResources, into: &buf)
         FfiConverterUInt64.write(value.resourceHighWatermark, into: &buf)
         FfiConverterUInt64.write(value.resourceRefusalCount, into: &buf)

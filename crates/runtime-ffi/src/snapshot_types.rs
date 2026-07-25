@@ -197,8 +197,11 @@ pub struct RuntimeSnapshot {
     pub receipts: Vec<RuntimeReceiptSnapshot>,
     pub workspaces: Vec<RuntimeWorkspaceDefinition>,
     pub recent_activity: Vec<RuntimeActivitySnapshot>,
+    pub dropped_activity: u64,
     pub recent_errors: Vec<RuntimeErrorSnapshot>,
+    pub dropped_errors: u64,
     pub boundary_refusals: Vec<RuntimeRefusal>,
+    pub dropped_boundary_refusals: u64,
     pub active_resources: u64,
     pub resource_high_watermark: u64,
     pub resource_refusal_count: u64,
@@ -221,6 +224,7 @@ pub struct RuntimeObservationFrame {
     pub oldest_available_event: u64,
     pub newest_available_event: u64,
     pub event_cursor_was_stale: bool,
+    pub lost_before_batch: u64,
 }
 
 #[uniffi::export(callback_interface)]

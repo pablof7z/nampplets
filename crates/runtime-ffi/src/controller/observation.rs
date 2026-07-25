@@ -112,6 +112,7 @@ impl RuntimeController {
                             oldest_available_event: batch.oldest_available,
                             newest_available_event: batch.newest_available,
                             event_cursor_was_stale: batch.cursor_was_stale,
+                            lost_before_batch: batch.lost_before_batch,
                         });
                         tokio::select! {
                             changed = app_observer.changed() => {
@@ -160,6 +161,7 @@ impl RuntimeController {
 
 impl RuntimeController {
     pub(super) fn project_snapshot(&self, snapshot: &AppSnapshot) -> RuntimeSnapshot {
+        let refusals = self.boundary_refusals.lock();
         RuntimeSnapshot {
             revision: snapshot.revision,
             closed: snapshot.closed,
@@ -279,6 +281,7 @@ impl RuntimeController {
                     occurred_at_millis: fact.occurred_at_millis,
                 })
                 .collect(),
+            dropped_activity: snapshot.dropped_activity,
             recent_errors: snapshot
                 .recent_errors
                 .iter()
@@ -301,7 +304,9 @@ impl RuntimeController {
                     occurred_at_millis: fact.occurred_at_millis,
                 })
                 .collect(),
-            boundary_refusals: self.boundary_refusals.lock().iter().cloned().collect(),
+            dropped_errors: snapshot.dropped_errors,
+            boundary_refusals: refusals.iter().cloned().collect(),
+            dropped_boundary_refusals: refusals.dropped(),
             active_resources: snapshot.resources.admitted as u64,
             resource_high_watermark: snapshot.resources.high_watermark as u64,
             resource_refusal_count: snapshot.resources.refusal_count,
