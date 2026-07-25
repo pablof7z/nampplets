@@ -9,6 +9,7 @@ use crate::{
     GOOD_MORNING_D_TAG, MAXIMUM_PERMISSION_DECISIONS, RuntimeCatalogCapability,
     RuntimeCatalogConfirmation, RuntimeCatalogProvenance, RuntimeExactBuildCoordinate,
     RuntimePermissionRequirement, RuntimeProviderUpdate, RuntimeRefusal, VerifiedArtifact,
+    snapshot_integrity::MAXIMUM_REPORTED_PROJECTION_FAULTS,
     support::{bump_signal, now_millis},
 };
 
@@ -156,6 +157,26 @@ impl RuntimeController {
             refused: 0,
             refusal: Some(refusal),
         }
+    }
+
+    /// Surfaces one projection fault as a boundary refusal, at most once per
+    /// controller for each distinct `(code, detail)` pair.
+    ///
+    /// Projection runs on every publish and on every pull, so a fault that
+    /// survives in stored state would otherwise be re-recorded without bound:
+    /// it would evict the refusal ring and, through `record_refusal`'s signal
+    /// bump, keep waking the observation loop. Beyond
+    /// `MAXIMUM_REPORTED_PROJECTION_FAULTS` distinct faults the latch stops
+    /// admitting new keys rather than growing forever.
+    pub(crate) fn report_projection_fault(&self, code: &str, detail: String) {
+        let key = format!("{code} {detail}");
+        {
+            let mut reported = self.reported_projection_faults.lock();
+            if reported.len() >= MAXIMUM_REPORTED_PROJECTION_FAULTS || !reported.insert(key) {
+                return;
+            }
+        }
+        self.record_refusal(code.to_owned(), detail);
     }
 
     pub(super) fn record_refusal(&self, code: impl Into<String>, detail: impl Into<String>) {

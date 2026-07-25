@@ -19,9 +19,12 @@ use crate::{
     RuntimePendingWriteSnapshot, RuntimeReceiptSnapshot, RuntimeRelayDiagnosticsObservationStart,
     RuntimeRelayDiagnosticsObserver, RuntimeRelayDiagnosticsSnapshot, RuntimeSessionSnapshot,
     RuntimeSnapshot,
-    projection::{project_event, project_profile},
+    projection::{
+        ProjectedWorkspaces, assigned_workspace_ids, project_event, project_profile,
+        project_workspaces,
+    },
+    snapshot_integrity::check_snapshot_integrity,
     support::bump_signal,
-    workspace::workspace_from_view,
 };
 
 #[uniffi::export]
@@ -161,9 +164,18 @@ impl RuntimeController {
 }
 
 impl RuntimeController {
-    pub(super) fn project_snapshot(&self, snapshot: &AppSnapshot) -> RuntimeSnapshot {
+    pub(crate) fn project_snapshot(&self, snapshot: &AppSnapshot) -> RuntimeSnapshot {
         let refusals = self.boundary_refusals.lock();
-        RuntimeSnapshot {
+        // Referential closure, established here rather than re-derived by every
+        // binding (#106): a build may only claim workspaces this same
+        // projection publishes.
+        let ProjectedWorkspaces {
+            workspaces,
+            published_ids,
+            unprojectable,
+        } = project_workspaces(&snapshot.workspaces);
+
+        let projected = RuntimeSnapshot {
             revision: snapshot.revision,
             closed: snapshot.closed,
             installed_library: RuntimeInstalledLibrarySnapshot {
@@ -194,14 +206,11 @@ impl RuntimeController {
                             .iter()
                             .map(|session| session.0)
                             .collect(),
-                        assigned_workspace_ids: snapshot
-                            .workspaces
-                            .iter()
-                            .filter(|workspace| {
-                                workspace.assigned_builds.contains(&view.build.principal)
-                            })
-                            .map(|workspace| workspace.id.to_string())
-                            .collect(),
+                        assigned_workspace_ids: assigned_workspace_ids(
+                            &snapshot.workspaces,
+                            &published_ids,
+                            &view.build.principal,
+                        ),
                     })
                     .collect(),
             },
@@ -264,11 +273,7 @@ impl RuntimeController {
                         .map(|latest| latest.state.as_str().to_owned()),
                 })
                 .collect(),
-            workspaces: snapshot
-                .workspaces
-                .iter()
-                .filter_map(|workspace| workspace_from_view(workspace).ok())
-                .collect(),
+            workspaces,
             recent_activity: snapshot
                 .recent_activity
                 .iter()
@@ -303,6 +308,35 @@ impl RuntimeController {
             active_resources: snapshot.resources.admitted as u64,
             resource_high_watermark: snapshot.resources.high_watermark as u64,
             resource_refusal_count: snapshot.resources.refusal_count,
+        };
+        // `report_projection_faults` appends to `boundary_refusals` through
+        // `record_boundary_refusal`, and parking_lot mutexes are not
+        // reentrant: the read guard taken above must be released first.
+        drop(refusals);
+        self.report_projection_faults(&unprojectable, &projected);
+        projected
+    }
+
+    /// Reports, once each, anything this projection could not carry faithfully.
+    ///
+    /// A dropped workspace and a violated invariant are both producer-side
+    /// faults: no binding can repair them, and a binding that re-detects them
+    /// can only refuse an otherwise healthy runtime. Recording them as
+    /// `RuntimeRefusal`s keeps the evidence at the boundary every platform
+    /// already reads, without a parallel error surface.
+    fn report_projection_faults(
+        &self,
+        unprojectable_workspaces: &[(String, String)],
+        projected: &RuntimeSnapshot,
+    ) {
+        for (workspace_id, error) in unprojectable_workspaces {
+            self.report_projection_fault(
+                "workspace-projection",
+                format!("stored workspace {workspace_id} cannot cross the boundary: {error}"),
+            );
+        }
+        if let Err(violation) = check_snapshot_integrity(projected) {
+            self.report_projection_fault(violation.code(), violation.to_string());
         }
     }
 }

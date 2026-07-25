@@ -1,15 +1,17 @@
 //! Rust-owned projections between kernel types and the FFI boundary records.
 
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use nmp_native_artifact::ManifestCoordinate;
 use nmp_native_nmp_adapter::{
     AccountLifecycleError, LocalAccountHandle, LocalAccountKind, LocalAccountSnapshot,
 };
 use nmp_native_providers::{ThemeProviderLimits, ThemeSnapshot};
-use nmp_native_runtime_app::{PermissionPlatformAvailability, PermissionReviewView, PlatformEvent};
+use nmp_native_runtime_app::{
+    PermissionPlatformAvailability, PermissionReviewView, PlatformEvent, WorkspaceView,
+};
 use nmp_native_runtime_core::{
-    CapabilityRequirement, ExecutionProfile, GrantDecision, Sensitivity,
+    CapabilityRequirement, ExecutionProfile, GrantDecision, Principal, Sensitivity,
 };
 
 use crate::{
@@ -19,7 +21,62 @@ use crate::{
     RuntimePermissionCapabilitySnapshot, RuntimePermissionDecisionOption,
     RuntimePermissionExistingDecision, RuntimePermissionPlatformAvailability,
     RuntimePermissionRequirement, RuntimePermissionReviewSnapshot, RuntimePermissionSensitivity,
+    RuntimeWorkspaceDefinition, workspace::workspace_from_view,
 };
+
+/// The workspace half of one snapshot projection.
+///
+/// `published_ids` is the authority for every workspace cross-reference in the
+/// same projection: a stored workspace that cannot cross the versioned schema
+/// boundary is absent from `workspaces`, and must therefore be absent from the
+/// builds' assignments too.
+pub(crate) struct ProjectedWorkspaces {
+    pub(crate) workspaces: Vec<RuntimeWorkspaceDefinition>,
+    pub(crate) published_ids: BTreeSet<String>,
+    /// Workspace id plus the reason it could not be projected, for the boundary
+    /// refusal that keeps the drop from being silent.
+    pub(crate) unprojectable: Vec<(String, String)>,
+}
+
+pub(crate) fn project_workspaces(views: &[WorkspaceView]) -> ProjectedWorkspaces {
+    let mut workspaces = Vec::with_capacity(views.len());
+    let mut published_ids = BTreeSet::new();
+    let mut unprojectable = Vec::new();
+    for view in views {
+        match workspace_from_view(view) {
+            Ok(workspace) => {
+                published_ids.insert(workspace.workspace_id.clone());
+                workspaces.push(workspace);
+            }
+            Err(error) => unprojectable.push((view.id.to_string(), error)),
+        }
+    }
+    ProjectedWorkspaces {
+        workspaces,
+        published_ids,
+        unprojectable,
+    }
+}
+
+/// The workspaces one installed build is assigned to, restricted to workspaces
+/// this same projection publishes.
+///
+/// The restriction is what makes the reference closed by construction instead
+/// of a check every platform binding has to repeat (#106).
+pub(crate) fn assigned_workspace_ids(
+    views: &[WorkspaceView],
+    published_ids: &BTreeSet<String>,
+    principal: &Principal,
+) -> Vec<String> {
+    views
+        .iter()
+        .filter(|workspace| {
+            published_ids.contains(workspace.id.as_ref())
+                && workspace.assigned_builds.contains(principal)
+        })
+        .map(|workspace| workspace.id.to_string())
+        .collect()
+}
 
 pub(crate) fn theme_from_appearance(
     appearance: NativeAppearanceSnapshot,

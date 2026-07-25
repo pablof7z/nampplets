@@ -15,6 +15,7 @@ mod diagnostics;
 mod native_capabilities;
 mod permission_types;
 mod projection;
+mod snapshot_integrity;
 mod snapshot_types;
 mod support;
 mod types;

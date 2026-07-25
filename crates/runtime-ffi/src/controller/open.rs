@@ -22,7 +22,7 @@ use nmp_native_runtime_core::{GrantLimits, ResourceLimits};
 use nmp_native_runtime_store::{RuntimeStore, StoreLimits};
 use nmp_native_surface::BindingLimits;
 use parking_lot::Mutex;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use tokio::sync::watch;
 
 use super::{RuntimeController, RuntimeShellEnvironment, SystemClock};
@@ -306,6 +306,7 @@ pub(super) fn open_runtime_controller(
         config_provider,
         artifacts: Mutex::new(BTreeMap::new()),
         boundary_refusals: Mutex::new(BoundedFacts::with_capacity(config.maximum_boundary_events)),
+        reported_projection_faults: Mutex::new(BTreeSet::new()),
         maximum_boundary_events: config.maximum_boundary_events,
         signal,
         observers: Arc::new(AtomicUsize::new(0)),

@@ -59,6 +59,12 @@ pub struct RuntimeController {
     config_provider: Option<Arc<ConfigProvider>>,
     pub(crate) artifacts: Mutex<BTreeMap<Principal, Arc<VerifiedArtifactHandle>>>,
     boundary_refusals: Mutex<BoundedFacts<RuntimeRefusal>>,
+    /// Projection faults already surfaced as boundary refusals, keyed by
+    /// refusal code plus offending identity. Projection runs on every publish
+    /// and on every pull, so without this latch one persistent fault would
+    /// evict the bounded refusal ring and, through `bump_signal`, spin the
+    /// observation loop. Bounded by `MAXIMUM_REPORTED_PROJECTION_FAULTS`.
+    reported_projection_faults: Mutex<BTreeSet<String>>,
     maximum_boundary_events: usize,
     signal: watch::Sender<u64>,
     observers: Arc<AtomicUsize>,
