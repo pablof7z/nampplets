@@ -59,11 +59,10 @@ final class RuntimeWorkbenchUITests: XCTestCase {
             ]
             XCTAssertTrue(decision.waitForExistence(timeout: 10))
             XCTAssertTrue(scrollToHittable(decision, in: app))
-            decision.click()
             let allow = app.descendants(matching: .any)[
                 "permission-\(domain)-allowExactBuild"
             ]
-            XCTAssertTrue(allow.waitForExistence(timeout: 2))
+            XCTAssertTrue(openDecisionMenu(decision, revealing: allow))
             allow.click()
         }
 
@@ -228,12 +227,11 @@ final class RuntimeWorkbenchUITests: XCTestCase {
                 scrollToHittable(decision, in: app),
                 "The \(domain) decision must be reachable in the native review"
             )
-            decision.click()
             let allow = app.descendants(matching: .any)[
                 "permission-\(domain)-allowExactBuild"
             ]
             XCTAssertTrue(
-                allow.waitForExistence(timeout: 2),
+                openDecisionMenu(decision, revealing: allow),
                 "The runtime must offer an exact-build grant for \(domain)"
             )
             allow.click()
@@ -321,17 +319,100 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         guard !element.isHittable else {
             return true
         }
-        let scrollView = app.scrollViews.firstMatch
+        // Scope the scroll view lookup to the window that actually contains
+        // `element`. A previously dismissed sheet (e.g. the account
+        // registration window) can still report its own scroll view to an
+        // app-wide, unscoped `app.scrollViews.firstMatch` query for a brief
+        // window while it finishes tearing down, even after the specific
+        // control we waited on has already left the accessibility tree.
+        // Swiping that stale scroll view has no effect on the still-open
+        // review sheet and would silently spin without ever revealing
+        // `element`, so anchor the search to element's own window instead of
+        // relying on window ordering.
+        let scope = containingWindow(of: element, in: app) ?? app
+        let scrollView = scope.scrollViews.firstMatch
         guard scrollView.waitForExistence(timeout: 2) else {
             return false
         }
         for _ in 0 ..< 6 {
             scrollView.swipeUp()
-            if element.isHittable {
+            if element.isHittable, waitForStableFrame(element, timeout: 2) {
                 return true
             }
         }
         return false
+    }
+
+    /// Clicks `decision` to open its native popup menu and waits for `allow`
+    /// to appear inside it, retrying the click a bounded number of times.
+    ///
+    /// A click delivered immediately after `scrollToHittable` scrolls a row
+    /// into view can land on a control whose popup-menu tracking session
+    /// never stabilizes in the accessibility tree — the row was hittable,
+    /// but only just, right at the edge of the scroll view's clip bounds.
+    /// The first click is silently swallowed rather than opening a menu.
+    /// Retrying the click (instead of only waiting longer for a menu that
+    /// was never opened) recovers deterministically without weakening what
+    /// this is actually asserting: that the runtime offers this decision.
+    @MainActor
+    private func openDecisionMenu(
+        _ decision: XCUIElement,
+        revealing allow: XCUIElement
+    ) -> Bool {
+        for _ in 0 ..< 3 {
+            decision.click()
+            if allow.waitForExistence(timeout: 2) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// `swipeUp()` requests a fast (flinged) scroll, which hands off to
+    /// AppKit's own momentum/deceleration animation. That animation runs on
+    /// the window server, not the app's run loop, so XCUITest's automatic
+    /// "wait for app to idle" step completes before the scrolled content has
+    /// actually come to rest. Interacting with a menu-style control while its
+    /// row is still drifting underneath the pointer can open a popup menu
+    /// that never stabilizes in the accessibility tree before it is
+    /// dismissed by the continuing scroll. Waiting for the element's frame
+    /// to be identical across two consecutive samples confirms the scroll
+    /// has actually settled before the caller clicks it.
+    @MainActor
+    private func waitForStableFrame(
+        _ element: XCUIElement,
+        timeout: TimeInterval
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        var previousFrame: CGRect?
+        while Date() < deadline {
+            guard element.isHittable else {
+                previousFrame = nil
+                usleep(100_000)
+                continue
+            }
+            let currentFrame = element.frame
+            if let previousFrame, previousFrame == currentFrame {
+                return true
+            }
+            previousFrame = currentFrame
+            usleep(150_000)
+        }
+        return false
+    }
+
+    @MainActor
+    private func containingWindow(
+        of element: XCUIElement,
+        in app: XCUIApplication
+    ) -> XCUIElement? {
+        let identifier = element.identifier
+        guard !identifier.isEmpty else {
+            return nil
+        }
+        return app.windows.allElementsBoundByIndex.first { window in
+            window.descendants(matching: .any)[identifier].exists
+        }
     }
 
     @MainActor
