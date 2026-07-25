@@ -334,13 +334,110 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         guard scrollView.waitForExistence(timeout: 2) else {
             return false
         }
-        for _ in 0 ..< 6 {
+
+        // The permission sheet's window is only given `idealHeight: 720`;
+        // its floor is `minHeight: 560`. A fixed swipe count tuned against
+        // one developer's local display — where the sheet renders near its
+        // ideal size and most of the capability list is visible without
+        // scrolling — does not generalize: CI runs headless against its own
+        // virtual display, which can size the sheet down toward its minimum
+        // height and reveal far less of the list per swipe, so a domain
+        // that never needed scrolling locally can need several swipes in
+        // CI. Loop with a generous, geometry-independent attempt budget
+        // instead of a fixed one tuned to a single screen.
+        //
+        // Swiping is intentionally one-directional (always up, the
+        // direction that reveals later rows). An earlier version of this
+        // loop tried to "correct" an overshoot by swiping back down
+        // whenever the target briefly scrolled out of the visible area
+        // above the scroll view. In practice that made things worse: for a
+        // row sitting exactly at the end of the scrollable content (e.g.
+        // the last capability in the list), alternating swipe directions
+        // could make the row's accessibility element flicker in and out of
+        // existence entirely and, eventually, made the scroll view itself
+        // stop resolving in the accessibility snapshot
+        // ("Failed to get matching snapshot ... ScrollView"), reproduced
+        // locally. A single scroll direction does not have that failure
+        // mode.
+        //
+        // "Revealed" requires the target's full frame inside the scroll
+        // view's visible bounds (see `isFullyRevealed`), not merely
+        // `isHittable`: XCUITest can mark a row hittable a frame or two
+        // before it has fully crossed the scroll view's clip boundary,
+        // which was enough for the old check to stop scrolling but not
+        // enough for a subsequent click to reliably open its popup menu —
+        // exactly the residual flakiness a previous pass through this test
+        // flagged for the last row in the list.
+        //
+        // Progress is tracked by the target's vertical offset from the
+        // scroll view's center. Once swiping stops moving that offset
+        // (the scroll view has reached the end of its content — the
+        // saturation point), further swipes cannot help, so stop and
+        // report a diagnostic instead of silently spinning to the attempt
+        // ceiling.
+        let maxAttempts = 20
+        var consecutiveStalls = 0
+        var previousOffset: CGFloat?
+
+        for attempt in 0 ..< maxAttempts {
             scrollView.swipeUp()
-            if element.isHittable, waitForStableFrame(element, timeout: 2) {
+            usleep(250_000)
+
+            if isFullyRevealed(element, in: scrollView),
+                waitForStableFrame(element, timeout: 2)
+            {
                 return true
             }
+
+            let scrollFrame = scrollView.frame
+            let elementFrame = element.frame
+            let offset = abs(elementFrame.midY - scrollFrame.midY)
+            if let previousOffset, abs(offset - previousOffset) < 1 {
+                consecutiveStalls += 1
+            } else {
+                consecutiveStalls = 0
+            }
+            previousOffset = offset
+
+            if consecutiveStalls >= 3 {
+                NSLog(
+                    "scrollToHittable: giving up on "
+                        + "\(element.identifier) after \(attempt + 1) "
+                        + "attempt(s) — the scroll view stopped moving it "
+                        + "any further (reached the end of its content) "
+                        + "without fully revealing it. isHittable="
+                        + "\(element.isHittable) scrollView=\(scrollFrame) "
+                        + "element=\(elementFrame)"
+                )
+                return false
+            }
         }
+
+        NSLog(
+            "scrollToHittable: exhausted \(maxAttempts) attempts revealing "
+                + "\(element.identifier). isHittable=\(element.isHittable) "
+                + "Last scrollView=\(scrollView.frame) "
+                + "element=\(element.frame)"
+        )
         return false
+    }
+
+    /// Whether `element`'s full frame sits inside `scrollView`'s visible
+    /// bounds, not merely at its edge. XCUITest can mark a row `isHittable`
+    /// a frame or two before it has fully crossed the scroll view's clip
+    /// boundary — enough to stop scrolling but not enough for a subsequent
+    /// click to land reliably on it.
+    @MainActor
+    private func isFullyRevealed(
+        _ element: XCUIElement,
+        in scrollView: XCUIElement
+    ) -> Bool {
+        guard element.exists, element.isHittable else {
+            return false
+        }
+        let margin: CGFloat = 2
+        let visibleBounds = scrollView.frame.insetBy(dx: 0, dy: margin)
+        return visibleBounds.contains(element.frame)
     }
 
     /// Clicks `decision` to open its native popup menu and waits for `allow`
