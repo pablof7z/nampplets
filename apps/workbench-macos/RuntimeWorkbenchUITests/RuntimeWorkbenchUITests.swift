@@ -9,6 +9,14 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         String(repeating: "0", count: 63) + "1"
     static let uiTestSigningPublicKey =
         "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+    /// Mirrors `WorkbenchUITestStorage.runIdentifierKey`; the UI test bundle
+    /// drives the app out of process and does not link the feature package.
+    private static let runIdentifierKey = "NMP_WORKBENCH_UI_TEST_RUN_ID"
+
+    /// Names the transient storage root this run owns, so no other run of the
+    /// Workbench can clear it. One identifier per test keeps the root stable
+    /// across every launch the test makes.
+    private var runIdentifier = UUID().uuidString.lowercased()
 
     /// When the running test method started, so the app-liveness diagnostic
     /// below can report *how far in* a failure landed. The reported deaths
@@ -17,17 +25,23 @@ final class RuntimeWorkbenchUITests: XCTestCase {
     private(set) var testStartedAt = Date()
 
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
+        // In UI tests it is usually best to stop immediately when a failure
+        // occurs.
         continueAfterFailure = false
         testStartedAt = Date()
+        runIdentifier = UUID().uuidString.lowercased()
 
         // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
     }
 
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
+    /// Hands the app under test the storage root it may clear.
+    ///
+    /// The runner deliberately does not remove the root itself: the Workbench
+    /// is sandboxed, so the directory lives in its container tmp and is not
+    /// visible from this process. The app reclaims finished runs' roots on its
+    /// next launch instead.
+    private func isolateStorage(of app: XCUIApplication) {
+        app.launchEnvironment[Self.runIdentifierKey] = runIdentifier
     }
 
     /// Captures the app-liveness diagnostic at the instant a failure is
@@ -50,6 +64,7 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]
         app.launchEnvironment["NMP_WORKBENCH_UI_TEST_SCENARIO"] =
             "good-morning-permission-launch"
+        isolateStorage(of: app)
         app.launch()
         app.activate()
 
@@ -134,6 +149,7 @@ final class RuntimeWorkbenchUITests: XCTestCase {
 
         let app = XCUIApplication()
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]
+        isolateStorage(of: app)
         app.launch()
         app.activate()
 
