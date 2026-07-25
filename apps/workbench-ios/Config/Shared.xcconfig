@@ -31,3 +31,13 @@ INFOPLIST_FILE = Config/Info.plist
 // ==========================================
 // AI agents can modify Config/RuntimeWorkbenchiOS.entitlements to add capabilities
 CODE_SIGN_ENTITLEMENTS = Config/RuntimeWorkbenchiOS.entitlements
+
+// ==========================================
+// Code Signing
+// ==========================================
+// A stable Team ID is required so Keychain-backed account persistence
+// (MacOSKeychainAccountVault) survives across rebuilds and on-device runs.
+// CI builds for the simulator with CODE_SIGNING_ALLOWED=NO and is
+// unaffected by this.
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM = 456SHKPP26

@@ -29,3 +29,14 @@ INFOPLIST_FILE = Config/Info.plist
 // ==========================================
 // AI agents can modify Config/RuntimeWorkbench.entitlements to add capabilities
 CODE_SIGN_ENTITLEMENTS = Config/RuntimeWorkbench.entitlements
+
+// ==========================================
+// Code Signing
+// ==========================================
+// A stable Team ID is required so Keychain-backed account persistence
+// (MacOSKeychainAccountVault) survives across rebuilds: without a team,
+// Xcode falls back to ad-hoc signing, which mints a new signing identity
+// per build and invalidates access to Keychain items the previous build
+// wrote. CI overrides these via command-line flags to stay unsigned.
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM = 456SHKPP26
