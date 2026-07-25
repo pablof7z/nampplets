@@ -38,6 +38,12 @@ These rules apply to the whole repository.
 - A file already past 600 lines is not license to keep piling onto it: put
   new code in a new module/file, and any nontrivial change touching such a
   file should shrink it (extract, split) rather than add net lines.
+- This is enforced as a one-way ratchet, not just a guideline: a file at or
+  over 600 lines must not grow versus its prior committed size (it may shrink
+  freely, even while staying over the ceiling), and a file under 600 lines
+  must not cross it. `scripts/ci/check_file_growth.py` implements the check;
+  it runs in CI (`file-growth` job) and locally via the pre-commit hook
+  installed by `scripts/setup-git-hooks.sh`.
 
 ## Workstream boundaries
 

@@ -76,6 +76,10 @@ swift test --package-path platforms/apple --parallel
 swift test --package-path apps/workbench-macos/RuntimeWorkbenchPackage --parallel
 ```
 
+Run `scripts/setup-git-hooks.sh` once per checkout to enforce the AGENTS.md
+600-line file-growth ratchet locally before every commit; CI enforces it
+independently regardless of local setup.
+
 Use the concrete Xcode project and scheme arguments documented by
 `apps/workbench-macos/README.md`. The sibling `~/Work/nmp` checkout is a
 read-only reference and must never be modified by this repository's workflows.

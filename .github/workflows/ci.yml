@@ -143,6 +143,48 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  file-growth:
+    name: File-growth ratchet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Test the file-growth ratchet check
+        run: python3 -m unittest scripts/ci/test_check_file_growth.py
+
+      - name: Resolve the base revision for this change
+        id: base
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ -n "$PR_BASE_SHA" ]; then
+            base_sha="$PR_BASE_SHA"
+          elif [ -n "$PUSH_BEFORE_SHA" ] \
+            && [ "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ] \
+            && git rev-parse -q --verify "${PUSH_BEFORE_SHA}^{commit}" >/dev/null 2>&1; then
+            base_sha="$PUSH_BEFORE_SHA"
+          elif git rev-parse -q --verify "HEAD~1" >/dev/null 2>&1; then
+            base_sha="HEAD~1"
+          else
+            base_sha=""
+          fi
+          echo "sha=$base_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce the 600-line file-growth ratchet
+        if: steps.base.outputs.sha != ''
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: >-
+          python3 scripts/ci/check_file_growth.py
+          --base "$BASE_SHA"
+          --head "$GITHUB_SHA"
+
   rust:
     name: Rust workspace
     runs-on: ubuntu-24.04
