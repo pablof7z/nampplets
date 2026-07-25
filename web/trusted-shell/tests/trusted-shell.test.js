@@ -795,6 +795,21 @@ test("outbox projection supports bounded query, publish, and subscription lifecy
     { events: [], incomplete: true, error: "one relay is unavailable" }
   );
 
+  const bounded = outbox.query([{ kinds: [1] }], { timeoutMs: 1000 });
+  const boundedEnvelope = harness.sent.at(-1).envelope;
+  harness.receive({
+    type: "outbox.query.result",
+    id: boundedEnvelope.id,
+    events: [],
+    incomplete: true,
+    reason: "query event bound reached (1024 events)"
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(await bounded)), {
+    events: [],
+    incomplete: true,
+    reason: "query event bound reached (1024 events)"
+  });
+
   const received = [];
   const closed = [];
   const subscription = outbox.subscribe({ kinds: [1] });
@@ -873,6 +888,19 @@ test("relay projection preserves event, EOSE, query, and governed publish result
   assert.equal(queryResult[0].event.id, "profile");
   assert.equal(queryResult.incomplete, true);
   assert.equal(queryResult.error, undefined);
+
+  const bounded = relay.query({ kinds: [1] });
+  const boundedEnvelope = harness.sent.at(-1).envelope;
+  harness.receive({
+    type: "relay.query.result",
+    id: boundedEnvelope.id,
+    events: [{ event: { id: "bounded" } }],
+    incomplete: true,
+    reason: "query event bound reached (1024 events)"
+  });
+  const boundedResult = await bounded;
+  assert.equal(boundedResult.incomplete, true);
+  assert.equal(boundedResult.reason, "query event bound reached (1024 events)");
 
   const publish = relay.publish({
     kind: 1,

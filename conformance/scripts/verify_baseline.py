@@ -80,6 +80,30 @@ def verify_lock(lock: dict[str, Any]) -> None:
         raise BaselineError("manifest kind baseline drifted")
     if set(lock["artifacts"]["accepted_modes"]) != {"single-file", "external-assets"}:
         raise BaselineError("artifact modes do not match deliberate baseline")
+    artifact_redirect_contract = {
+        "redirect_policy": "manual-per-hop-revalidation",
+        "maximum_redirect_hops": 5,
+        "accepted_redirect_statuses": [301, 302, 303, 307, 308],
+        "transport_auto_follow": False,
+        "requires_https": True,
+        "requires_credential_free_url": True,
+        "requires_query_free_url": True,
+        "requires_fragment_free_url": True,
+        "requires_fresh_dns_each_hop": True,
+        "requires_public_address_each_hop": True,
+        "requires_address_pinned_connection": True,
+        "requires_hostname_tls_sni": True,
+        "allows_ambient_proxy": False,
+        "requires_exact_effective_url_each_hop": True,
+        "default_request_deadline_seconds": 15,
+        "default_maximum_path_bytes": 8 * 1024 * 1024,
+        "default_maximum_artifact_bytes": 32 * 1024 * 1024,
+        "requires_typed_observable_refusal": True,
+        "retention_execution_gate": "per-path-sha256-and-aggregate",
+    }
+    for field, expected in artifact_redirect_contract.items():
+        if lock["artifacts"].get(field) != expected:
+            raise BaselineError(f"artifact redirect contract drifted: {field}")
     if lock["web_projection"]["sandbox_tokens"] != ["allow-scripts"]:
         raise BaselineError("sandbox baseline must contain only allow-scripts")
     for required_true in (
@@ -137,8 +161,17 @@ def verify_lock(lock: dict[str, Any]) -> None:
         raise BaselineError("Good Morning capability profile has an unknown domain")
 
     status = lock["baseline"]["status"]
-    signoffs = lock["signoff"].values()
-    if status == "ratified" and any(not value.strip() for value in signoffs):
+    signoffs = lock["signoff"]
+    if signoffs.get("product_owner") != "pablof7z":
+        raise BaselineError("product-owner direction is not recorded")
+    pending_signoffs = (
+        signoffs.get("compatibility_reviewer"),
+        signoffs.get("security_reviewer"),
+        signoffs.get("nmp_boundary_reviewer"),
+    )
+    if status == "unratified" and any(pending_signoffs):
+        raise BaselineError("unratified baseline must keep pending signoffs empty")
+    if status == "ratified" and any(not value.strip() for value in signoffs.values()):
         raise BaselineError("ratified baseline requires every signoff")
     if any(value == "PENDING" for value in lock["corpus"].values()):
         raise BaselineError("corpus digests are not finalized")
@@ -314,17 +347,67 @@ def verify_service_scenarios() -> tuple[int, int, int]:
         for step in scenario["script"]:
             if step.startswith("event:") and step.removeprefix("event:") not in events:
                 raise BaselineError(f"relay scenario references unknown event fixture: {step}")
-    blob_ids = {scenario["id"] for scenario in scenarios["blob"]}
-    if not {
+    blob_by_id = {scenario["id"]: scenario for scenario in scenarios["blob"]}
+    blob_ids = set(blob_by_id)
+    required_blobs = {
         "verified-index",
         "one-byte-corrupt",
         "missing",
-        "redirect-refused",
+        "redirect-public-followed",
+        "redirect-unsafe-target",
+        "redirect-hop-limit",
+        "redirect-effective-url-mismatch",
         "mime-mismatch",
         "oversized",
         "slow-stream",
-    } <= blob_ids:
-        raise BaselineError("blob scenarios are incomplete")
+    }
+    if blob_ids != required_blobs:
+        raise BaselineError(f"blob scenario mismatch: {blob_ids ^ required_blobs}")
+    redirect_expectations = {
+        "redirect-public-followed": {
+            "status": 302,
+            "request_url": "https://artifacts.example/index.html",
+            "effective_url": "https://artifacts.example/index.html",
+            "redirect_hop": 1,
+            "mutation": "location:https://cdn.example/index.html",
+            "expected_policy": "follow-after-manual-revalidation",
+        },
+        "redirect-unsafe-target": {
+            "status": 302,
+            "request_url": "https://artifacts.example/index.html",
+            "effective_url": "https://artifacts.example/index.html",
+            "redirect_hop": 1,
+            "mutation": "location:https://127.0.0.1/index.html",
+            "expected_policy": "typed-refusal-non-public-address",
+        },
+        "redirect-hop-limit": {
+            "status": 308,
+            "request_url": "https://hop-5.example/index.html",
+            "effective_url": "https://hop-5.example/index.html",
+            "redirect_hop": 6,
+            "mutation": "location:https://hop-6.example/index.html",
+            "expected_policy": "typed-refusal-hop-limit",
+        },
+        "redirect-effective-url-mismatch": {
+            "status": 200,
+            "request_url": "https://artifacts.example/index.html",
+            "effective_url": "https://confused.example/index.html",
+            "redirect_hop": 0,
+            "mutation": "none",
+            "expected_policy": "typed-refusal-effective-url",
+        },
+    }
+    for scenario_id, expected in redirect_expectations.items():
+        scenario = blob_by_id[scenario_id]
+        if scenario.get("response_role") != "raw-hop-response":
+            raise BaselineError(
+                f"blob scenario {scenario_id} must remain a raw hop response"
+            )
+        for field, value in expected.items():
+            if scenario.get(field) != value:
+                raise BaselineError(
+                    f"blob scenario {scenario_id} contract drifted: {field}"
+                )
     signer_results = {scenario["result"] for scenario in scenarios["signer"]}
     if signer_results != {"approved", "rejected", "invalid", "unavailable"}:
         raise BaselineError("signer result coverage is incomplete")

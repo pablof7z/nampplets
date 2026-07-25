@@ -59,6 +59,11 @@ jobs:
           --locked
           --root "$RUNNER_TEMP/antislop"
 
+      - name: Test the bounded AntiSlop runner
+        run: python3 -m unittest scripts/ci/test_run_antislop.py
+        env:
+          ANTISLOP_BINARY: ${{ runner.temp }}/antislop/bin/antislop
+
       - name: Reject unfinished first-party source
         run: >-
           python3 scripts/ci/run_antislop.py

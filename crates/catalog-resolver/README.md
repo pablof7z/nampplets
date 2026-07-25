@@ -18,11 +18,12 @@ Production integration has three Arc-owned boundaries:
   start/completion/operation contract. `RustHttpsAcquisitionPort` is the
   production implementation: one fixed-size Rust runtime, zero-queue
   admission, system DNS, public-address admission before connect, exact
-  approved-address pinning under the original hostname (preserving TLS/SNI),
-  redirects disabled, one overall deadline, and a streaming
-  `maximum_bytes + 1` cap. It reports the exact effective URL, status, redirect
-  presence, resolved socket addresses, and bounded response bytes for a second
-  defensive validation before retention.
+  approved-address pinning under the requested hostname (preserving TLS/SNI),
+  no ambient proxy, transport auto-redirect disabled, a 15-second default
+  per-request deadline, and a streaming `maximum_bytes + 1` cap. It reports the
+  exact effective URL, status, redirect location, resolved socket addresses,
+  and bounded response bytes for a second defensive validation before
+  retention.
 - `SealedArtifactCache` indexes already verified `VerifiedArtifactHandle`
   values by aggregate hash. A persistent implementation belongs with
   `crates/artifact`; it must reopen only artifact-owned immutable bytes. The
@@ -37,13 +38,22 @@ drop, and confirm all release review ownership; the default resolver admits at
 most 16 pending reviews and returns typed saturation, stale, and foreign-token
 refusals.
 
-The resolver refuses HTTPS targets that resolve to loopback, private,
-link-local, multicast, documentation, benchmarking, reserved, or unspecified
-addresses. Redirects, an effective URL different from the requested candidate,
-oversize bodies, missing DNS evidence, and source confusion are refused before
-the artifact cache can commit. Transport and HTTP availability failures may
-advance to the next finite approved Blossom candidate; security-policy
-refusals fail the whole acquisition.
+The resolver follows 301, 302, 303, 307, and 308 through at most five hops per
+candidate. It manually refetches every hop so the target must again be a
+credential-free, query-free, fragment-free HTTPS URL, DNS must be fresh, every
+reported address must be public, and the effective URL must exactly equal the
+requested URL for that hop. Targets resolving to loopback, private, link-local,
+multicast, documentation, benchmarking, reserved, or unspecified addresses are
+refused.
+
+Missing redirect locations, a sixth hop, inexact effective URLs, oversize
+bodies, missing DNS evidence, and source confusion are typed, observable
+refusals before the artifact cache can commit. Other non-success HTTP statuses,
+including unsupported 3xx statuses, are recorded and may advance to the next
+finite approved Blossom candidate. Transport and HTTP availability failures may
+also advance; security-policy refusals fail the whole acquisition. Even a valid
+public redirect yields no retained or executable bytes until the artifact owner
+verifies every path SHA-256 and the aggregate.
 
 Cancellation is cooperative and event-driven: a bounded wake registration
 unblocks the resolver immediately, then the resolver cancels the exact port

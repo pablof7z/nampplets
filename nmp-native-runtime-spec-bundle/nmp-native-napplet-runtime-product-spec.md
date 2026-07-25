@@ -534,7 +534,9 @@ For a multi-file artifact:
 - ensure relative scripts, styles, workers, fonts, and media resolve only to verified artifact bytes;
 - apply a deny-by-default CSP for external network access.
 
-No unverified redirect or runtime fetch may enter the executable artifact graph.
+Redirects enter the executable artifact graph only after every hop is manually
+revalidated by the Rust acquisition policy and the final bytes pass the signed
+per-path and aggregate checks. Runtime fetches remain outside that graph.
 
 ### 10.3 Web projection compatibility
 

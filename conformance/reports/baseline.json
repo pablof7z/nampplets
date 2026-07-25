@@ -18,6 +18,16 @@
       "decision": "accept both package modes with per-path and aggregate verification"
     },
     {
+      "id": "redirected-artifact-acquisition",
+      "transport": "automatic redirect following disabled",
+      "runtime_requirement": "credential-free, query-free HTTPS; fresh public DNS admission and exact effective URL at every hop; pinned host/TLS/SNI connection without ambient proxy; finite bytes and deadline",
+      "decision": "follow only 301/302/303/307/308 through at most five manually revalidated hops, then require per-path SHA-256 and aggregate verification before retention or execution",
+      "runtime_evidence": [
+        "catalog-resolver::redirect_to_a_revalidated_public_https_target_is_followed",
+        "catalog-resolver::redirect_private_dns_source_confusion_and_oversize_fail_before_retention"
+      ]
+    },
+    {
       "id": "shell-handshake",
       "nap_registry": "shell.ready and shell.init",
       "package_baseline": "no shell domain or shell envelope validator",
@@ -47,6 +57,12 @@
     "clean": false,
     "authority": false,
     "note": "The local reference checkout had user-owned conflicts and untracked data. It was not modified."
+  },
+  "signoff": {
+    "product_owner": "pablof7z",
+    "compatibility_reviewer": "",
+    "security_reviewer": "",
+    "nmp_boundary_reviewer": ""
   },
   "advertised_domains": {
     "macos": [],

@@ -37,9 +37,18 @@ the generated ABI mechanics; application targets import the generated
   profile, account, and grant claims in napplet bytes have no authority.
 - Verified reads resolve an exact logical path against the sealed artifact for
   the active session. Native filesystem paths never cross the API.
-- Artifact acquisition is a finite native capability callback. Rust supplies
-  an explicit byte ceiling and approved candidate list, denies redirects, and
-  rechecks response source, length, digest, and aggregate before committing.
+- Catalog artifact acquisition is Rust-owned. Raw HTTP transport auto-follow is
+  disabled, and Rust follows only 301/302/303/307/308 through at most five
+  manually revalidated hops. Every hop repeats credential-free, query-free
+  HTTPS parsing, fresh DNS/public-address admission, approved-address pinning
+  under hostname TLS/SNI without ambient proxy, and exact effective-URL checks
+  under a finite byte ceiling and per-request deadline.
+- The bounded `ArtifactSource` callback still receives
+  `redirects_allowed = false`; that is a raw-transport instruction, not a
+  blanket runtime redirect policy. It must report a redirect rather than
+  following invisibly so Rust can validate or refuse it. No callback or catalog
+  response is retained or executed until Rust rechecks source/length, every
+  path digest, and the aggregate.
 - Theme and settings providers are registered only by constructors that
   receive real native callbacks. Native appearance reports raw OS traits;
   Rust maps and validates NAP-THEME. Native settings receives only bounded,

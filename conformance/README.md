@@ -13,6 +13,12 @@ runtime implementation already passes the scenarios.
   consumed by the Rust test harness.
 - `reports/` contains generated baseline evidence.
 
+Blob redirect fixtures are deliberately flat raw-hop responses. Their
+`request_url`, `effective_url`, `redirect_hop`, and `expected_policy` metadata
+let policy tests compose a chain without pretending the deterministic
+transport followed it. Full-chain follow/refusal behavior is exercised by the
+catalog-resolver tests.
+
 Regenerate from exact clean upstream checkouts:
 
 ```sh
@@ -33,13 +39,17 @@ does not write and fails when regenerating would change `digests.sha256`.
 
 Importing a published artifact requires an exact signed event already committed
 under `napplet-corpus/published/<name>/event.json`; the importer verifies the
-path hash and refuses redirects:
+path hash and intentionally refuses redirects:
 
 ```sh
 python3 conformance/scripts/import_published_fixture.py \
   conformance/napplet-corpus/published/good-morning/event.json \
   conformance/napplet-corpus/published/good-morning/index.html
 ```
+
+That refusal is a reproducible evidence-import rule, not runtime policy. The
+runtime follows a bounded set of redirect statuses in Rust, manually
+revalidating every hop while raw transport auto-follow remains disabled.
 
 The normal offline gate is:
 

@@ -5,6 +5,8 @@
 //! then delegates all signature, manifest, path-hash, aggregate, and immutable
 //! byte handling to `nmp-native-artifact`.
 
+mod redirect;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
@@ -24,6 +26,7 @@ use nmp_native_artifact::{
     SignedArtifactResolver, VerifiedArtifactHandle, VerifiedArtifactIndex,
 };
 use parking_lot::{Condvar, Mutex};
+use redirect::{ResponseAction, classify_response};
 use thiserror::Error;
 use url::{Host, Url};
 
@@ -577,7 +580,7 @@ pub enum AcquisitionRefusal {
     MissingAddressEvidence,
     #[error("HTTPS response has {actual} resolved addresses; the maximum is {maximum}")]
     AddressLimit { actual: usize, maximum: usize },
-    #[error("redirect was refused")]
+    #[error("supported redirect response is missing a valid Location")]
     Redirect,
     #[error("redirect exceeded the maximum of {maximum} hops")]
     TooManyRedirects { maximum: usize },
@@ -819,6 +822,7 @@ async fn rust_https_fetch_inner(
 
     let mut client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
         .connect_timeout(config.deadline)
         .timeout(config.deadline);
     if matches!(url.host(), Some(Host::Domain(_))) {
@@ -1766,51 +1770,31 @@ impl ManifestBlobSource for SafeManifestBlobSource {
                 ) {
                     return Err(self.refuse(request.logical_path(), &current, reason));
                 }
-                if response.redirect_location.is_some() || (300..400).contains(&response.status) {
-                    if hops >= self.limits.maximum_redirect_hops {
-                        return Err(self.refuse(
-                            request.logical_path(),
-                            &current,
-                            AcquisitionRefusal::TooManyRedirects {
-                                maximum: self.limits.maximum_redirect_hops,
-                            },
-                        ));
-                    }
-                    let Some(location) = response.redirect_location.as_deref() else {
-                        return Err(self.refuse(
-                            request.logical_path(),
-                            &current,
-                            AcquisitionRefusal::Redirect,
-                        ));
-                    };
-                    let next_url = match current_url.join(location) {
-                        Ok(url) => url,
-                        Err(_) => {
+                match classify_response(
+                    &current_url,
+                    &response.effective_url,
+                    response.status,
+                    response.redirect_location.as_deref(),
+                    self.limits.maximum_url_bytes,
+                ) {
+                    Ok(ResponseAction::Follow(next_url)) => {
+                        if hops >= self.limits.maximum_redirect_hops {
                             return Err(self.refuse(
                                 request.logical_path(),
                                 &current,
-                                AcquisitionRefusal::InvalidCandidate,
+                                AcquisitionRefusal::TooManyRedirects {
+                                    maximum: self.limits.maximum_redirect_hops,
+                                },
                             ));
                         }
-                    };
-                    current_url = match validate_candidate(
-                        next_url.as_str(),
-                        self.limits.maximum_url_bytes,
-                    ) {
-                        Ok(url) => url,
-                        Err(reason) => {
-                            return Err(self.refuse(request.logical_path(), &current, reason));
-                        }
-                    };
-                    hops += 1;
-                    continue;
-                }
-                if response.effective_url.as_ref() != current.as_str() {
-                    return Err(self.refuse(
-                        request.logical_path(),
-                        &current,
-                        AcquisitionRefusal::SourceConfusion,
-                    ));
+                        current_url = next_url;
+                        hops += 1;
+                        continue;
+                    }
+                    Ok(ResponseAction::HandleStatus) => {}
+                    Err(reason) => {
+                        return Err(self.refuse(request.logical_path(), &current, reason));
+                    }
                 }
                 if response.body.len() > request.maximum_bytes() {
                     return Err(self.refuse(

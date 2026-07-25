@@ -77,10 +77,48 @@
       "mutation": "none"
     },
     {
-      "id": "redirect-refused",
+      "id": "redirect-public-followed",
       "status": 302,
       "fixture": null,
-      "mutation": "location:https://example.invalid/untrusted"
+      "mutation": "location:https://cdn.example/index.html",
+      "request_url": "https://artifacts.example/index.html",
+      "effective_url": "https://artifacts.example/index.html",
+      "redirect_hop": 1,
+      "response_role": "raw-hop-response",
+      "expected_policy": "follow-after-manual-revalidation"
+    },
+    {
+      "id": "redirect-unsafe-target",
+      "status": 302,
+      "fixture": null,
+      "mutation": "location:https://127.0.0.1/index.html",
+      "request_url": "https://artifacts.example/index.html",
+      "effective_url": "https://artifacts.example/index.html",
+      "redirect_hop": 1,
+      "response_role": "raw-hop-response",
+      "expected_policy": "typed-refusal-non-public-address"
+    },
+    {
+      "id": "redirect-hop-limit",
+      "status": 308,
+      "fixture": null,
+      "mutation": "location:https://hop-6.example/index.html",
+      "request_url": "https://hop-5.example/index.html",
+      "effective_url": "https://hop-5.example/index.html",
+      "redirect_hop": 6,
+      "response_role": "raw-hop-response",
+      "expected_policy": "typed-refusal-hop-limit"
+    },
+    {
+      "id": "redirect-effective-url-mismatch",
+      "status": 200,
+      "fixture": "reference/prelude-order/index.html",
+      "mutation": "none",
+      "request_url": "https://artifacts.example/index.html",
+      "effective_url": "https://confused.example/index.html",
+      "redirect_hop": 0,
+      "response_role": "raw-hop-response",
+      "expected_policy": "typed-refusal-effective-url"
     },
     {
       "id": "mime-mismatch",

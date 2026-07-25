@@ -21,6 +21,7 @@ use std::{
 use nmp::{
     AccessContext, Binding, CacheMode, Demand, Engine, Filter, Freshness, IndexedTagName,
     LiveQuery, ObservationCancel, PublicKey, RelayUrl, Row, SourceAuthority, UnsignedEvent, Window,
+    WindowLoad,
 };
 use nmp_native_nap_bridge::{
     Provider, ProviderCall, ProviderDescriptor, ProviderError, ProviderPlatformAvailability,
@@ -901,6 +902,11 @@ struct QueryProjection {
     rows: Vec<Row>,
     source_relays: BTreeSet<String>,
     incomplete: bool,
+    /// Names the exhausted class when a host bound, rather than unresolved
+    /// acquisition evidence, is what kept matching rows out of `rows`. Silent
+    /// truncation is forbidden (`docs/threat-model.md`), so a projection that
+    /// hit its ceiling reports the ceiling instead of reading as complete.
+    bound: Option<String>,
     error: Option<String>,
 }
 
@@ -1513,6 +1519,7 @@ fn read_once(
             rows: Vec::new(),
             source_relays: BTreeSet::new(),
             incomplete: true,
+            bound: None,
             error: Some("request was cancelled".to_owned()),
         };
     }
@@ -1531,6 +1538,7 @@ fn read_once(
                 rows: Vec::new(),
                 source_relays: BTreeSet::new(),
                 incomplete: true,
+                bound: None,
                 error: Some(error.to_string()),
             };
         }
@@ -1539,6 +1547,7 @@ fn read_once(
     let mut latest_rows = Vec::new();
     let mut source_relays = BTreeSet::new();
     let mut incomplete = true;
+    let mut bound_reached = false;
     let mut frames = 0_usize;
     loop {
         let now = Instant::now();
@@ -1553,7 +1562,14 @@ fn read_once(
         };
         frames += 1;
         if let Some(window) = frame.window {
-            latest_rows = select_rows(window.rows, filters, limits.maximum_events);
+            // A window delivered at its declared ceiling means canonical rows
+            // older than the oldest delivered one may exist and were never
+            // offered to this projection at all.
+            let window_at_bound = window.rows.len() >= limits.maximum_events
+                || matches!(window.load, WindowLoad::AtBound { .. });
+            let selection = select_rows(window.rows, filters, limits.maximum_events);
+            bound_reached = window_at_bound || selection.bound_reached;
+            latest_rows = selection.rows;
         }
         source_relays = frame
             .evidence
@@ -1561,8 +1577,12 @@ fn read_once(
             .iter()
             .map(|source| source.relay.to_string())
             .collect();
-        incomplete = projection_incomplete(&frame.evidence);
-        if !incomplete || frames >= 256 {
+        // Acquisition shortfall drives the wait; the host bound never does,
+        // since no additional frame can lift a ceiling this observation was
+        // opened with. Reporting still folds both in below.
+        let acquisition_incomplete = projection_incomplete(&frame.evidence);
+        incomplete = acquisition_incomplete || bound_reached;
+        if !acquisition_incomplete || frames >= 256 {
             break;
         }
     }
@@ -1570,6 +1590,12 @@ fn read_once(
         rows: latest_rows,
         source_relays,
         incomplete,
+        bound: bound_reached.then(|| {
+            format!(
+                "query event bound reached ({} events)",
+                limits.maximum_events
+            )
+        }),
         error: cancellation
             .is_cancelled()
             .then(|| "request was cancelled".to_owned()),
@@ -1585,19 +1611,36 @@ fn projection_incomplete(evidence: &nmp::AcquisitionEvidence) -> bool {
             .any(|source| source.reconciled_through.is_none())
 }
 
-fn select_rows(rows: Vec<Row>, filters: &[NapFilter], maximum: usize) -> Vec<Row> {
+/// Rows chosen for one projection, plus whether the host's `maximum_events`
+/// ceiling kept a matching row out. A caller-supplied `filter.limit` is the
+/// napplet's own bound and never sets `bound_reached`; only the host ceiling
+/// standing in for it does, because that is the cut the napplet cannot see.
+#[derive(Debug)]
+struct RowSelection {
+    rows: Vec<Row>,
+    bound_reached: bool,
+}
+
+fn select_rows(rows: Vec<Row>, filters: &[NapFilter], maximum: usize) -> RowSelection {
     let mut selected = BTreeMap::<String, Row>::new();
+    let mut bound_reached = false;
     for filter in filters {
-        let limit = filter.limit.unwrap_or(maximum).min(maximum);
-        for row in rows
-            .iter()
-            .filter(|row| event_matches(&row.event, filter))
-            .take(limit)
-        {
+        let requested = filter.limit.unwrap_or(maximum);
+        let limit = requested.min(maximum);
+        let mut matching = rows.iter().filter(|row| event_matches(&row.event, filter));
+        let mut taken = 0_usize;
+        for row in matching.by_ref().take(limit) {
             selected.insert(row.event.id.to_string(), row.clone());
+            taken += 1;
             if selected.len() >= maximum {
                 break;
             }
+        }
+        // Whatever still matches was dropped here. Attribute the drop to the
+        // host ceiling only when the ceiling — not the napplet's own limit —
+        // is what stopped the take.
+        if matching.next().is_some() && (taken < limit || requested >= maximum) {
+            bound_reached = true;
         }
     }
     let mut rows = selected.into_values().collect::<Vec<_>>();
@@ -1608,8 +1651,12 @@ fn select_rows(rows: Vec<Row>, filters: &[NapFilter], maximum: usize) -> Vec<Row
             .cmp(&left.event.created_at)
             .then_with(|| left.event.id.cmp(&right.event.id))
     });
+    bound_reached |= rows.len() > maximum;
     rows.truncate(maximum);
-    rows
+    RowSelection {
+        rows,
+        bound_reached,
+    }
 }
 
 fn event_matches(event: &nmp::Event, filter: &NapFilter) -> bool {
@@ -1688,6 +1735,9 @@ fn query_result(
         if let Some(row) = projection.rows.first() {
             value["result"] = row_result(row);
         }
+        if let Some(bound) = projection.bound {
+            value["reason"] = Value::String(bound);
+        }
         if let Some(error) = projection.error {
             value["error"] = Value::String(error);
         }
@@ -1705,6 +1755,12 @@ fn query_result(
             // projection carries this bounded evidence as an array property.
             // Preserve rows while making a partial public window observable.
             value["incomplete"] = Value::Bool(true);
+        }
+        // Name the exhausted class alongside the flag, the way a bounded
+        // subscription names its own: `incomplete` alone cannot tell a napplet
+        // whether relays are still answering or the ceiling cut the result.
+        if let Some(bound) = projection.bound {
+            value["reason"] = Value::String(bound);
         }
         if let Some(error) = projection.error {
             value["error"] = Value::String(error);
@@ -1734,7 +1790,7 @@ fn drain_subscription(
         }
         let rows = frame
             .window
-            .map(|window| select_rows(window.rows, filters, limits.maximum_events))
+            .map(|window| select_rows(window.rows, filters, limits.maximum_events).rows)
             .unwrap_or_default();
         for row in rows {
             let event_id = row.event.id.to_string();
@@ -2451,12 +2507,95 @@ mod tests {
                 rows: Vec::new(),
                 source_relays: BTreeSet::new(),
                 incomplete: true,
+                bound: None,
                 error: None,
             },
         );
         assert_eq!(value["incomplete"], true);
         assert!(value.get("synced").is_none());
         assert!(value.get("complete").is_none());
+        assert!(value.get("reason").is_none());
+    }
+
+    fn note_row(index: u8, created_at: u64) -> Row {
+        let mut value = serde_json::to_value(public_note()).unwrap();
+        value["id"] = json!(format!("{index:02x}{}", "0".repeat(62)));
+        value["created_at"] = json!(created_at);
+        Row {
+            event: serde_json::from_value(value).unwrap(),
+            sources: BTreeSet::new(),
+        }
+    }
+
+    #[test]
+    fn select_rows_reports_the_host_bound_that_dropped_matching_rows() {
+        let rows = vec![
+            note_row(1, 1_700_000_003),
+            note_row(2, 1_700_000_002),
+            note_row(3, 1_700_000_001),
+        ];
+
+        let selection = select_rows(rows, &[NapFilter::default()], 2);
+
+        assert_eq!(selection.rows.len(), 2);
+        assert!(
+            selection.bound_reached,
+            "a projection cut by maximum_events must not read as complete"
+        );
+    }
+
+    #[test]
+    fn select_rows_keeps_a_caller_supplied_limit_off_the_host_bound() {
+        let rows = vec![
+            note_row(1, 1_700_000_003),
+            note_row(2, 1_700_000_002),
+            note_row(3, 1_700_000_001),
+        ];
+        let filter = NapFilter {
+            limit: Some(2),
+            ..NapFilter::default()
+        };
+
+        let selection = select_rows(rows, &[filter], 8);
+
+        assert_eq!(selection.rows.len(), 2);
+        assert!(
+            !selection.bound_reached,
+            "the napplet's own limit is not a bound it needs reported back"
+        );
+    }
+
+    #[test]
+    fn select_rows_reports_no_bound_when_every_matching_row_fits() {
+        let rows = vec![note_row(1, 1_700_000_002), note_row(2, 1_700_000_001)];
+
+        let selection = select_rows(rows, &[NapFilter::default()], 8);
+
+        assert_eq!(selection.rows.len(), 2);
+        assert!(!selection.bound_reached);
+    }
+
+    #[test]
+    fn query_result_names_the_event_bound_that_cut_its_rows() {
+        let value = query_result(
+            NapDomain::Relay,
+            "relay-bounded-1",
+            false,
+            QueryProjection {
+                rows: vec![Row {
+                    event: public_note(),
+                    sources: BTreeSet::new(),
+                }],
+                source_relays: BTreeSet::from(["wss://relay.example".to_owned()]),
+                incomplete: true,
+                bound: Some("query event bound reached (1024 events)".to_owned()),
+                error: None,
+            },
+        );
+
+        assert_eq!(value["incomplete"], true);
+        assert_eq!(value["reason"], "query event bound reached (1024 events)");
+        assert!(value.get("error").is_none());
     }
 
     #[test]
@@ -2472,6 +2611,7 @@ mod tests {
                 }],
                 source_relays: BTreeSet::from(["wss://relay.example".to_owned()]),
                 incomplete: true,
+                bound: None,
                 error: None,
             },
         );
@@ -2496,6 +2636,7 @@ mod tests {
                     "wss://two.example".to_owned(),
                 ]),
                 incomplete: false,
+                bound: None,
                 error: None,
             },
         );

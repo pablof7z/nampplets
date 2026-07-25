@@ -83,11 +83,16 @@ schema, or lifecycle state machine. Coordinate changes at the owning boundary.
 ## Git workflow
 
 - Always make changes in a dedicated git worktree, never in the base checkout.
+- Keep the base checkout's `main` synced with `origin/main` (fetch and
+  fast-forward) instead of letting it linger stale. Other agents merge PRs
+  concurrently; a stale local `main` produces false diffs, stale build
+  artifacts, and misleading "what's on main" answers.
 - Always open a pull request for the change; never push or merge directly into
   `main` from the base checkout.
-- Immediately after opening (or merging) the pull request, remove the
-  worktree used for that change. Do not leave finished worktrees lying
-  around.
+- Agents MUST clean up their worktree immediately once they are done with it
+  and the pull request has been published (even if it is still awaiting CI or
+  review) — do not hold a worktree open "just in case" while a PR sits
+  unmerged. Do not leave finished worktrees lying around.
 
 ## Required gates
 

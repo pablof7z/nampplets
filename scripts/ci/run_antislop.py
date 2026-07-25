@@ -4,31 +4,47 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 from pathlib import Path
+import stat
 import subprocess
 import sys
+import tempfile
 
 
 ANTISLOP_VERSION = "0.3.0"
+MAX_SOURCE_BYTES = 1024 * 1024
 SOURCE_EXTENSIONS = frozenset(
     {
         ".bash",
         ".c",
+        ".cc",
+        ".cjs",
         ".cpp",
         ".cs",
+        ".cxx",
         ".dart",
         ".fish",
         ".go",
         ".h",
+        ".hs",
         ".hpp",
         ".java",
         ".js",
         ".jsx",
         ".kt",
+        ".kts",
+        ".lua",
+        ".mjs",
+        ".pl",
+        ".pm",
         ".php",
         ".py",
+        ".r",
+        ".R",
         ".rb",
         ".rs",
+        ".scala",
         ".sh",
         ".swift",
         ".ts",
@@ -54,13 +70,17 @@ EXCLUDED_FILES = frozenset(
 
 # The 0.3.0 JavaScript AST heuristic treats every `return null` as a stub.
 # These byte-identical trusted-shell sources use null as a bounded protocol
-# result and return a generated compatibility prelude. Keep all non-stub
-# AntiSlop categories active for them.
+# result and return a generated compatibility prelude. Stub suppression is
+# permitted only for the exact reviewed bytes; all non-stub categories remain
+# active, and any shell change must deliberately update this fingerprint.
 TRUSTED_SHELL_FILES = frozenset(
     {
         "platforms/apple/Sources/NMPNativeRuntimeApple/Resources/TrustedShell/trusted-shell.js",
         "web/trusted-shell/trusted-shell.js",
     }
+)
+TRUSTED_SHELL_SHA256 = (
+    "ad306946e7a0eb4437ccb5f6c8251ec0e35dbaeb718fe323aef1e5d8c7e0d59e"
 )
 
 
@@ -87,14 +107,50 @@ def tracked_sources(repository: Path) -> list[str]:
         capture_output=True,
     )
     paths = result.stdout.decode("utf-8").split("\0")
-    return [
-        path
-        for path in paths
-        if path
-        and Path(path).suffix in SOURCE_EXTENSIONS
-        and path not in EXCLUDED_FILES
-        and not path.startswith(EXCLUDED_PREFIXES)
-    ]
+    selected = []
+    for path in paths:
+        if (
+            not path
+            or path in EXCLUDED_FILES
+            or path.startswith(EXCLUDED_PREFIXES)
+        ):
+            continue
+        suffix = Path(path).suffix
+        if suffix not in SOURCE_EXTENSIONS:
+            if suffix.lower() in SOURCE_EXTENSIONS:
+                raise RuntimeError(
+                    f"tracked source extension must be lowercase: {path}"
+                )
+            continue
+        source = repository / path
+        metadata = source.lstat()
+        if not stat.S_ISREG(metadata.st_mode):
+            raise RuntimeError(f"tracked source is not a regular file: {path}")
+        if metadata.st_size > MAX_SOURCE_BYTES:
+            raise RuntimeError(
+                f"tracked source exceeds {MAX_SOURCE_BYTES}-byte limit: {path}"
+            )
+        selected.append(path)
+    return selected
+
+
+def trusted_shell_sources(repository: Path, sources: list[str]) -> list[str]:
+    selected = sorted(path for path in sources if path in TRUSTED_SHELL_FILES)
+    expected = sorted(TRUSTED_SHELL_FILES)
+    if selected != expected:
+        raise RuntimeError(
+            "tracked trusted-shell source set changed: "
+            f"expected {expected!r}, got {selected!r}"
+        )
+
+    for path in selected:
+        actual = hashlib.sha256((repository / path).read_bytes()).hexdigest()
+        if actual != TRUSTED_SHELL_SHA256:
+            raise RuntimeError(
+                f"trusted-shell source fingerprint changed: {path}: "
+                f"expected {TRUSTED_SHELL_SHA256}, got {actual}"
+            )
+    return selected
 
 
 def verify_version(binary: str, repository: Path) -> None:
@@ -111,9 +167,27 @@ def verify_version(binary: str, repository: Path) -> None:
         raise RuntimeError(f"expected {expected!r}, got {actual!r}")
 
 
+def materialize_builtin_config(
+    binary: str, repository: Path, directory: Path
+) -> Path:
+    result = subprocess.run(
+        [binary, "--print-config"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    if not result.stdout.strip():
+        raise RuntimeError("AntiSlop built-in configuration is empty")
+    config = directory / f"antislop-{ANTISLOP_VERSION}.toml"
+    config.write_text(result.stdout, encoding="utf-8")
+    return config
+
+
 def scan(
     binary: str,
     repository: Path,
+    config: Path,
     label: str,
     paths: list[str],
     *options: str,
@@ -123,7 +197,16 @@ def scan(
 
     print(f"AntiSlop: scanning {len(paths)} {label} files", flush=True)
     result = subprocess.run(
-        [binary, *options, *paths],
+        [
+            binary,
+            "--config",
+            str(config),
+            "--extensions",
+            ",".join(sorted(SOURCE_EXTENSIONS)),
+            *options,
+            "--",
+            *paths,
+        ],
         cwd=repository,
         check=False,
     )
@@ -136,18 +219,25 @@ def main() -> int:
     verify_version(args.binary, repository)
 
     sources = tracked_sources(repository)
-    trusted_shell = sorted(path for path in sources if path in TRUSTED_SHELL_FILES)
+    trusted_shell = trusted_shell_sources(repository, sources)
     regular = sorted(path for path in sources if path not in TRUSTED_SHELL_FILES)
 
-    regular_status = scan(args.binary, repository, "first-party", regular)
-    shell_status = scan(
-        args.binary,
-        repository,
-        "trusted-shell",
-        trusted_shell,
-        "--disable",
-        "stub",
-    )
+    with tempfile.TemporaryDirectory(prefix="nampplets-antislop-") as directory:
+        config = materialize_builtin_config(
+            args.binary, repository, Path(directory)
+        )
+        regular_status = scan(
+            args.binary, repository, config, "first-party", regular
+        )
+        shell_status = scan(
+            args.binary,
+            repository,
+            config,
+            "trusted-shell",
+            trusted_shell,
+            "--disable",
+            "stub",
+        )
     return 1 if regular_status or shell_status else 0
 
 

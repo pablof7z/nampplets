@@ -34,6 +34,9 @@ from a compromised OS, WebView engine, native host, or all timing side channels.
 - Unknown message types are ignored; known messages are validated before
   provider dispatch.
 - NMP remains the only canonical Nostr state and durable-write owner.
+- Artifact redirects are followed only by the Rust policy loop, with the same
+  URL, DNS, address, TLS/SNI, effective-URL, byte, and deadline checks repeated
+  independently for every hop.
 - Every resource class is finite, refuses observably, and tears down
   deterministically.
 
@@ -43,7 +46,8 @@ from a compromised OS, WebView engine, native host, or all timing side channels.
 | --- | --- | --- |
 | Manifest signature or tag forgery | verify signed event and pinned kinds before cache/execute | invalid signature/tag fixture is rejected |
 | Blob substitution | SHA-256 every path and recompute aggregate | one-byte mutation fails baseline hash gate |
-| Gateway or redirect injection | gateway is untrusted; no redirect enters executable graph | redirect/corrupt artifact scenarios fail closed |
+| Gateway or redirect injection | gateway is untrusted; raw transport auto-follow is disabled; Rust follows only 301/302/303/307/308 through at most five manually revalidated, credential-free and query-free HTTPS hops | a public redirect reaches verified bytes, while an unsafe target, sixth hop, unapproved status, or inexact effective URL is refused observably before retention |
+| DNS rebinding or proxy confusion during acquisition | resolve each hop afresh, admit only public addresses, pin the connection to those addresses under the requested host's TLS/SNI, and use no ambient proxy | a hop resolving to a non-public address or connecting/reporting a different effective URL is refused |
 | Remote subresource escape | private verified materialization plus deny-by-default CSP | fetch, WebSocket, and remote asset fixture is denied |
 | Bridge discovery from iframe | bridge only in trusted top-level shell | iframe global inspection finds no bridge |
 | Source-window spoofing | exact `MessageEvent.source` mapping | sibling iframe's valid privileged envelope is dropped |

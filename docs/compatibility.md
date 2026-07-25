@@ -2,8 +2,8 @@
 
 Baseline `native-runtime-compat-v1` was captured on 2026-07-24. It is
 machine-readable in [`compatibility.lock`](../compatibility.lock) and remains
-**unratified** until product, compatibility, security, and NMP-boundary
-reviewers sign it.
+**unratified**. Product-owner direction is recorded as `pablof7z`;
+compatibility, security, and NMP-boundary review remain unsigned.
 
 ## Pinned authorities
 
@@ -40,6 +40,24 @@ hash verify and every subresource is materialized from verified bytes.
 This is compatibility support, not permission to navigate the iframe to a
 remote URL or allow runtime network fetches.
 
+### Redirected artifact acquisition
+
+Artifact redirects are supported, but transport-library auto-follow is not.
+For each approved source, Rust accepts only 301, 302, 303, 307, or 308 and
+follows at most five hops. Every target is parsed again as a credential-free,
+query-free, fragment-free HTTPS URL, resolved again, admitted only when every
+reported address is public, and connected to only through those approved
+addresses while preserving the target hostname for certificate validation and
+SNI. Ambient proxy configuration is not used.
+
+Each raw response must report the exact URL requested for that hop. Each
+request has a finite byte ceiling and a 15-second default deadline. A public
+redirect does not weaken artifact identity: no bytes become retained or
+executable until every manifest path SHA-256 and the aggregate hash verify.
+Unsafe targets, unapproved redirect statuses, missing locations, a sixth hop,
+source confusion, deadline/byte exhaustion, and verification failure are
+typed, observable refusals.
+
 ### NAP-SHELL
 
 The pinned NAP registry defines `shell.ready` and `shell.init`. The pinned
@@ -72,7 +90,8 @@ Pinned `@napplet/conformance` checks kind/d-tag shape, a hashed `/index.html`,
 known `requires`, sandbox/prelude boot, emitted envelope structure,
 no-capability degradation, and listener teardown. It does not by itself prove
 the event signature, every path hash, aggregate recomputation, duplicate
-critical tags, redirect refusal, or full external-asset closure.
+critical tags, bounded per-hop redirect revalidation, or full external-asset
+closure.
 
 The runtime compatibility gate is therefore the pinned suite **plus** the
 stronger artifact, malicious-input, and native bridge tests in this repository.

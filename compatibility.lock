@@ -65,6 +65,25 @@ requires_verified_index = true
 requires_per_path_sha256 = true
 requires_aggregate_verification = true
 remote_navigation = false
+redirect_policy = "manual-per-hop-revalidation"
+maximum_redirect_hops = 5
+accepted_redirect_statuses = [301, 302, 303, 307, 308]
+transport_auto_follow = false
+requires_https = true
+requires_credential_free_url = true
+requires_query_free_url = true
+requires_fragment_free_url = true
+requires_fresh_dns_each_hop = true
+requires_public_address_each_hop = true
+requires_address_pinned_connection = true
+requires_hostname_tls_sni = true
+allows_ambient_proxy = false
+requires_exact_effective_url_each_hop = true
+default_request_deadline_seconds = 15
+default_maximum_path_bytes = 8388608
+default_maximum_artifact_bytes = 33554432
+requires_typed_observable_refusal = true
+retention_execution_gate = "per-path-sha256-and-aggregate"
 
 [web_projection]
 sandbox_tokens = ["allow-scripts"]
@@ -139,7 +158,7 @@ required_domains = ["identity", "inc", "outbox"]
 optional_domains = ["resource", "theme", "link"]
 
 [signoff]
-product_owner = ""
+product_owner = "pablof7z"
 compatibility_reviewer = ""
 security_reviewer = ""
 nmp_boundary_reviewer = ""

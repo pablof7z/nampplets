@@ -1030,6 +1030,7 @@
             result.result = message.result;
           }
           if (message.incomplete === true) result.incomplete = true;
+          if (typeof message.reason === "string") result.reason = message.reason;
           if (typeof message.error === "string") result.error = message.error;
           return Object.freeze(result);
         },
@@ -1053,6 +1054,7 @@
             )
           };
           if (message.incomplete === true) result.incomplete = true;
+          if (typeof message.reason === "string") result.reason = message.reason;
           if (typeof message.error === "string") result.error = message.error;
           return Object.freeze(result);
         },
@@ -1225,6 +1227,7 @@
               ? message.events.slice()
               : [];
             if (message.incomplete === true) result.incomplete = true;
+            if (typeof message.reason === "string") result.reason = message.reason;
             if (typeof message.error === "string") result.error = message.error;
             return Object.freeze(result);
           }
