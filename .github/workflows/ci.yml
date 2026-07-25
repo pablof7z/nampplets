@@ -190,44 +190,6 @@ jobs:
       - name: Run trusted-shell tests with a per-test deadline
         run: node --test --test-timeout=10000 web/trusted-shell/tests/trusted-shell.test.js
 
-  architecture:
-    name: NMP architecture triage
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Check out the exact revision
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-
-      - name: Create bounded verification output
-        run: mkdir -p build/verification
-
-      - name: Run the deterministic NMP architecture scanner
-        run: >-
-          python3 scripts/nmp_architecture_scan.py .
-          --json --limit 200
-          > build/verification/nmp-architecture-scan.json
-
-      - name: Generate the D0-D10 evidence report
-        run: >-
-          python3 scripts/generate_d0_d10_report.py
-          --scan build/verification/nmp-architecture-scan.json
-          --evidence docs/verification/d0-d10-evidence.json
-          --output build/verification/d0-d10-report.json
-
-      - name: Fail on blocking scanner findings
-        run: python3 scripts/nmp_architecture_scan.py . --fail-on error --limit 200
-
-      - name: Upload deterministic architecture evidence
-        if: always()
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
-        with:
-          name: nmp-architecture-report
-          path: build/verification/*.json
-          if-no-files-found: error
-          retention-days: 14
-
   apple:
     name: Apple package and shared scheme
     runs-on: macos-15

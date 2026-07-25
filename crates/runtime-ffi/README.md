@@ -90,25 +90,6 @@ match. Launch rederives the same required set from the sealed handle. Any
 publisher, dTag, or byte change loses the profile and receives no grant
 inheritance.
 
-## D0-D10 discharge
-
-- D0/D4: `RuntimeApp` is the single product writer; this crate only validates,
-  maps, and observes its commands and projections. Installed-library and
-  workspace-assignment facts are projected mechanically from its bounded
-  snapshot rather than mirrored in native state.
-- D1/D5: observation emits the latest complete bounded app snapshot plus finite
-  cursor-based event replay.
-- D2/D3/D10: all Nostr acquisition, routing, persistence, and privacy stay
-  behind the pinned `nmp::Engine` facade in `NmpDataPlane`.
-- D6: command outcomes are state/events. Only pre-kernel open can throw.
-- D7: native callbacks return raw HTTP, appearance, and settings execution
-  facts; Rust decides trust, mapping, schema policy, persistence, and
-  lifecycle.
-- D8: observers are finitely admitted, updates conflate through watch channels,
-  and stop/close are event-driven. There is no polling.
-- D9: `RuntimeApp` receives one injected Rust clock; native callers never
-  supply timestamps.
-
 ## Verification
 
 ```sh
