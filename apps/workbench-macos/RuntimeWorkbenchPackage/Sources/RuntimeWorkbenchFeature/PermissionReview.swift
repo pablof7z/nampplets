@@ -291,7 +291,22 @@ public struct PermissionReviewSheet: View {
                 Button {
                     proxy.scrollTo(capability.domain, anchor: .center)
                 } label: {
-                    Color.clear.frame(width: 4, height: 4)
+                    // A fully transparent `Color.clear` fill (and, before
+                    // this, wrapping the whole row in `.opacity(0.01)`)
+                    // left this button visually present in the
+                    // accessibility tree but not reliably receiving
+                    // AppKit's mouse hit-testing: CI saw
+                    // `permission-scroll-to-<domain>` report existing and
+                    // accept `.click()` without `proxy.scrollTo` ever
+                    // having any observable effect (the target row's
+                    // frame never changed). `.contentShape` pins the
+                    // hit-testing region explicitly regardless of the
+                    // fill's alpha, and a non-zero (if minuscule) alpha
+                    // avoids relying on an exact-zero value some AppKit
+                    // layers treat as "not interactive."
+                    Color.white.opacity(0.001)
+                        .frame(width: 8, height: 8)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(
@@ -302,8 +317,7 @@ public struct PermissionReviewSheet: View {
                 )
             }
         }
-        .frame(height: 4)
-        .opacity(0.01)
+        .frame(height: 8)
     }
 
     private var exactBuildIdentity: some View {

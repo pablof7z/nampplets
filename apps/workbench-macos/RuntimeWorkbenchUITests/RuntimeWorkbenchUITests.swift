@@ -342,9 +342,23 @@ final class RuntimeWorkbenchUITests: XCTestCase {
 
         let anchor = app.buttons["permission-scroll-to-\(domain)"]
         if anchor.waitForExistence(timeout: 2) {
+            let frameBeforeClick = decision.frame
             anchor.click()
+            let settled = waitForStableFrame(decision, timeout: 5)
+            if !settled {
+                NSLog(
+                    "scrollPermissionDecisionIntoView: \(domain) did not "
+                        + "settle after clicking the deterministic-scroll "
+                        + "anchor. anchorExists=\(anchor.exists) "
+                        + "anchorHittable=\(anchor.isHittable) "
+                        + "decisionExists=\(decision.exists) "
+                        + "decisionHittable=\(decision.isHittable) "
+                        + "frameBeforeClick=\(frameBeforeClick) "
+                        + "frameAfterClick=\(decision.frame)"
+                )
+            }
             XCTAssertTrue(
-                waitForStableFrame(decision, timeout: 5),
+                settled,
                 message
                     ?? "The \(domain) decision must settle into view after "
                     + "the deterministic scroll"
