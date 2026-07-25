@@ -1275,7 +1275,7 @@ private final class LockedPendingWriteUpdates: @unchecked Sendable {
     }
 }
 
-final class LockedFlag: @unchecked Sendable {
+private final class LockedFlag: @unchecked Sendable {
     private let lock = NSLock()
     private var storage = false
 

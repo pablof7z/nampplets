@@ -131,3 +131,27 @@ extension RuntimeNappletSessionTests {
         )
     }
 }
+
+// A local copy rather than a shared/module-visible type: this test target
+// already has more than one file-scoped `LockedFlag` (each file's own
+// trivial atomic-bool test helper). Widening any one of them to internal
+// previously caused Swift to misresolve an unrelated same-named type at a
+// different call site in another file — see the commit that introduced this
+// duplicate for the exact compiler error. Keeping each copy private avoids
+// that class of cross-file ambiguity entirely.
+private final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = false
+
+    var value: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
+    }
+
+    func set(_ value: Bool) {
+        lock.lock()
+        storage = value
+        lock.unlock()
+    }
+}
