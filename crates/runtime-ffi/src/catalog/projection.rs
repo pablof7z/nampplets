@@ -4,9 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use nmp::WindowLoad;
 use nmp_native_artifact::ManifestCoordinate;
-use nmp_native_catalog_resolver::{
-    ArtifactReview, CoordinateLookupFact, CoordinateLookupState, ResolveError,
-};
+use nmp_native_catalog_resolver::{CoordinateLookupFact, CoordinateLookupState, ResolveError};
 use nmp_native_nmp_adapter::catalog::{
     CatalogAccessContext, CatalogBrowseFrame, CatalogManifestCandidate, CatalogShortfall,
     CatalogSourceEvidence, CatalogSourceStatus, ManifestCatalogError,
@@ -15,7 +13,7 @@ use nmp_native_runtime_core::CapabilityRequirement;
 
 use super::types::{
     RuntimeCatalogCapability, RuntimeCatalogEntry, RuntimeCatalogError, RuntimeCatalogFailure,
-    RuntimeCatalogLookupState, RuntimeCatalogPage, RuntimeCatalogProvenance, RuntimeCatalogReview,
+    RuntimeCatalogLookupState, RuntimeCatalogPage, RuntimeCatalogProvenance,
     RuntimeCatalogShortfall, RuntimeCatalogSource, RuntimeCatalogSourceAccess,
     RuntimeCatalogSourceState, RuntimeCatalogWindowState,
 };
@@ -117,24 +115,6 @@ pub(super) fn project_source(source: &CatalogSourceEvidence) -> RuntimeCatalogSo
             CatalogSourceStatus::AuthDenied => RuntimeCatalogSourceState::AuthDenied,
             CatalogSourceStatus::Error => RuntimeCatalogSourceState::Error,
         },
-    }
-}
-
-pub(super) fn project_review(token: &str, review: &ArtifactReview) -> RuntimeCatalogReview {
-    let summary = review.summary();
-    let (manifest_author, d_tag) = coordinate_identity(summary.coordinate());
-    RuntimeCatalogReview {
-        token: token.to_owned(),
-        event_id: summary.event_id().as_str().to_owned(),
-        coordinate: catalog_coordinate_string(summary.coordinate()),
-        manifest_author,
-        d_tag,
-        title: summary.title().map(str::to_owned),
-        description: summary.description().map(str::to_owned),
-        aggregate_hash: summary.aggregate().as_str().to_owned(),
-        capabilities: review_capabilities(summary),
-        blob_sources: summary.servers().map(str::to_owned).collect(),
-        provenance: project_lookup_facts(summary.lookup_facts()),
     }
 }
 

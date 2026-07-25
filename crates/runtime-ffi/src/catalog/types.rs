@@ -5,6 +5,7 @@ use std::sync::Arc;
 use nmp_native_artifact::VerifiedArtifactHandle;
 use thiserror::Error;
 
+use super::install_eligibility::RuntimeCatalogInstallEligibility;
 use crate::{RuntimePermissionRequirement, VerifiedArtifact};
 
 /// One candidate from the current bounded NMP window.
@@ -114,6 +115,9 @@ pub struct RuntimeCatalogReview {
     pub capabilities: Vec<RuntimeCatalogCapability>,
     pub blob_sources: Vec<String>,
     pub provenance: Vec<RuntimeCatalogProvenance>,
+    /// Rust's exact-install decision. Native renders it; it never re-derives
+    /// eligibility from `d_tag` or any other raw field above.
+    pub install_eligibility: RuntimeCatalogInstallEligibility,
 }
 
 /// Screen record paired with the verified handle returned by confirmation.

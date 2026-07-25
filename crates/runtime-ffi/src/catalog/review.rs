@@ -10,7 +10,8 @@ use nmp_native_artifact::ManifestCoordinate;
 use super::{
     MAXIMUM_PENDING_REVIEWS, RuntimeCatalogService, StoredReview,
     admission::ActiveCancellation,
-    projection::{duration_millis, map_resolve_error, project_review},
+    install_eligibility::project_review,
+    projection::{duration_millis, map_resolve_error},
     types::{
         RuntimeCatalogConfirmation, RuntimeCatalogConfirmedArtifact, RuntimeCatalogError,
         RuntimeCatalogReview,

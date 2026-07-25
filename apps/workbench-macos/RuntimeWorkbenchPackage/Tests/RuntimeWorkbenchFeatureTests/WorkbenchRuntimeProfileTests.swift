@@ -53,3 +53,31 @@ func productionNetworkInputsRefuseMissingOperatorLanes() {
         )
     }
 }
+
+@Test
+func catalogInstallWarningsRenderRustsOwnRefusalInsteadOfLocalCopy() {
+    let blocked = NativeRuntimeCatalogInstallEligibility(
+        canInstall: false,
+        blocker: NativeRuntimeCatalogFailure(
+            code: "unsupported-manifest-identity",
+            detail: "d_tag exceeds 256 bytes",
+            provenance: []
+        )
+    )
+    let warnings = WorkbenchCatalogInstallEligibility.warnings(for: blocked)
+
+    #expect(warnings.count == 1)
+    #expect(warnings.first?.id == "unsupported-manifest-identity")
+    #expect(warnings.first?.severity == .blocking)
+    #expect(warnings.first?.message == "d_tag exceeds 256 bytes")
+}
+
+@Test
+func catalogInstallWarningsStaySilentWhenRustPermitsTheInstall() {
+    let permitted = NativeRuntimeCatalogInstallEligibility(
+        canInstall: true,
+        blocker: nil
+    )
+
+    #expect(WorkbenchCatalogInstallEligibility.warnings(for: permitted).isEmpty)
+}

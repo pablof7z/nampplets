@@ -3616,6 +3616,84 @@ public func FfiConverterTypeRuntimeCatalogFeedSnapshot_lower(_ value: RuntimeCat
 
 
 /**
+ * Rust's exact-install decision for one frozen review.
+ *
+ * `can_install` is the decision itself. `blocker` is present exactly when the
+ * decision is negative and states, in Rust's own words, why the runtime would
+ * refuse to mint an exact-build principal for this manifest. Its `provenance`
+ * stays empty: the review's own provenance already covers the lookup.
+ */
+public struct RuntimeCatalogInstallEligibility {
+    public var canInstall: Bool
+    public var blocker: RuntimeCatalogFailure?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(canInstall: Bool, blocker: RuntimeCatalogFailure?) {
+        self.canInstall = canInstall
+        self.blocker = blocker
+    }
+}
+
+#if compiler(>=6)
+extension RuntimeCatalogInstallEligibility: Sendable {}
+#endif
+
+
+extension RuntimeCatalogInstallEligibility: Equatable, Hashable {
+    public static func ==(lhs: RuntimeCatalogInstallEligibility, rhs: RuntimeCatalogInstallEligibility) -> Bool {
+        if lhs.canInstall != rhs.canInstall {
+            return false
+        }
+        if lhs.blocker != rhs.blocker {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(canInstall)
+        hasher.combine(blocker)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRuntimeCatalogInstallEligibility: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RuntimeCatalogInstallEligibility {
+        return
+            try RuntimeCatalogInstallEligibility(
+                canInstall: FfiConverterBool.read(from: &buf),
+                blocker: FfiConverterOptionTypeRuntimeCatalogFailure.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RuntimeCatalogInstallEligibility, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.canInstall, into: &buf)
+        FfiConverterOptionTypeRuntimeCatalogFailure.write(value.blocker, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuntimeCatalogInstallEligibility_lift(_ buf: RustBuffer) throws -> RuntimeCatalogInstallEligibility {
+    return try FfiConverterTypeRuntimeCatalogInstallEligibility.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuntimeCatalogInstallEligibility_lower(_ value: RuntimeCatalogInstallEligibility) -> RustBuffer {
+    return FfiConverterTypeRuntimeCatalogInstallEligibility.lower(value)
+}
+
+
+/**
  * A finite page for one screen.
  *
  * `has_more` means matching rows were omitted by the 100-row screen
@@ -3903,10 +3981,19 @@ public struct RuntimeCatalogReview {
     public var capabilities: [RuntimeCatalogCapability]
     public var blobSources: [String]
     public var provenance: [RuntimeCatalogProvenance]
+    /**
+     * Rust's exact-install decision. Native renders it; it never re-derives
+     * eligibility from `d_tag` or any other raw field above.
+     */
+    public var installEligibility: RuntimeCatalogInstallEligibility
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(token: String, eventId: String, coordinate: String, manifestAuthor: String, dTag: String?, title: String?, description: String?, aggregateHash: String, capabilities: [RuntimeCatalogCapability], blobSources: [String], provenance: [RuntimeCatalogProvenance]) {
+    public init(token: String, eventId: String, coordinate: String, manifestAuthor: String, dTag: String?, title: String?, description: String?, aggregateHash: String, capabilities: [RuntimeCatalogCapability], blobSources: [String], provenance: [RuntimeCatalogProvenance],
+        /**
+         * Rust's exact-install decision. Native renders it; it never re-derives
+         * eligibility from `d_tag` or any other raw field above.
+         */installEligibility: RuntimeCatalogInstallEligibility) {
         self.token = token
         self.eventId = eventId
         self.coordinate = coordinate
@@ -3918,6 +4005,7 @@ public struct RuntimeCatalogReview {
         self.capabilities = capabilities
         self.blobSources = blobSources
         self.provenance = provenance
+        self.installEligibility = installEligibility
     }
 }
 
@@ -3961,6 +4049,9 @@ extension RuntimeCatalogReview: Equatable, Hashable {
         if lhs.provenance != rhs.provenance {
             return false
         }
+        if lhs.installEligibility != rhs.installEligibility {
+            return false
+        }
         return true
     }
 
@@ -3976,6 +4067,7 @@ extension RuntimeCatalogReview: Equatable, Hashable {
         hasher.combine(capabilities)
         hasher.combine(blobSources)
         hasher.combine(provenance)
+        hasher.combine(installEligibility)
     }
 }
 
@@ -3998,7 +4090,8 @@ public struct FfiConverterTypeRuntimeCatalogReview: FfiConverterRustBuffer {
                 aggregateHash: FfiConverterString.read(from: &buf),
                 capabilities: FfiConverterSequenceTypeRuntimeCatalogCapability.read(from: &buf),
                 blobSources: FfiConverterSequenceString.read(from: &buf),
-                provenance: FfiConverterSequenceTypeRuntimeCatalogProvenance.read(from: &buf)
+                provenance: FfiConverterSequenceTypeRuntimeCatalogProvenance.read(from: &buf),
+                installEligibility: FfiConverterTypeRuntimeCatalogInstallEligibility.read(from: &buf)
         )
     }
 
@@ -4014,6 +4107,7 @@ public struct FfiConverterTypeRuntimeCatalogReview: FfiConverterRustBuffer {
         FfiConverterSequenceTypeRuntimeCatalogCapability.write(value.capabilities, into: &buf)
         FfiConverterSequenceString.write(value.blobSources, into: &buf)
         FfiConverterSequenceTypeRuntimeCatalogProvenance.write(value.provenance, into: &buf)
+        FfiConverterTypeRuntimeCatalogInstallEligibility.write(value.installEligibility, into: &buf)
     }
 }
 

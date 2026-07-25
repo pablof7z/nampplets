@@ -25,8 +25,8 @@ mod tests;
 pub use catalog::{
     RuntimeCatalogCancellationResult, RuntimeCatalogCapability, RuntimeCatalogConfirmation,
     RuntimeCatalogConfirmationResult, RuntimeCatalogEntry, RuntimeCatalogFailure,
-    RuntimeCatalogFeedSnapshot, RuntimeCatalogLookupState, RuntimeCatalogPage,
-    RuntimeCatalogPageResult, RuntimeCatalogProvenance, RuntimeCatalogReview,
+    RuntimeCatalogFeedSnapshot, RuntimeCatalogInstallEligibility, RuntimeCatalogLookupState,
+    RuntimeCatalogPage, RuntimeCatalogPageResult, RuntimeCatalogProvenance, RuntimeCatalogReview,
     RuntimeCatalogReviewResult, RuntimeCatalogShortfall, RuntimeCatalogSource,
     RuntimeCatalogSourceAccess, RuntimeCatalogSourceState, RuntimeCatalogWindowState,
 };

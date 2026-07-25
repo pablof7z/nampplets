@@ -297,16 +297,7 @@ extension WorkbenchRuntimeProfile: RuntimeWorkbenchCatalogProfileBacking {
         let optionalDomains = review.capabilities.compactMap {
             $0.requirement == .optional ? $0.domain : nil
         }
-        let supportsExactInstall = review.dTag != nil
-        let warnings = supportsExactInstall
-            ? []
-            : [
-                CatalogWarning(
-                    id: "named-build-required",
-                    severity: .blocking,
-                    message: "Only named manifests can mint an exact-build runtime principal."
-                ),
-            ]
+        let eligibility = review.installEligibility
         return CatalogInstallReview(
             id: review.token,
             title: review.title ?? review.dTag ?? "Untitled napplet",
@@ -327,11 +318,11 @@ extension WorkbenchRuntimeProfile: RuntimeWorkbenchCatalogProfileBacking {
                     detail: "Rust verified the exact signed manifest and immutable artifact bytes."
                 ),
             ],
-            warnings: warnings,
+            warnings: WorkbenchCatalogInstallEligibility.warnings(for: eligibility),
             updateRelationship: .unknown(
                 reason: "The exact installed-library relationship is resolved during installation."
             ),
-            canInstall: supportsExactInstall
+            canInstall: eligibility.canInstall
         )
     }
 

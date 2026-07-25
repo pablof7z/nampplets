@@ -7,6 +7,7 @@
 
 mod admission;
 mod feed;
+mod install_eligibility;
 mod projection;
 mod review;
 mod types;
@@ -41,6 +42,7 @@ use feed::{
 };
 use projection::map_browse_error;
 
+pub use install_eligibility::RuntimeCatalogInstallEligibility;
 pub use projection::project_catalog_error;
 pub use types::{
     RuntimeCatalogCancellationResult, RuntimeCatalogCapability, RuntimeCatalogConfirmation,

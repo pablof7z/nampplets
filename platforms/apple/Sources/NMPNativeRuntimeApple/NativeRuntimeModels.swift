@@ -13,6 +13,8 @@ public typealias NativeRuntimeCatalogConfirmation = RuntimeCatalogConfirmation
 public typealias NativeRuntimeCatalogEntry = RuntimeCatalogEntry
 public typealias NativeRuntimeCatalogFailure = RuntimeCatalogFailure
 public typealias NativeRuntimeCatalogFeedSnapshot = RuntimeCatalogFeedSnapshot
+public typealias NativeRuntimeCatalogInstallEligibility =
+    RuntimeCatalogInstallEligibility
 public typealias NativeRuntimeCatalogLookupState = RuntimeCatalogLookupState
 public typealias NativeRuntimeCatalogPage = RuntimeCatalogPage
 public typealias NativeRuntimeCatalogPageResult = RuntimeCatalogPageResult
