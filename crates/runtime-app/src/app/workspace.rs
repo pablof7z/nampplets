@@ -9,7 +9,7 @@ use super::{AppState, RuntimeApp};
 use crate::{commands::PlatformEvent, views::AppErrorCode};
 
 impl RuntimeApp {
-    pub(crate) fn save_workspace(
+    pub(super) fn save_workspace(
         &self,
         state: &mut AppState,
         workspace: WorkspaceRecord,
@@ -26,7 +26,7 @@ impl RuntimeApp {
         self.push_event(state, PlatformEvent::WorkspaceSaved { workspace_id });
     }
 
-    pub(crate) fn assign_workspace_build(
+    pub(super) fn assign_workspace_build(
         &self,
         state: &mut AppState,
         workspace_id: Arc<str>,
@@ -70,7 +70,7 @@ impl RuntimeApp {
         }
     }
 
-    pub(crate) fn restore_workspaces(&self, state: &mut AppState, now: u64) {
+    pub(super) fn restore_workspaces(&self, state: &mut AppState, now: u64) {
         let workspaces = match self.store.load_workspaces() {
             Ok(workspaces) => workspaces,
             Err(error) => {

@@ -12,7 +12,7 @@ use crate::{
 };
 
 impl RuntimeApp {
-    pub(crate) fn dispatch_envelope(
+    pub(super) fn dispatch_envelope(
         self: &Arc<Self>,
         state: &mut AppState,
         session_id: SessionId,

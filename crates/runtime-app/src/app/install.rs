@@ -13,7 +13,7 @@ use crate::{
 };
 
 impl RuntimeApp {
-    pub(crate) fn install_verified(
+    pub(super) fn install_verified(
         &self,
         state: &mut AppState,
         build: InstalledBuild,
@@ -91,7 +91,7 @@ impl RuntimeApp {
         self.push_event(state, PlatformEvent::Installed { principal });
     }
 
-    pub(crate) fn set_library_filter(&self, state: &mut AppState, query: Arc<str>, now: u64) {
+    pub(super) fn set_library_filter(&self, state: &mut AppState, query: Arc<str>, now: u64) {
         if query.len() > self.limits.maximum_library_query_bytes {
             self.refuse(
                 state,
@@ -118,7 +118,7 @@ impl RuntimeApp {
         self.push_event(state, PlatformEvent::LibraryFilterChanged { query });
     }
 
-    pub(crate) fn uninstall(
+    pub(super) fn uninstall(
         &self,
         state: &mut AppState,
         principal: Principal,

@@ -17,13 +17,13 @@ use crate::{
 };
 
 impl RuntimeApp {
-    pub(crate) fn publish(&self, state: &mut AppState) {
+    pub(super) fn publish(&self, state: &mut AppState) {
         state.revision = state.revision.saturating_add(1);
         let snapshot = Arc::new(self.build_snapshot(state));
         self.snapshots.send_replace(snapshot);
     }
 
-    pub(crate) fn build_snapshot(&self, state: &AppState) -> AppSnapshot {
+    pub(super) fn build_snapshot(&self, state: &AppState) -> AppSnapshot {
         AppSnapshot {
             revision: state.revision,
             closed: state.closed,
@@ -108,7 +108,7 @@ impl RuntimeApp {
         }
     }
 
-    pub(crate) fn push_event(&self, state: &mut AppState, event: PlatformEvent) {
+    pub(super) fn push_event(&self, state: &mut AppState, event: PlatformEvent) {
         state.next_event_sequence = state.next_event_sequence.saturating_add(1);
         let sequence = state.next_event_sequence;
         push_bounded(
@@ -118,7 +118,7 @@ impl RuntimeApp {
         );
     }
 
-    pub(crate) fn record_activity(
+    pub(super) fn record_activity(
         &self,
         state: &mut AppState,
         principal: &Principal,
@@ -160,7 +160,7 @@ impl RuntimeApp {
         }
     }
 
-    pub(crate) fn refuse(
+    pub(super) fn refuse(
         &self,
         state: &mut AppState,
         code: AppErrorCode,
@@ -180,11 +180,11 @@ impl RuntimeApp {
         self.push_event(state, PlatformEvent::Refused(fact));
     }
 
-    pub(crate) fn record_error(&self, state: &mut AppState, fact: AppErrorFact) {
+    pub(super) fn record_error(&self, state: &mut AppState, fact: AppErrorFact) {
         push_bounded(&mut state.errors, self.limits.maximum_error_facts, fact);
     }
 
-    pub(crate) fn refuse_store(
+    pub(super) fn refuse_store(
         &self,
         state: &mut AppState,
         principal: Option<Principal>,
@@ -202,7 +202,7 @@ impl RuntimeApp {
         );
     }
 
-    pub(crate) fn refuse_bridge(
+    pub(super) fn refuse_bridge(
         &self,
         state: &mut AppState,
         principal: Option<Principal>,
@@ -220,7 +220,7 @@ impl RuntimeApp {
         );
     }
 
-    pub(crate) fn refuse_session(
+    pub(super) fn refuse_session(
         &self,
         state: &mut AppState,
         principal: Option<Principal>,
@@ -238,7 +238,7 @@ impl RuntimeApp {
         );
     }
 
-    pub(crate) fn refuse_binding(&self, state: &mut AppState, error: BindingError, now: u64) {
+    pub(super) fn refuse_binding(&self, state: &mut AppState, error: BindingError, now: u64) {
         self.refuse(
             state,
             AppErrorCode::Binding,

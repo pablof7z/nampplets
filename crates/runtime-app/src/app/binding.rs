@@ -15,7 +15,7 @@ use crate::{
 };
 
 impl RuntimeApp {
-    pub(crate) fn open_binding(&self, state: &mut AppState, request: BindingRequest, now: u64) {
+    pub(super) fn open_binding(&self, state: &mut AppState, request: BindingRequest, now: u64) {
         if state.bindings.contains_key(&request.workspace_binding_id) {
             self.refuse(
                 state,
@@ -84,7 +84,7 @@ impl RuntimeApp {
         );
     }
 
-    pub(crate) fn close_binding(&self, state: &mut AppState, binding_id: &Arc<str>, now: u64) {
+    pub(super) fn close_binding(&self, state: &mut AppState, binding_id: &Arc<str>, now: u64) {
         let Some(owner) = state.bindings.remove(binding_id) else {
             self.refuse(
                 state,
@@ -105,11 +105,11 @@ impl RuntimeApp {
         );
     }
 
-    pub(crate) fn approve_write(&self, state: &mut AppState, write: ApprovedWrite, now: u64) {
+    pub(super) fn approve_write(&self, state: &mut AppState, write: ApprovedWrite, now: u64) {
         self.accept_approved_write(state, write, None, now);
     }
 
-    pub(crate) fn decide_provider_write(
+    pub(super) fn decide_provider_write(
         &self,
         state: &mut AppState,
         operation_id: ProviderOperationId,
@@ -166,7 +166,7 @@ impl RuntimeApp {
         );
     }
 
-    pub(crate) fn accept_approved_write(
+    pub(super) fn accept_approved_write(
         &self,
         state: &mut AppState,
         write: ApprovedWrite,
@@ -285,7 +285,7 @@ impl RuntimeApp {
         );
     }
 
-    pub(crate) fn reattach_receipt(
+    pub(super) fn reattach_receipt(
         &self,
         state: &mut AppState,
         receipt_id: WriteReceiptId,

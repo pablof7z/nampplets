@@ -11,7 +11,7 @@ use super::{AppState, RuntimeApp, SessionEntry};
 use crate::{commands::PlatformEvent, views::AppErrorCode};
 
 impl RuntimeApp {
-    pub(crate) fn launch(
+    pub(super) fn launch(
         &self,
         state: &mut AppState,
         principal: Principal,
@@ -196,7 +196,7 @@ impl RuntimeApp {
         self.push_event(state, PlatformEvent::SessionChanged(session.snapshot()));
     }
 
-    pub(crate) fn transition_session(
+    pub(super) fn transition_session(
         &self,
         state: &mut AppState,
         session_id: SessionId,
@@ -236,7 +236,7 @@ impl RuntimeApp {
         self.push_event(state, PlatformEvent::SessionChanged(session.snapshot()));
     }
 
-    pub(crate) fn end_session(
+    pub(super) fn end_session(
         &self,
         state: &mut AppState,
         session_id: SessionId,
@@ -311,7 +311,7 @@ impl RuntimeApp {
         delivery_join
     }
 
-    pub(crate) fn close(&self, state: &mut AppState, now: u64) -> Vec<JoinHandle<()>> {
+    pub(super) fn close(&self, state: &mut AppState, now: u64) -> Vec<JoinHandle<()>> {
         if state.closed {
             return Vec::new();
         }

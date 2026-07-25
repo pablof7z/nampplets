@@ -1,6 +1,6 @@
 //! Shared fixtures for `crates/runtime-app` integration tests.
 //!
-//! Both the plain `#[test]` suite (`tests/kernel.rs`) and the cucumber
+//! Both the plain `#[test]` suites (`tests/kernel_*.rs`) and the cucumber
 //! scenario runner (`tests/bdd.rs`) drive the exact same `Rig` so that BDD
 //! scenarios exercise the identical bootstrap path as the existing tests
 //! they were ported from. Each binary only exercises a subset of this

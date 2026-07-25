@@ -68,73 +68,73 @@ pub struct ObservationClosed;
 
 #[derive(Debug)]
 pub struct RuntimeApp {
-    pub(super) limits: AppLimits,
-    pub(super) binding_limits: BindingLimits,
-    pub(super) resources: Arc<ResourceTracker>,
-    pub(super) grants: Arc<GrantLedger>,
-    pub(super) bridge: ProviderRegistry,
-    pub(super) shell_provider: Arc<ShellProvider>,
-    pub(super) mapped_routes: BTreeSet<(Capability, Arc<str>)>,
-    pub(super) store: Arc<RuntimeStore>,
-    pub(super) data_plane: Arc<dyn HostDataPlane>,
-    pub(super) clock: Arc<dyn KernelClock>,
-    pub(super) state: Mutex<AppState>,
-    pub(super) snapshots: watch::Sender<Arc<AppSnapshot>>,
+    limits: AppLimits,
+    binding_limits: BindingLimits,
+    resources: Arc<ResourceTracker>,
+    grants: Arc<GrantLedger>,
+    bridge: ProviderRegistry,
+    shell_provider: Arc<ShellProvider>,
+    mapped_routes: BTreeSet<(Capability, Arc<str>)>,
+    store: Arc<RuntimeStore>,
+    data_plane: Arc<dyn HostDataPlane>,
+    clock: Arc<dyn KernelClock>,
+    state: Mutex<AppState>,
+    snapshots: watch::Sender<Arc<AppSnapshot>>,
 }
 
 #[derive(Debug)]
 pub(crate) struct AppState {
-    pub(super) next_session_id: u64,
-    pub(super) next_source_window_id: u64,
-    pub(super) next_operation_id: u64,
-    pub(super) next_event_sequence: u64,
-    pub(super) revision: u64,
-    pub(super) closed: bool,
-    pub(super) library_query: Arc<str>,
-    pub(super) installed: BTreeMap<Principal, InstalledBuild>,
-    pub(super) artifacts: BTreeMap<Principal, Arc<dyn ExecutableArtifact>>,
-    pub(super) sessions: BTreeMap<SessionId, SessionEntry>,
-    pub(super) operations: BTreeMap<ProviderOperationId, ActiveOperation>,
-    pub(super) bindings: BTreeMap<Arc<str>, BindingOwner>,
-    pub(super) receipts: BTreeMap<WriteReceiptId, Arc<AppReceipt>>,
-    pub(super) workspaces: BTreeMap<Arc<str>, WorkspaceRecord>,
-    pub(super) workspace_assignments: BTreeMap<Arc<str>, BTreeSet<Principal>>,
-    pub(super) activity: VecDeque<ActivityFact>,
-    pub(super) errors: VecDeque<AppErrorFact>,
-    pub(super) events: VecDeque<SequencedPlatformEvent>,
+    next_session_id: u64,
+    next_source_window_id: u64,
+    next_operation_id: u64,
+    next_event_sequence: u64,
+    revision: u64,
+    closed: bool,
+    library_query: Arc<str>,
+    installed: BTreeMap<Principal, InstalledBuild>,
+    artifacts: BTreeMap<Principal, Arc<dyn ExecutableArtifact>>,
+    sessions: BTreeMap<SessionId, SessionEntry>,
+    operations: BTreeMap<ProviderOperationId, ActiveOperation>,
+    bindings: BTreeMap<Arc<str>, BindingOwner>,
+    receipts: BTreeMap<WriteReceiptId, Arc<AppReceipt>>,
+    workspaces: BTreeMap<Arc<str>, WorkspaceRecord>,
+    workspace_assignments: BTreeMap<Arc<str>, BTreeSet<Principal>>,
+    activity: VecDeque<ActivityFact>,
+    errors: VecDeque<AppErrorFact>,
+    events: VecDeque<SequencedPlatformEvent>,
 }
 
 #[derive(Debug)]
 pub(crate) struct SessionEntry {
-    pub(super) session: Arc<Session>,
-    pub(super) context: SessionContext,
-    pub(super) plan: InjectionPlan,
-    pub(super) source_window: SourceWindowId,
-    pub(super) push_observer: Option<ProviderPushObserver>,
-    pub(super) push_delivery: Option<ProviderPushDelivery>,
-    pub(super) ready: bool,
-    pub(super) last_provider_sequence: Option<u64>,
-    pub(super) delivered_push_count: u64,
-    pub(super) _artifact: Arc<dyn ExecutableArtifact>,
-    pub(super) _webview: WorkLease,
+    session: Arc<Session>,
+    context: SessionContext,
+    plan: InjectionPlan,
+    source_window: SourceWindowId,
+    push_observer: Option<ProviderPushObserver>,
+    push_delivery: Option<ProviderPushDelivery>,
+    ready: bool,
+    last_provider_sequence: Option<u64>,
+    delivered_push_count: u64,
+    _artifact: Arc<dyn ExecutableArtifact>,
+    _webview: WorkLease,
 }
 
 #[derive(Debug)]
 pub(crate) struct ProviderPushDelivery {
-    pub(super) join: Option<JoinHandle<()>>,
+    join: Option<JoinHandle<()>>,
 }
 
 #[derive(Debug)]
 pub(crate) struct ActiveOperation {
-    pub(super) session: SessionId,
-    pub(super) principal: Principal,
-    pub(super) domain: Capability,
-    pub(super) handle: Option<ProviderOperation>,
-    pub(super) proposal: Option<ProviderWriteProposal>,
+    session: SessionId,
+    principal: Principal,
+    domain: Capability,
+    handle: Option<ProviderOperation>,
+    proposal: Option<ProviderWriteProposal>,
 }
 
 impl ActiveOperation {
-    pub(super) fn cancel(self, reason: Arc<str>) {
+    fn cancel(self, reason: Arc<str>) {
         if let Some(proposal) = self.proposal {
             proposal.refuse(reason);
         }
@@ -143,7 +143,7 @@ impl ActiveOperation {
         }
     }
 
-    pub(super) fn complete(self) {
+    fn complete(self) {
         drop(self.proposal);
         if let Some(handle) = self.handle {
             handle.complete();
@@ -153,8 +153,8 @@ impl ActiveOperation {
 
 #[derive(Debug)]
 pub(crate) struct BindingOwner {
-    pub(super) request: BindingRequest,
-    pub(super) binding: Arc<Binding>,
+    request: BindingRequest,
+    binding: Arc<Binding>,
 }
 
 impl RuntimeApp {

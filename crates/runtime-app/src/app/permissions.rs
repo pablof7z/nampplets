@@ -68,7 +68,7 @@ impl RuntimeApp {
         })
     }
 
-    pub(crate) fn set_grant(
+    pub(super) fn set_grant(
         &self,
         state: &mut AppState,
         principal: Principal,
@@ -140,7 +140,7 @@ impl RuntimeApp {
         );
     }
 
-    pub(crate) fn current_grant_decision(
+    pub(super) fn current_grant_decision(
         &self,
         principal: &Principal,
         capability: &Capability,
@@ -151,7 +151,7 @@ impl RuntimeApp {
         }
     }
 
-    pub(crate) fn revoke(
+    pub(super) fn revoke(
         &self,
         state: &mut AppState,
         principal: Principal,
@@ -208,7 +208,7 @@ impl RuntimeApp {
         );
     }
 
-    pub(crate) fn restore_persistent_grants(
+    pub(super) fn restore_persistent_grants(
         &self,
         principal: &Principal,
     ) -> Result<(), StoreError> {
@@ -229,7 +229,7 @@ impl RuntimeApp {
     }
 }
 
-pub(crate) fn grant_outcome(decision: GrantDecision) -> &'static str {
+pub(super) fn grant_outcome(decision: GrantDecision) -> &'static str {
     match decision {
         GrantDecision::Denied => "denied",
         GrantDecision::AskEveryTime => "ask-every-time",
@@ -239,7 +239,7 @@ pub(crate) fn grant_outcome(decision: GrantDecision) -> &'static str {
     }
 }
 
-pub(crate) fn permission_provider_projection(
+pub(super) fn permission_provider_projection(
     descriptor: Option<ProviderDescriptor>,
 ) -> (
     Option<Sensitivity>,
@@ -276,7 +276,7 @@ pub(crate) fn permission_provider_projection(
     }
 }
 
-pub(crate) fn permission_decision_policy(
+pub(super) fn permission_decision_policy(
     current: GrantDecision,
     availability: &PermissionPlatformAvailability,
 ) -> (Option<GrantDecision>, Vec<PermissionDecisionOption>) {

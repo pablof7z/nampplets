@@ -18,7 +18,7 @@ use crate::{
 };
 
 impl RuntimeApp {
-    pub(crate) fn activate_push_delivery(
+    pub(super) fn activate_push_delivery(
         self: &Arc<Self>,
         state: &mut AppState,
         session_id: SessionId,
@@ -65,7 +65,7 @@ impl RuntimeApp {
         Ok(())
     }
 
-    pub(crate) fn ingest_provider_push_batch(
+    pub(super) fn ingest_provider_push_batch(
         &self,
         session_id: SessionId,
         source_window: SourceWindowId,
@@ -189,7 +189,7 @@ impl RuntimeApp {
         true
     }
 
-    pub(crate) fn provider_push_observation_failed(
+    pub(super) fn provider_push_observation_failed(
         &self,
         session_id: SessionId,
         source_window: SourceWindowId,
@@ -230,7 +230,7 @@ impl RuntimeApp {
         self.publish(&mut state);
     }
 
-    pub(crate) fn project_provider_push(&self, state: &mut AppState, push: ProviderPush) {
+    pub(super) fn project_provider_push(&self, state: &mut AppState, push: ProviderPush) {
         self.push_event(
             state,
             PlatformEvent::ProviderPush {
@@ -243,7 +243,7 @@ impl RuntimeApp {
         );
     }
 
-    pub(crate) fn complete_operation(
+    pub(super) fn complete_operation(
         &self,
         state: &mut AppState,
         operation_id: ProviderOperationId,
