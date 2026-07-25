@@ -188,19 +188,38 @@ public struct PermissionReviewSheet: View {
         )
     }
 
+    /// Whether the process is running under an XCUITest scenario launch.
+    /// UI tests set `NMP_WORKBENCH_UI_TEST_SCENARIO` (see
+    /// `RuntimeWorkbenchApp.swift` and `ContentView.swift`, which gate their
+    /// own fixture-loading behind the same variable) before the app is
+    /// launched, so its mere presence — regardless of which scenario string
+    /// it carries — is a reliable, test-only signal. It is never set for a
+    /// user-facing launch.
+    private var isUITestScrollHookEnabled: Bool {
+        ProcessInfo.processInfo.environment["NMP_WORKBENCH_UI_TEST_SCENARIO"]
+            != nil
+    }
+
     public var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    exactBuildIdentity
-                    Divider()
-                    capabilityReview
-                    if let issue = model.issue {
-                        Divider()
-                        issueView(issue)
+            ScrollViewReader { proxy in
+                VStack(spacing: 0) {
+                    if isUITestScrollHookEnabled {
+                        scrollAnchorRow(proxy: proxy)
+                    }
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            exactBuildIdentity
+                            Divider()
+                            capabilityReview
+                            if let issue = model.issue {
+                                Divider()
+                                issueView(issue)
+                            }
+                        }
+                        .padding(24)
                     }
                 }
-                .padding(24)
             }
             .navigationTitle("Review Permissions")
             .toolbar {
@@ -240,6 +259,51 @@ public struct PermissionReviewSheet: View {
             idealHeight: 720
         )
         .interactiveDismissDisabled(model.isSubmitting)
+    }
+
+    /// A UI-test-only row of near-invisible buttons, one per capability
+    /// domain, that jump the matching capability card straight to the
+    /// center of the scroll view via `ScrollViewProxy.scrollTo`.
+    ///
+    /// This exists because swipe-gesture-based scrolling from the XCUITest
+    /// side (`scrollToHittable` in `RuntimeWorkbenchUITests.swift`) proved
+    /// fundamentally unreliable against CI's virtual display: the sheet's
+    /// window can size down toward its `minHeight`, changing how much of
+    /// the list a single swipe reveals, and a swipe that overshoots the
+    /// target can push it entirely outside the scroll view's bounds with
+    /// no reliable way to correct without reintroducing a flicker bug a
+    /// prior fix already hit with bidirectional swiping.
+    ///
+    /// `proxy.scrollTo` is exact and immediate: it needs no swipe-distance
+    /// tuning, cannot overshoot, and (called outside a `withAnimation`
+    /// block, as here) is not subject to AppKit's momentum/deceleration
+    /// animation running out from under XCUITest's "wait for idle" step.
+    /// The row lives outside the `ScrollView` so it is always present and
+    /// hittable regardless of scroll position, and it is gated behind the
+    /// same `NMP_WORKBENCH_UI_TEST_SCENARIO` launch-environment signal
+    /// already used to gate fixture loading, so it never exists in a
+    /// user-facing build. It only moves a row into view — the UI test
+    /// still performs the real click on the real, fully revealed control
+    /// to prove the actual interaction works.
+    private func scrollAnchorRow(proxy: ScrollViewProxy) -> some View {
+        HStack(spacing: 0) {
+            ForEach(model.review.capabilities) { capability in
+                Button {
+                    proxy.scrollTo(capability.domain, anchor: .center)
+                } label: {
+                    Color.clear.frame(width: 4, height: 4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(
+                    "permission-scroll-to-\(capability.domain)"
+                )
+                .accessibilityLabel(
+                    "Scroll \(capability.domain) into view"
+                )
+            }
+        }
+        .frame(height: 4)
+        .opacity(0.01)
     }
 
     private var exactBuildIdentity: some View {
@@ -305,6 +369,7 @@ public struct PermissionReviewSheet: View {
 
                 ForEach(model.review.capabilities) { capability in
                     capabilityCard(capability)
+                        .id(capability.domain)
                 }
             }
         }

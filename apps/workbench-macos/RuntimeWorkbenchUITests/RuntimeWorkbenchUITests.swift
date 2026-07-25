@@ -54,11 +54,10 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         reopenReview.click()
 
         for domain in ["identity", "inc", "outbox"] {
-            let decision = app.descendants(matching: .any)[
-                "permission-decision-\(domain)"
-            ]
-            XCTAssertTrue(decision.waitForExistence(timeout: 10))
-            XCTAssertTrue(scrollToHittable(decision, in: app))
+            let decision = scrollPermissionDecisionIntoView(
+                domain: domain,
+                in: app
+            )
             let allow = app.descendants(matching: .any)[
                 "permission-\(domain)-allowExactBuild"
             ]
@@ -216,16 +215,10 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         )
 
         for domain in ["inc", "link", "resource", "theme"] {
-            let decision = app.descendants(matching: .any)[
-                "permission-decision-\(domain)"
-            ]
-            XCTAssertTrue(
-                decision.waitForExistence(timeout: 10),
-                "STL Preview's signed manifest requires \(domain)"
-            )
-            XCTAssertTrue(
-                scrollToHittable(decision, in: app),
-                "The \(domain) decision must be reachable in the native review"
+            let decision = scrollPermissionDecisionIntoView(
+                domain: domain,
+                in: app,
+                message: "The \(domain) decision must be reachable in the native review"
             )
             let allow = app.descendants(matching: .any)[
                 "permission-\(domain)-allowExactBuild"
@@ -309,6 +302,60 @@ final class RuntimeWorkbenchUITests: XCTestCase {
             for: [expectation],
             timeout: timeout
         ) == .completed
+    }
+
+    /// Reveals the `permission-decision-<domain>` control in the native
+    /// permission review sheet and returns it.
+    ///
+    /// The permission list is rendered inside a `ScrollView` whose sheet
+    /// window is only given an `idealHeight`, not a fixed one — CI's
+    /// virtual display can size it down toward its `minHeight` and reveal
+    /// far less of the list than a local run does. Two earlier attempts at
+    /// simulating swipe gestures from this side of the fence
+    /// (`scrollToHittable` below) proved unable to keep up with that: a
+    /// single-direction swipe loop can overshoot a target that sits near
+    /// the end of the list right off the top of the scroll view's visible
+    /// bounds, with no safe way to correct without reintroducing a flicker
+    /// bug a prior fix hit when it tried swiping both directions.
+    ///
+    /// `PermissionReviewSheet` now exposes a deterministic, UI-test-only
+    /// hook instead: a `permission-scroll-to-<domain>` button that lives
+    /// outside the `ScrollView` (so it is always hittable, regardless of
+    /// scroll position) and calls `ScrollViewProxy.scrollTo` directly,
+    /// which is exact and cannot overshoot. Prefer that hook when it
+    /// exists; fall back to the swipe-based heuristic only for launches
+    /// that do not set `NMP_WORKBENCH_UI_TEST_SCENARIO` (and therefore
+    /// never render the hook), such as the opt-in live catalog journey.
+    @MainActor
+    private func scrollPermissionDecisionIntoView(
+        domain: String,
+        in app: XCUIApplication,
+        message: String? = nil
+    ) -> XCUIElement {
+        let decision = app.descendants(matching: .any)[
+            "permission-decision-\(domain)"
+        ]
+        XCTAssertTrue(
+            decision.waitForExistence(timeout: 10),
+            message ?? "The \(domain) decision must exist in the native review"
+        )
+
+        let anchor = app.buttons["permission-scroll-to-\(domain)"]
+        if anchor.waitForExistence(timeout: 2) {
+            anchor.click()
+            XCTAssertTrue(
+                waitForStableFrame(decision, timeout: 5),
+                message
+                    ?? "The \(domain) decision must settle into view after "
+                    + "the deterministic scroll"
+            )
+        } else {
+            XCTAssertTrue(
+                scrollToHittable(decision, in: app),
+                message ?? "The \(domain) decision must be reachable in the native review"
+            )
+        }
+        return decision
     }
 
     @MainActor
