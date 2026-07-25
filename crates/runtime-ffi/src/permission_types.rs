@@ -67,7 +67,15 @@ pub struct RuntimePermissionCapabilitySnapshot {
     pub dependencies: Vec<String>,
     pub platform_availability: RuntimePermissionPlatformAvailability,
     pub existing_decision: RuntimePermissionExistingDecision,
+    /// Rust's own answer to "is this capability granted?". Callers render it;
+    /// they never rebuild it by matching decision names.
+    pub is_granted: bool,
     pub requested_decision: Option<RuntimeGrantDecision>,
+    /// The decision Rust recommends when the user accepts this capability
+    /// without picking a scope: the broadest currently valid affirmative
+    /// decision, `Denied` when nothing affirmative is valid here, and absent
+    /// when host policy manages the capability and offers no user decision.
+    pub recommended_decision: Option<RuntimeGrantDecision>,
     pub decision_options: Vec<RuntimePermissionDecisionOption>,
 }
 

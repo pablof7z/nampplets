@@ -212,7 +212,11 @@ public final class RuntimeWorkbenchPermissionManager:
                     native.platformAvailability
                 ),
                 existingDecision: existingDecision(native.existingDecision),
+                isGranted: native.isGranted,
                 requestedDecision: native.requestedDecision.map(
+                    requestedDecision
+                ),
+                recommendedDecision: native.recommendedDecision.map(
                     requestedDecision
                 ),
                 decisionOptions: options

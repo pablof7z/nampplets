@@ -46,6 +46,48 @@ import Testing
 }
 
 @MainActor
+@Test func grantStateAndRecommendationAreReadFromRustNotRederived() throws {
+    let native = RecordingNativePermissionService(
+        review: nativeReview(
+            capabilities: [
+                nativeCapability(
+                    domain: "identity",
+                    existing: .allowSession,
+                    requested: .allowSession
+                ),
+                nativeCapability(
+                    domain: "resource",
+                    availability: .unavailable(
+                        reason: "no native resource executor is installed"
+                    ),
+                    existing: .denied,
+                    requested: .denied,
+                    invalidDecisions: [
+                        .askEveryTime,
+                        .allowSession,
+                        .allowExactBuild,
+                    ],
+                    invalidReason: "no native resource executor is installed"
+                ),
+            ]
+        )
+    )
+
+    let manager = try RuntimeWorkbenchPermissionManager(
+        native: native,
+        principal: permissionManagerPrincipal()
+    )
+    let capabilities = manager.snapshot().review.capabilities
+    let identity = try #require(capabilities.first)
+    let resource = try #require(capabilities.last)
+
+    #expect(identity.isGranted)
+    #expect(identity.recommendedDecision == .allowExactBuild)
+    #expect(!resource.isGranted)
+    #expect(resource.recommendedDecision == .deny)
+}
+
+@MainActor
 @Test func managedCapabilityIsExplicitlyLockedAndCannotProduceAPartialBatch()
     throws
 {
@@ -76,6 +118,8 @@ import Testing
 
     #expect(capability.existingDecision == .managed)
     #expect(capability.requestedDecision == nil)
+    #expect(capability.isGranted)
+    #expect(capability.recommendedDecision == nil)
     #expect(capability.decisionOptions.allSatisfy { !$0.isValid })
     #expect(model.selection(for: capability) == nil)
     #expect(!model.canConfirm)
@@ -271,14 +315,29 @@ private func nativeCapability(
     invalidDecisions: Set<NativeRuntimeGrantDecision> = [],
     invalidReason: String = "decision unavailable"
 ) -> NativeRuntimePermissionCapabilitySnapshot {
-    NativeRuntimePermissionCapabilitySnapshot(
+    // This helper stands in for Rust, so it reproduces the projection Rust
+    // performs: granted means the decision in force allows without prompting,
+    // and the recommendation is the broadest still-valid affirmative option.
+    let granted: [NativeRuntimePermissionExistingDecision] = [
+        .allowSession,
+        .allowExactBuild,
+        .managed,
+    ]
+    let recommended: NativeRuntimeGrantDecision? = requested == nil
+        ? nil
+        : ([.allowExactBuild, .allowSession].first {
+            !invalidDecisions.contains($0)
+        } ?? .denied)
+    return NativeRuntimePermissionCapabilitySnapshot(
         domain: domain,
         requirement: .required,
         sensitivity: sensitivity,
         dependencies: [],
         platformAvailability: availability,
         existingDecision: existing,
+        isGranted: granted.contains(existing),
         requestedDecision: requested,
+        recommendedDecision: recommended,
         decisionOptions: NativeRuntimeGrantDecision.allTestCases.map {
             decision in
             let invalid = invalidDecisions.contains(decision)

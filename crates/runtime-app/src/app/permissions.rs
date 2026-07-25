@@ -48,8 +48,7 @@ impl RuntimeApp {
             let descriptor = self.bridge.permission_descriptor(&request.capability);
             let (sensitivity, dependencies, platform_availability) =
                 permission_provider_projection(descriptor);
-            let (requested_decision, decision_options) =
-                permission_decision_policy(current_decision, &platform_availability);
+            let policy = permission_decision_policy(current_decision, &platform_availability);
             capabilities.push(PermissionCapabilityView {
                 capability: request.capability.clone(),
                 requirement: request.requirement,
@@ -57,8 +56,10 @@ impl RuntimeApp {
                 dependencies,
                 platform_availability,
                 current_decision,
-                requested_decision,
-                decision_options,
+                is_granted: current_decision.allows_without_prompt(),
+                requested_decision: policy.requested,
+                recommended_decision: policy.recommended,
+                decision_options: policy.options,
             });
         }
         Ok(PermissionReviewView {
@@ -276,10 +277,18 @@ pub(super) fn permission_provider_projection(
     }
 }
 
+/// One capability's complete decision policy, decided once by Rust.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct PermissionDecisionPolicy {
+    pub requested: Option<GrantDecision>,
+    pub recommended: Option<GrantDecision>,
+    pub options: Vec<PermissionDecisionOption>,
+}
+
 pub(super) fn permission_decision_policy(
     current: GrantDecision,
     availability: &PermissionPlatformAvailability,
-) -> (Option<GrantDecision>, Vec<PermissionDecisionOption>) {
+) -> PermissionDecisionPolicy {
     let user_decisions = [
         GrantDecision::Denied,
         GrantDecision::AskEveryTime,
@@ -288,9 +297,10 @@ pub(super) fn permission_decision_policy(
     ];
     if current == GrantDecision::Managed {
         let reason: Arc<str> = Arc::from("this capability is managed by host policy");
-        return (
-            None,
-            user_decisions
+        return PermissionDecisionPolicy {
+            requested: None,
+            recommended: None,
+            options: user_decisions
                 .into_iter()
                 .map(|decision| PermissionDecisionOption {
                     decision,
@@ -298,7 +308,7 @@ pub(super) fn permission_decision_policy(
                     invalid_reason: Some(Arc::clone(&reason)),
                 })
                 .collect(),
-        );
+        };
     }
     let unavailable_reason = match availability {
         PermissionPlatformAvailability::Available => None,
@@ -312,20 +322,86 @@ pub(super) fn permission_decision_policy(
     } else {
         current
     };
-    (
-        Some(requested),
-        user_decisions
-            .into_iter()
-            .map(|decision| {
-                let invalid_reason = (decision != GrantDecision::Denied)
-                    .then(|| unavailable_reason.clone())
-                    .flatten();
-                PermissionDecisionOption {
-                    decision,
-                    valid: invalid_reason.is_none(),
-                    invalid_reason,
-                }
-            })
-            .collect(),
-    )
+    let options: Vec<PermissionDecisionOption> = user_decisions
+        .into_iter()
+        .map(|decision| {
+            let invalid_reason = (decision != GrantDecision::Denied)
+                .then(|| unavailable_reason.clone())
+                .flatten();
+            PermissionDecisionOption {
+                decision,
+                valid: invalid_reason.is_none(),
+                invalid_reason,
+            }
+        })
+        .collect();
+    PermissionDecisionPolicy {
+        requested: Some(requested),
+        recommended: Some(recommended_decision(&options)),
+        options,
+    }
+}
+
+/// The broadest affirmative decision this runtime currently accepts, falling
+/// back to `Denied` when the platform offers no affirmative option at all.
+/// Breadth is declared by `runtime-core`, never by a caller.
+fn recommended_decision(options: &[PermissionDecisionOption]) -> GrantDecision {
+    GrantDecision::AFFIRMATIVE_BY_BREADTH
+        .into_iter()
+        .find(|affirmative| {
+            options
+                .iter()
+                .any(|option| option.decision == *affirmative && option.valid)
+        })
+        .unwrap_or(GrantDecision::Denied)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn available_capability_recommends_the_broadest_affirmative_decision() {
+        let policy = permission_decision_policy(
+            GrantDecision::AskEveryTime,
+            &PermissionPlatformAvailability::Available,
+        );
+
+        assert_eq!(policy.recommended, Some(GrantDecision::AllowExactBuild));
+        assert!(
+            policy
+                .recommended
+                .is_some_and(GrantDecision::allows_without_prompt)
+        );
+    }
+
+    #[test]
+    fn unavailable_capability_recommends_denied_because_nothing_affirmative_is_valid() {
+        let policy = permission_decision_policy(
+            GrantDecision::AllowExactBuild,
+            &PermissionPlatformAvailability::Unavailable {
+                reason: Arc::from("no provider on this platform"),
+            },
+        );
+
+        assert_eq!(policy.recommended, Some(GrantDecision::Denied));
+        assert!(
+            policy
+                .options
+                .iter()
+                .all(|option| { option.decision == GrantDecision::Denied || !option.valid })
+        );
+    }
+
+    #[test]
+    fn managed_capability_recommends_nothing_because_the_user_decides_nothing() {
+        let policy = permission_decision_policy(
+            GrantDecision::Managed,
+            &PermissionPlatformAvailability::Available,
+        );
+
+        assert_eq!(policy.requested, None);
+        assert_eq!(policy.recommended, None);
+        assert!(policy.options.iter().all(|option| !option.valid));
+    }
 }

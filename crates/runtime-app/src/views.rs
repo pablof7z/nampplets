@@ -149,7 +149,17 @@ pub struct PermissionCapabilityView {
     pub dependencies: Vec<Capability>,
     pub platform_availability: PermissionPlatformAvailability,
     pub current_decision: GrantDecision,
+    /// True when the decision in force already allows this capability without
+    /// prompting. This is the runtime's own classification of "granted"; it is
+    /// not a list of decision names for a caller to match against.
+    pub is_granted: bool,
     pub requested_decision: Option<GrantDecision>,
+    /// The decision the runtime recommends when the user accepts this
+    /// capability without choosing a scope: the broadest currently valid
+    /// affirmative decision, `Denied` when nothing affirmative is valid on
+    /// this platform, and `None` when host policy manages the capability and
+    /// the user has no decision to make.
+    pub recommended_decision: Option<GrantDecision>,
     pub decision_options: Vec<PermissionDecisionOption>,
 }
 

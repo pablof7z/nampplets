@@ -214,9 +214,18 @@ public struct PermissionCapabilityReview: Identifiable, Equatable, Sendable {
     public let dependencies: [PermissionCapabilityDependency]
     public let platformAvailability: PermissionPlatformAvailability
     public let existingDecision: PermissionExistingDecision
+    /// Rust's own classification of the decision in force: true when this
+    /// capability is already allowed without prompting. The native layer
+    /// renders this value and never rebuilds it from decision names.
+    public let isGranted: Bool
     /// The Rust-owned requested default, absent when host policy manages the
     /// capability and therefore offers no user-selectable decision.
     public let requestedDecision: PermissionRequestedDecision?
+    /// The decision Rust recommends when the user accepts this capability
+    /// without picking a scope. Absent for host-managed capabilities, which
+    /// offer the user no decision at all. Native code never invents this
+    /// preference by ordering `decisionOptions` itself.
+    public let recommendedDecision: PermissionRequestedDecision?
     public let decisionOptions: [PermissionDecisionOption]
 
     public var id: String {
@@ -232,7 +241,9 @@ public struct PermissionCapabilityReview: Identifiable, Equatable, Sendable {
         dependencies: [PermissionCapabilityDependency],
         platformAvailability: PermissionPlatformAvailability,
         existingDecision: PermissionExistingDecision,
+        isGranted: Bool,
         requestedDecision: PermissionRequestedDecision?,
+        recommendedDecision: PermissionRequestedDecision?,
         decisionOptions: [PermissionDecisionOption]
     ) {
         let validRequestedOption = requestedDecision.map { requested in
@@ -245,6 +256,12 @@ public struct PermissionCapabilityReview: Identifiable, Equatable, Sendable {
         )
         let managedStateIsConsistent =
             (existingDecision == .managed) == (requestedDecision == nil)
+            && (requestedDecision == nil) == (recommendedDecision == nil)
+        let recommendationIsOffered = recommendedDecision.map { recommended in
+            decisionOptions.contains {
+                $0.decision == recommended && $0.isValid
+            }
+        } ?? true
         let lockedOptionsExplainWhy = requestedDecision != nil
             || decisionOptions.allSatisfy {
                 !($0.invalidReason?.isEmpty ?? true)
@@ -265,6 +282,7 @@ public struct PermissionCapabilityReview: Identifiable, Equatable, Sendable {
             uniqueOptions,
             validRequestedOption,
             managedStateIsConsistent,
+            recommendationIsOffered,
             lockedOptionsExplainWhy,
             (platformAvailability.detail?.utf8.count ?? 0)
                 <= PermissionLimits.maximumDisplayTextUTF8Bytes
@@ -280,7 +298,9 @@ public struct PermissionCapabilityReview: Identifiable, Equatable, Sendable {
         self.dependencies = dependencies
         self.platformAvailability = platformAvailability
         self.existingDecision = existingDecision
+        self.isGranted = isGranted
         self.requestedDecision = requestedDecision
+        self.recommendedDecision = recommendedDecision
         self.decisionOptions = decisionOptions
     }
 

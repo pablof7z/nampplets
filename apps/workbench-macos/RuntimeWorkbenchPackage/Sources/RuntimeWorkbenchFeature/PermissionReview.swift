@@ -344,10 +344,22 @@ public struct PermissionReviewSheet: View {
 
             Divider()
 
-            LabeledContent(
-                "Current decision",
-                value: capability.existingDecision.title
-            )
+            LabeledContent("Current decision") {
+                Label(
+                    capability.existingDecision.title,
+                    systemImage: capability.isGranted
+                        ? "checkmark.shield"
+                        : "shield.slash"
+                )
+                .foregroundStyle(
+                    capability.isGranted ? Color.green : Color.secondary
+                )
+                .accessibilityLabel(
+                    capability.isGranted
+                        ? "\(capability.existingDecision.title), granted"
+                        : "\(capability.existingDecision.title), not granted"
+                )
+            }
 
             if capability.requestedDecision == nil {
                 lockedManagedDecision(capability)
@@ -424,18 +436,19 @@ public struct PermissionReviewSheet: View {
                 Button {
                     model.select(option.decision, for: capability)
                 } label: {
+                    let title = optionTitle(option, in: capability)
                     if model.selection(for: capability) == option.decision {
-                        Label(option.decision.title, systemImage: "checkmark")
+                        Label(title, systemImage: "checkmark")
                     } else {
-                        Text(option.decision.title)
+                        Text(title)
                     }
                 }
                 .disabled(!option.isValid)
                 .accessibilityIdentifier(
                     "permission-\(capability.domain)-\(option.decision.rawValue)"
                 )
-                .help(option.invalidReason ?? option.decision.title)
-                .accessibilityLabel(option.decision.title)
+                .help(option.invalidReason ?? optionTitle(option, in: capability))
+                .accessibilityLabel(optionTitle(option, in: capability))
                 .accessibilityHint(
                     option.invalidReason
                         ?? "Selects this decision for \(capability.title)"
@@ -456,6 +469,19 @@ public struct PermissionReviewSheet: View {
         for capability: PermissionCapabilityReview
     ) -> String {
         model.selection(for: capability)?.title ?? "Managed by host"
+    }
+
+    /// Marks the decision the runtime itself recommends. The preference is
+    /// read from Rust's projected `recommendedDecision`; this sheet never
+    /// ranks `decisionOptions` on its own.
+    private func optionTitle(
+        _ option: PermissionDecisionOption,
+        in capability: PermissionCapabilityReview
+    ) -> String {
+        guard option.decision == capability.recommendedDecision else {
+            return option.decision.title
+        }
+        return "\(option.decision.title) (Recommended)"
     }
 
     private func lockedManagedDecision(

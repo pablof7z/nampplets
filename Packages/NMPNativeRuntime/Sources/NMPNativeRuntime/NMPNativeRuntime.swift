@@ -5285,19 +5285,43 @@ public struct RuntimePermissionCapabilitySnapshot {
     public var dependencies: [String]
     public var platformAvailability: RuntimePermissionPlatformAvailability
     public var existingDecision: RuntimePermissionExistingDecision
+    /**
+     * Rust's own answer to "is this capability granted?". Callers render it;
+     * they never rebuild it by matching decision names.
+     */
+    public var isGranted: Bool
     public var requestedDecision: RuntimeGrantDecision?
+    /**
+     * The decision Rust recommends when the user accepts this capability
+     * without picking a scope: the broadest currently valid affirmative
+     * decision, `Denied` when nothing affirmative is valid here, and absent
+     * when host policy manages the capability and offers no user decision.
+     */
+    public var recommendedDecision: RuntimeGrantDecision?
     public var decisionOptions: [RuntimePermissionDecisionOption]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(domain: String, requirement: RuntimePermissionRequirement, sensitivity: RuntimePermissionSensitivity, dependencies: [String], platformAvailability: RuntimePermissionPlatformAvailability, existingDecision: RuntimePermissionExistingDecision, requestedDecision: RuntimeGrantDecision?, decisionOptions: [RuntimePermissionDecisionOption]) {
+    public init(domain: String, requirement: RuntimePermissionRequirement, sensitivity: RuntimePermissionSensitivity, dependencies: [String], platformAvailability: RuntimePermissionPlatformAvailability, existingDecision: RuntimePermissionExistingDecision,
+        /**
+         * Rust's own answer to "is this capability granted?". Callers render it;
+         * they never rebuild it by matching decision names.
+         */isGranted: Bool, requestedDecision: RuntimeGrantDecision?,
+        /**
+         * The decision Rust recommends when the user accepts this capability
+         * without picking a scope: the broadest currently valid affirmative
+         * decision, `Denied` when nothing affirmative is valid here, and absent
+         * when host policy manages the capability and offers no user decision.
+         */recommendedDecision: RuntimeGrantDecision?, decisionOptions: [RuntimePermissionDecisionOption]) {
         self.domain = domain
         self.requirement = requirement
         self.sensitivity = sensitivity
         self.dependencies = dependencies
         self.platformAvailability = platformAvailability
         self.existingDecision = existingDecision
+        self.isGranted = isGranted
         self.requestedDecision = requestedDecision
+        self.recommendedDecision = recommendedDecision
         self.decisionOptions = decisionOptions
     }
 }
@@ -5327,7 +5351,13 @@ extension RuntimePermissionCapabilitySnapshot: Equatable, Hashable {
         if lhs.existingDecision != rhs.existingDecision {
             return false
         }
+        if lhs.isGranted != rhs.isGranted {
+            return false
+        }
         if lhs.requestedDecision != rhs.requestedDecision {
+            return false
+        }
+        if lhs.recommendedDecision != rhs.recommendedDecision {
             return false
         }
         if lhs.decisionOptions != rhs.decisionOptions {
@@ -5343,7 +5373,9 @@ extension RuntimePermissionCapabilitySnapshot: Equatable, Hashable {
         hasher.combine(dependencies)
         hasher.combine(platformAvailability)
         hasher.combine(existingDecision)
+        hasher.combine(isGranted)
         hasher.combine(requestedDecision)
+        hasher.combine(recommendedDecision)
         hasher.combine(decisionOptions)
     }
 }
@@ -5363,7 +5395,9 @@ public struct FfiConverterTypeRuntimePermissionCapabilitySnapshot: FfiConverterR
                 dependencies: FfiConverterSequenceString.read(from: &buf),
                 platformAvailability: FfiConverterTypeRuntimePermissionPlatformAvailability.read(from: &buf),
                 existingDecision: FfiConverterTypeRuntimePermissionExistingDecision.read(from: &buf),
+                isGranted: FfiConverterBool.read(from: &buf),
                 requestedDecision: FfiConverterOptionTypeRuntimeGrantDecision.read(from: &buf),
+                recommendedDecision: FfiConverterOptionTypeRuntimeGrantDecision.read(from: &buf),
                 decisionOptions: FfiConverterSequenceTypeRuntimePermissionDecisionOption.read(from: &buf)
         )
     }
@@ -5375,7 +5409,9 @@ public struct FfiConverterTypeRuntimePermissionCapabilitySnapshot: FfiConverterR
         FfiConverterSequenceString.write(value.dependencies, into: &buf)
         FfiConverterTypeRuntimePermissionPlatformAvailability.write(value.platformAvailability, into: &buf)
         FfiConverterTypeRuntimePermissionExistingDecision.write(value.existingDecision, into: &buf)
+        FfiConverterBool.write(value.isGranted, into: &buf)
         FfiConverterOptionTypeRuntimeGrantDecision.write(value.requestedDecision, into: &buf)
+        FfiConverterOptionTypeRuntimeGrantDecision.write(value.recommendedDecision, into: &buf)
         FfiConverterSequenceTypeRuntimePermissionDecisionOption.write(value.decisionOptions, into: &buf)
     }
 }

@@ -223,8 +223,12 @@ pub(crate) fn project_permission_review(
                     }
                 },
                 existing_decision: project_grant_decision(capability.current_decision),
+                is_granted: capability.is_granted,
                 requested_decision: capability
                     .requested_decision
+                    .and_then(project_requested_grant_decision),
+                recommended_decision: capability
+                    .recommended_decision
                     .and_then(project_requested_grant_decision),
                 decision_options: capability
                     .decision_options

@@ -192,7 +192,9 @@ private func permissionSnapshot() -> PermissionReviewSnapshot {
         ],
         platformAvailability: .available,
         existingDecision: .denied,
+        isGranted: false,
         requestedDecision: .askEveryTime,
+        recommendedDecision: .allowExactBuild,
         decisionOptions: validOptions()
     )!
     let outbox = PermissionCapabilityReview(
@@ -204,7 +206,9 @@ private func permissionSnapshot() -> PermissionReviewSnapshot {
         dependencies: [],
         platformAvailability: .available,
         existingDecision: .askEveryTime,
+        isGranted: false,
         requestedDecision: .askEveryTime,
+        recommendedDecision: .allowExactBuild,
         decisionOptions: validOptions()
     )!
     let review = PermissionReview(
@@ -238,7 +242,9 @@ private func unavailablePermissionSnapshot() -> PermissionReviewSnapshot {
             reason: "No native resource executor is installed."
         ),
         existingDecision: .denied,
+        isGranted: false,
         requestedDecision: .deny,
+        recommendedDecision: .deny,
         decisionOptions: validOptions(
             unavailable: [.askEveryTime, .allowSession, .allowExactBuild]
         )

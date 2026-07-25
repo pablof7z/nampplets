@@ -60,6 +60,15 @@ pub enum GrantDecision {
 }
 
 impl GrantDecision {
+    /// The user-selectable affirmative decisions, broadest first.
+    ///
+    /// `AllowExactBuild` survives the session for one exact aggregate hash;
+    /// `AllowSession` dies with the session, so it is strictly narrower.
+    /// `Managed` is host policy and is never a decision a user may pick.
+    /// Callers that need "the broadest affirmative decision" read this order
+    /// instead of inventing one at a presentation boundary.
+    pub const AFFIRMATIVE_BY_BREADTH: [Self; 2] = [Self::AllowExactBuild, Self::AllowSession];
+
     pub fn allows_without_prompt(self) -> bool {
         matches!(
             self,
@@ -309,6 +318,20 @@ mod tests {
 
     fn principal(hash: char) -> Principal {
         Principal::new("a".repeat(64), "app", hash.to_string().repeat(64)).unwrap()
+    }
+
+    #[test]
+    fn affirmative_breadth_order_is_declared_by_this_crate() {
+        assert_eq!(
+            GrantDecision::AFFIRMATIVE_BY_BREADTH,
+            [GrantDecision::AllowExactBuild, GrantDecision::AllowSession]
+        );
+        assert!(
+            GrantDecision::AFFIRMATIVE_BY_BREADTH
+                .iter()
+                .all(|decision| decision.allows_without_prompt())
+        );
+        assert!(!GrantDecision::AFFIRMATIVE_BY_BREADTH.contains(&GrantDecision::Managed));
     }
 
     #[test]
