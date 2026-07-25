@@ -108,5 +108,4 @@ cargo test --workspace
 
 For Apple changes, build and test the shared `RuntimeWorkbench` scheme in the
 macOS destination, and build the `RuntimeWorkbenchiOS` scheme in an iOS
-Simulator destination. For NMP-sensitive application work, run the
-architecture scanner and document which D0-D10 rules the design discharges.
+Simulator destination.
