@@ -1,6 +1,7 @@
+use super::feed::connecting_catalog_frame;
 use super::*;
-use nmp::{EngineConfig, RelayUrl};
-use nmp_native_artifact::INDEX_PATH;
+use nmp::{EngineConfig, RelayUrl, WindowLoad};
+use nmp_native_artifact::{INDEX_PATH, ManifestCoordinate};
 use tempfile::TempDir;
 
 const LIVE_STL_PREVIEW_AUTHOR: &str =
