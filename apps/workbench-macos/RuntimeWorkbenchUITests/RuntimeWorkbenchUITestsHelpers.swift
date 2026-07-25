@@ -301,6 +301,22 @@ extension RuntimeWorkbenchUITests {
         }
     }
 
+    /// Every presence wait in this flow uses the suite's standard 10s
+    /// allowance, deliberately and uniformly.
+    ///
+    /// Each step here waits on something that only materializes after a
+    /// window-server transition — an NSMenu popup, a sheet presentation, a
+    /// sheet dismissal — none of which are driven by the app's own run loop,
+    /// so XCTest's automatic "wait for app to idle" step cannot cover them.
+    /// When a second process steals frontmost (concurrent `xcodebuild` runs
+    /// on the same machine are the common case), those transitions are
+    /// exactly what stalls, and the popup-menu step stalls first. Three of
+    /// these waits were previously written as bare `timeout: 2` asserts,
+    /// which read as "this should be instant" rather than as a tuned budget;
+    /// the menu wait below then failed repeatedly under concurrent runs while
+    /// passing in isolation. A longer allowance costs nothing when the
+    /// element appears on time, so there is no reason for any step in this
+    /// sequence to be the short one.
     @MainActor
     func registerAndActivateDeterministicAccount(
         in app: XCUIApplication
@@ -315,7 +331,10 @@ extension RuntimeWorkbenchUITests {
         accountSwitcher.click()
 
         let addSigner = app.menuItems["Signer-backed Account…"]
-        XCTAssertTrue(addSigner.waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            addSigner.waitForExistence(timeout: 10),
+            "The account switcher menu must offer signer-backed registration"
+        )
         addSigner.click()
 
         let secretField = app.secureTextFields["Secret key"]
@@ -324,7 +343,10 @@ extension RuntimeWorkbenchUITests {
         secretField.typeText(Self.uiTestSigningSecret)
 
         let register = app.buttons["Register Local Account"]
-        XCTAssertTrue(register.waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            register.waitForExistence(timeout: 10),
+            "The registration sheet must offer a register control"
+        )
         XCTAssertTrue(register.isEnabled)
         register.click()
 
@@ -354,7 +376,10 @@ extension RuntimeWorkbenchUITests {
         )
 
         let done = app.buttons["Done"]
-        XCTAssertTrue(done.waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            done.waitForExistence(timeout: 10),
+            "The account sheet must offer a dismissal control"
+        )
         done.click()
         XCTAssertTrue(
             waitForNonexistence(of: activePublicKey, timeout: 10),
