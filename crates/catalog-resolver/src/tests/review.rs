@@ -8,6 +8,8 @@ use std::{
 
 use nmp_native_artifact::ArtifactSourcePolicy;
 
+use crate::{AcquisitionRefusal, ResolveError};
+
 use super::*;
 
 #[test]

@@ -1,6 +1,6 @@
 use url::Url;
 
-use super::{AcquisitionRefusal, validate_candidate};
+use crate::{AcquisitionRefusal, https::validate_candidate};
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum ResponseAction {

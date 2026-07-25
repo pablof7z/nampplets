@@ -2,7 +2,12 @@
 
 use std::sync::atomic::Ordering;
 
-use nmp_native_artifact::INDEX_PATH;
+use nmp_native_artifact::{INDEX_PATH, Sha256Digest};
+
+use crate::{
+    AcquisitionRefusal, ResolutionOrigin, ResolveError, SealedArtifactCache, SealedArtifactKey,
+    https::validate_candidate, resolver::Admission,
+};
 
 use super::*;
 

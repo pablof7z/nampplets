@@ -3,12 +3,28 @@
 //! [`review`] (review lifecycle and blocking-cancellation behavior), and
 //! [`acquisition`] (raw Rust HTTPS port behavior).
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    fmt,
+    net::{IpAddr, Ipv4Addr},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
-use nmp_native_artifact::ArtifactSourcePolicy;
+use nmp_native_artifact::{
+    ArtifactLimits, ArtifactSourcePolicy, FileArtifactCache, ManifestCoordinate,
+};
+use parking_lot::{Condvar, Mutex};
 use tempfile::TempDir;
 
-use super::*;
+use crate::{
+    CancellationToken, CatalogResolver, CoordinateLookupFact, HttpsAcquisitionCompletion,
+    HttpsAcquisitionOperation, HttpsAcquisitionPort, HttpsFetchRequest, HttpsFetchResponse,
+    HttpsPortError, LookupPortError, ManifestLookupCompletion, ManifestLookupOperation,
+    ManifestLookupPort, ManifestLookupRequest, ManifestLookupResponse, MemorySealedArtifactCache,
+    ResolverLimits,
+};
 
 mod acquisition;
 mod resolution;

@@ -1,5 +1,10 @@
 //! Raw Rust HTTPS acquisition port behavior tests.
 
+use crate::{
+    AcquisitionRefusal, CancellationToken, HttpsPortError, RustHttpsAcquisitionConfig,
+    RustHttpsAcquisitionPort, https::HttpsWaitError,
+};
+
 use super::*;
 
 #[test]
