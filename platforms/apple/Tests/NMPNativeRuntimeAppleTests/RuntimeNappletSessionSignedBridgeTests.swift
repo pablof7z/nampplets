@@ -4,7 +4,7 @@ import XCTest
 import WebKit
 @testable import NMPNativeRuntimeApple
 
-extension RuntimeNappletSessionTests {
+final class RuntimeNappletSessionSignedBridgeTests: RuntimeNappletSessionTestCase {
     @MainActor
     func testSignedGoodMorningExecutesAuthoredBridgeTrafficInTrustedView() async throws {
         let root = FileManager.default.temporaryDirectory
