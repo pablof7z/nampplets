@@ -197,7 +197,7 @@ public struct WorkbenchLibrarySheet: View {
     }
 }
 
-struct WorkbenchLibraryBuildRow: View {
+private struct WorkbenchLibraryBuildRow: View {
     let build: WorkbenchLibraryBuild
     let workspaces: [WorkbenchLibraryWorkspace]
     let commandsAvailable: Bool

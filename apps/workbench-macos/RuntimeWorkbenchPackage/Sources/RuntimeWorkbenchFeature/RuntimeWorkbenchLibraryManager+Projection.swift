@@ -120,7 +120,7 @@ extension RuntimeWorkbenchLibraryManager {
         )
     }
 
-    static func sessionState(
+    private static func sessionState(
         _ state: NativeRuntimeLibrarySessionState
     ) -> WorkbenchLibrarySessionState {
         switch state {

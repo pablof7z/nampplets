@@ -93,7 +93,7 @@ extension ContentView {
     }
 
     @ViewBuilder
-    func nappletSurface(
+    private func nappletSurface(
         _ artifact: NappletArtifact,
         title: String
     ) -> some View {
@@ -127,7 +127,7 @@ extension ContentView {
     }
 
     @MainActor
-    func closeWindow(_ window: WorkbenchCanvasWindow) {
+    private func closeWindow(_ window: WorkbenchCanvasWindow) {
         mutateLayout {
             $0.removeWindow(id: window.id)
         }

@@ -75,7 +75,7 @@ extension ContentView {
         }
     }
 
-    var workspaceControlStrip: some View {
+    private var workspaceControlStrip: some View {
         HStack(spacing: 10) {
             accountMenu
 
@@ -117,7 +117,7 @@ extension ContentView {
         .background(.bar)
     }
 
-    var accountMenu: some View {
+    private var accountMenu: some View {
         Menu {
             Section("Switch account") {
                 if accountSnapshot.accounts.isEmpty {
@@ -188,7 +188,7 @@ extension ContentView {
         .accessibilityIdentifier("account-switcher")
     }
 
-    var workspaceActionsMenu: some View {
+    private var workspaceActionsMenu: some View {
         Menu {
             Button("Installed Napplets", systemImage: "square.stack.3d.up") {
                 isLibrarySheetPresented = true
@@ -221,7 +221,7 @@ extension ContentView {
         )
     }
 
-    var availableLayoutModes: [WorkbenchLayoutMode] {
+    private var availableLayoutModes: [WorkbenchLayoutMode] {
         #if os(iOS)
         WorkbenchLayoutMode.allCases
         #else
@@ -229,7 +229,7 @@ extension ContentView {
         #endif
     }
 
-    var layoutMenu: some View {
+    private var layoutMenu: some View {
         Menu {
             Section("Window layout") {
                 ForEach(availableLayoutModes, id: \.self) { mode in
@@ -276,19 +276,19 @@ extension ContentView {
         .accessibilityIdentifier("runtime-activity")
     }
 
-    var activitySymbol: String {
+    private var activitySymbol: String {
         activity.hasPrefix("Refused") || activity.contains("crashed")
             ? "exclamationmark.triangle.fill"
             : "checkmark.shield.fill"
     }
 
-    var activityColor: Color {
+    private var activityColor: Color {
         activity.hasPrefix("Refused") || activity.contains("crashed")
             ? .orange
             : .green
     }
 
-    var activeAccountLabel: String {
+    private var activeAccountLabel: String {
         guard
             let activeHandle = accountSnapshot.activeHandle,
             let account = accountSnapshot.accounts.first(where: {
@@ -300,7 +300,7 @@ extension ContentView {
         return accountDisplayName(account)
     }
 
-    func accountDisplayName(
+    private func accountDisplayName(
         _ account: WorkbenchStoredAccount
     ) -> String {
         let projectedIdentity = account.npub.isEmpty
@@ -314,7 +314,7 @@ extension ContentView {
         return "\(projectedIdentity.prefix(8))…\(projectedIdentity.suffix(6))"
     }
 
-    func accountMenuSymbol(
+    private func accountMenuSymbol(
         _ account: WorkbenchStoredAccount
     ) -> String {
         switch account.connectionKind {
@@ -328,7 +328,7 @@ extension ContentView {
     }
 
     @MainActor
-    func setLayoutMode(_ mode: WorkbenchLayoutMode) {
+    private func setLayoutMode(_ mode: WorkbenchLayoutMode) {
         mutateLayout { $0.setMode(mode) }
         if mode == .fullWindow {
             fullWindowRootID = layout.selectedWindow?.id
@@ -340,7 +340,7 @@ extension ContentView {
     }
 
     @MainActor
-    func exitFullWindow() {
+    private func exitFullWindow() {
         setLayoutMode(.freeform)
     }
 }

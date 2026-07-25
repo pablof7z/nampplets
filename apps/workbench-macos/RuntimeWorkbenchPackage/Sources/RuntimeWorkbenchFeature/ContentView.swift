@@ -33,8 +33,8 @@ public struct ContentView: View {
     let bootstrapError: String?
     let layoutStore: any WorkbenchLayoutPersisting
     let accountManager: any WorkbenchAccountManaging
-    let catalogClient: any CatalogClient
-    let libraryManager: any WorkbenchLibraryManaging
+    private let catalogClient: any CatalogClient
+    private let libraryManager: any WorkbenchLibraryManaging
     let injectedPermissionManager: (any PermissionReviewManaging)?
 
     @State var activity = "Opening application runtime profile"
@@ -44,7 +44,7 @@ public struct ContentView: View {
         WorkbenchExactBuildIdentity?
     @State var deferredPermissionIdentity:
         WorkbenchExactBuildIdentity?
-    @State var deferredLibraryOpenIdentity:
+    @State private var deferredLibraryOpenIdentity:
         WorkbenchExactBuildIdentity?
     @State var runningArtifacts:
         [WorkbenchExactBuildIdentity: NappletArtifact] = [:]

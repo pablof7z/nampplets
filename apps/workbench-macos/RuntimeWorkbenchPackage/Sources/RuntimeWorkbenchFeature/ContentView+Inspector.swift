@@ -45,7 +45,7 @@ extension ContentView {
     }
 
     @ViewBuilder
-    var inspectorOverviewTab: some View {
+    private var inspectorOverviewTab: some View {
         if let window = layout.selectedWindow {
             VStack(alignment: .leading, spacing: 12) {
                 Text(window.title)
@@ -112,7 +112,7 @@ extension ContentView {
     }
 
     @ViewBuilder
-    var inspectorRelaysTab: some View {
+    private var inspectorRelaysTab: some View {
         if let profile {
             RelayDiagnosticsInspectorView(
                 source: RuntimeWorkbenchRelayDiagnosticsSource(profile: profile)
