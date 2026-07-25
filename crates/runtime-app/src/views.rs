@@ -10,6 +10,7 @@ use nmp_native_runtime_core::{
 use nmp_native_runtime_store::InstalledBuild;
 use thiserror::Error;
 
+use crate::activity::ActivityFact;
 use crate::commands::ProviderOperationId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -40,15 +41,6 @@ pub enum AppErrorCode {
     Store,
     Receipt,
     Closed,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ActivityFact {
-    pub principal: Principal,
-    pub category: Arc<str>,
-    pub operation: Arc<str>,
-    pub outcome: Arc<str>,
-    pub occurred_at_millis: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -101,27 +101,67 @@ public enum ActivityFactKind: String, CaseIterable, Hashable, Sendable {
     }
 }
 
+/// The visibility the runtime decided for one detail value.
+///
+/// Native code does not classify values. Whether something is secret is a
+/// security decision the runtime makes where it produces the fact and where
+/// it knows what the value is; keyword matching on the text both over-matches
+/// and under-matches. A value the runtime classified as secret reaches this
+/// layer with no bytes, so `.redacted` carries nothing to reveal.
+public enum ActivityDetailValue: Equatable, Sendable {
+    /// A value the runtime classified as safe to display verbatim.
+    case visible(String)
+    /// A value the runtime classified as secret and withheld.
+    case redacted
+
+    /// The text to render. There is no unclassified path to a display string.
+    public var displayText: String {
+        switch self {
+        case let .visible(text): text
+        case .redacted: ActivityDetailField.redactedPlaceholder
+        }
+    }
+
+    var measuredUTF8ByteCount: Int {
+        switch self {
+        case let .visible(text): text.utf8.count
+        case .redacted: 0
+        }
+    }
+}
+
 public struct ActivityDetailField: Identifiable, Equatable, Sendable {
+    /// Shown in place of a value the runtime withheld.
+    public static let redactedPlaceholder = "[REDACTED]"
+
     public let key: String
-    public let value: String
+    public let value: ActivityDetailValue
 
     public var id: String {
         key
     }
 
-    public init?(key: String, value: String) {
+    /// The text to render for this field.
+    public var displayValue: String {
+        value.displayText
+    }
+
+    /// Whether the runtime classified this value as secret.
+    public var isRedacted: Bool {
+        value == .redacted
+    }
+
+    public init?(key: String, value: ActivityDetailValue) {
         guard !key.isEmpty,
               key.utf8.count <= ActivityLimits.maximumDetailKeyUTF8Bytes,
-              value.utf8.count <= ActivityLimits.maximumDetailValueUTF8Bytes
+              value.measuredUTF8ByteCount
+                <= ActivityLimits.maximumDetailValueUTF8Bytes
         else {
             return nil
         }
 
-        self.key = ActivitySecretRedactor.displayText(key)
-        self.value = ActivitySecretRedactor.detailValue(
-            key: key,
-            value: value
-        )
+        self.key = key
+        self.value = value
     }
 }
 
@@ -164,23 +204,25 @@ public struct ActivityFact: Identifiable, Equatable, Sendable {
 
         let byteCount = displayFields.reduce(0) { $0 + $1.utf8.count }
             + detailFields.reduce(0) {
-                $0 + $1.key.utf8.count + $1.value.utf8.count
+                $0 + $1.key.utf8.count + $1.value.measuredUTF8ByteCount
             }
         guard byteCount <= ActivityLimits.maximumFactUTF8Bytes else {
             return nil
         }
 
-        self.id = ActivitySecretRedactor.displayText(id)
+        // The runtime owns every string here. It produced these display
+        // fields, so it is also where a secret would have been withheld;
+        // re-scanning them for secret-looking substrings would only add a
+        // second, weaker opinion.
+        self.id = id
         self.scope = scope
         self.ordinal = ordinal
         self.severity = severity
         self.category = category
         self.kind = kind
-        self.title = ActivitySecretRedactor.displayText(title)
-        self.summary = ActivitySecretRedactor.displayText(summary)
-        self.evidenceSummary = evidenceSummary.map(
-            ActivitySecretRedactor.displayText
-        )
+        self.title = title
+        self.summary = summary
+        self.evidenceSummary = evidenceSummary
         self.detailFields = detailFields
     }
 
@@ -188,7 +230,7 @@ public struct ActivityFact: Identifiable, Equatable, Sendable {
         [id, title, summary, evidenceSummary ?? ""].reduce(0) {
             $0 + $1.utf8.count
         } + detailFields.reduce(0) {
-            $0 + $1.key.utf8.count + $1.value.utf8.count
+            $0 + $1.key.utf8.count + $1.value.measuredUTF8ByteCount
         }
     }
 }
@@ -280,51 +322,5 @@ public struct ActivityUpdateGap: Equatable, Sendable {
         self.expectedPredecessorRevision = expectedPredecessorRevision
         self.receivedPredecessorRevision = receivedPredecessorRevision
         self.receivedRevision = receivedRevision
-    }
-}
-
-enum ActivitySecretRedactor {
-    static let redacted = "[REDACTED]"
-
-    private static let sensitiveKeyFragments = [
-        "authorization",
-        "cookie",
-        "credential",
-        "nsec",
-        "password",
-        "privatekey",
-        "secret",
-        "token",
-    ]
-
-    private static let sensitiveValueMarkers = [
-        "authorization:",
-        "bearer ",
-        "cookie=",
-        "nsec1",
-        "password=",
-        "private_key=",
-        "privatekey=",
-        "secret=",
-        "token=",
-    ]
-
-    static func detailValue(key: String, value: String) -> String {
-        let normalizedKey = key.lowercased().filter(\.isLetter)
-        guard !sensitiveKeyFragments.contains(where: {
-            normalizedKey.contains($0)
-        }) else {
-            return redacted
-        }
-        return displayText(value)
-    }
-
-    static func displayText(_ value: String) -> String {
-        let lowercased = value.lowercased()
-        guard !sensitiveValueMarkers.contains(where: lowercased.contains)
-        else {
-            return redacted
-        }
-        return value
     }
 }

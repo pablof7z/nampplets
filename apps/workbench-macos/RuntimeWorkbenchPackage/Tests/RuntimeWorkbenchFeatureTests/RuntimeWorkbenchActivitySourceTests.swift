@@ -1,4 +1,5 @@
 import Foundation
+import NMPNativeRuntimeApple
 @testable import RuntimeWorkbenchFeature
 import Testing
 
@@ -137,6 +138,34 @@ import Testing
     )
     sources.append(replacement)
     #expect(sources.count == 8)
+}
+
+@Test func detailFieldsCarryTheRuntimeClassificationWithoutReinterpreting()
+    throws
+{
+    let withheld = try #require(
+        ActivityDetailField(
+            NativeRuntimeActivityDetail(
+                key: "approved-draft",
+                value: .redacted
+            )
+        )
+    )
+    // The runtime classified this one public. The old Swift heuristic would
+    // have redacted it on the strength of the key alone.
+    let shown = try #require(
+        ActivityDetailField(
+            NativeRuntimeActivityDetail(
+                key: "token-relay",
+                value: .visible("wss://relay.example")
+            )
+        )
+    )
+
+    #expect(withheld.isRedacted)
+    #expect(withheld.displayValue == "[REDACTED]")
+    #expect(!shown.isRedacted)
+    #expect(shown.displayValue == "wss://relay.example")
 }
 
 private func goodMorningActivityScope() -> ActivityExactBuildScope? {

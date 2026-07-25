@@ -438,6 +438,22 @@ fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
+    typealias FfiType = UInt32
+    typealias SwiftType = UInt32
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt32 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
     typealias FfiType = UInt64
     typealias SwiftType = UInt64
@@ -2800,6 +2816,82 @@ public func FfiConverterTypeRuntimeAccountUpdate_lower(_ value: RuntimeAccountUp
 }
 
 
+/**
+ * One classified key/value pair belonging to an activity fact.
+ */
+public struct RuntimeActivityDetail {
+    public var key: String
+    public var value: RuntimeActivityDetailValue
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(key: String, value: RuntimeActivityDetailValue) {
+        self.key = key
+        self.value = value
+    }
+}
+
+#if compiler(>=6)
+extension RuntimeActivityDetail: Sendable {}
+#endif
+
+
+extension RuntimeActivityDetail: Equatable, Hashable {
+    public static func ==(lhs: RuntimeActivityDetail, rhs: RuntimeActivityDetail) -> Bool {
+        if lhs.key != rhs.key {
+            return false
+        }
+        if lhs.value != rhs.value {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(key)
+        hasher.combine(value)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRuntimeActivityDetail: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RuntimeActivityDetail {
+        return
+            try RuntimeActivityDetail(
+                key: FfiConverterString.read(from: &buf),
+                value: FfiConverterTypeRuntimeActivityDetailValue.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RuntimeActivityDetail, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.key, into: &buf)
+        FfiConverterTypeRuntimeActivityDetailValue.write(value.value, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuntimeActivityDetail_lift(_ buf: RustBuffer) throws -> RuntimeActivityDetail {
+    return try FfiConverterTypeRuntimeActivityDetail.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuntimeActivityDetail_lower(_ value: RuntimeActivityDetail) -> RustBuffer {
+    return FfiConverterTypeRuntimeActivityDetail.lower(value)
+}
+
+
+/**
+ * One bounded activity fact attributed to an exact build.
+ */
 public struct RuntimeActivitySnapshot {
     public var author: String
     public var dTag: String
@@ -2808,10 +2900,24 @@ public struct RuntimeActivitySnapshot {
     public var operation: String
     public var outcome: String
     public var occurredAtMillis: UInt64
+    /**
+     * Details the runtime produced, each already classified.
+     */
+    public var details: [RuntimeActivityDetail]
+    /**
+     * Details the runtime dropped to stay within its per-fact bound.
+     */
+    public var droppedDetailCount: UInt32
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(author: String, dTag: String, aggregateHash: String, category: String, operation: String, outcome: String, occurredAtMillis: UInt64) {
+    public init(author: String, dTag: String, aggregateHash: String, category: String, operation: String, outcome: String, occurredAtMillis: UInt64,
+        /**
+         * Details the runtime produced, each already classified.
+         */details: [RuntimeActivityDetail],
+        /**
+         * Details the runtime dropped to stay within its per-fact bound.
+         */droppedDetailCount: UInt32) {
         self.author = author
         self.dTag = dTag
         self.aggregateHash = aggregateHash
@@ -2819,6 +2925,8 @@ public struct RuntimeActivitySnapshot {
         self.operation = operation
         self.outcome = outcome
         self.occurredAtMillis = occurredAtMillis
+        self.details = details
+        self.droppedDetailCount = droppedDetailCount
     }
 }
 
@@ -2850,6 +2958,12 @@ extension RuntimeActivitySnapshot: Equatable, Hashable {
         if lhs.occurredAtMillis != rhs.occurredAtMillis {
             return false
         }
+        if lhs.details != rhs.details {
+            return false
+        }
+        if lhs.droppedDetailCount != rhs.droppedDetailCount {
+            return false
+        }
         return true
     }
 
@@ -2861,6 +2975,8 @@ extension RuntimeActivitySnapshot: Equatable, Hashable {
         hasher.combine(operation)
         hasher.combine(outcome)
         hasher.combine(occurredAtMillis)
+        hasher.combine(details)
+        hasher.combine(droppedDetailCount)
     }
 }
 
@@ -2879,7 +2995,9 @@ public struct FfiConverterTypeRuntimeActivitySnapshot: FfiConverterRustBuffer {
                 category: FfiConverterString.read(from: &buf),
                 operation: FfiConverterString.read(from: &buf),
                 outcome: FfiConverterString.read(from: &buf),
-                occurredAtMillis: FfiConverterUInt64.read(from: &buf)
+                occurredAtMillis: FfiConverterUInt64.read(from: &buf),
+                details: FfiConverterSequenceTypeRuntimeActivityDetail.read(from: &buf),
+                droppedDetailCount: FfiConverterUInt32.read(from: &buf)
         )
     }
 
@@ -2891,6 +3009,8 @@ public struct FfiConverterTypeRuntimeActivitySnapshot: FfiConverterRustBuffer {
         FfiConverterString.write(value.operation, into: &buf)
         FfiConverterString.write(value.outcome, into: &buf)
         FfiConverterUInt64.write(value.occurredAtMillis, into: &buf)
+        FfiConverterSequenceTypeRuntimeActivityDetail.write(value.details, into: &buf)
+        FfiConverterUInt32.write(value.droppedDetailCount, into: &buf)
     }
 }
 
@@ -8103,6 +8223,88 @@ extension RuntimeAccountKind: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * One activity detail value whose visibility the runtime already decided.
+ */
+
+public enum RuntimeActivityDetailValue {
+
+    /**
+     * The runtime classified this value as safe to display verbatim.
+     */
+    case visible(text: String
+    )
+    /**
+     * The runtime classified this value as secret; no bytes are carried.
+     */
+    case redacted
+}
+
+
+#if compiler(>=6)
+extension RuntimeActivityDetailValue: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRuntimeActivityDetailValue: FfiConverterRustBuffer {
+    typealias SwiftType = RuntimeActivityDetailValue
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RuntimeActivityDetailValue {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .visible(text: try FfiConverterString.read(from: &buf)
+        )
+
+        case 2: return .redacted
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RuntimeActivityDetailValue, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case let .visible(text):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(text, into: &buf)
+
+
+        case .redacted:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuntimeActivityDetailValue_lift(_ buf: RustBuffer) throws -> RuntimeActivityDetailValue {
+    return try FfiConverterTypeRuntimeActivityDetailValue.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuntimeActivityDetailValue_lower(_ value: RuntimeActivityDetailValue) -> RustBuffer {
+    return FfiConverterTypeRuntimeActivityDetailValue.lower(value)
+}
+
+
+extension RuntimeActivityDetailValue: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum RuntimeCatalogLookupState {
 
@@ -11162,6 +11364,31 @@ fileprivate struct FfiConverterSequenceTypeRuntimeAccountHandle: FfiConverterRus
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeRuntimeAccountHandle.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeRuntimeActivityDetail: FfiConverterRustBuffer {
+    typealias SwiftType = [RuntimeActivityDetail]
+
+    public static func write(_ value: [RuntimeActivityDetail], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRuntimeActivityDetail.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RuntimeActivityDetail] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RuntimeActivityDetail]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRuntimeActivityDetail.read(from: &buf))
         }
         return seq
     }

@@ -7,6 +7,7 @@
 
 use nmp_native_runtime_core::CapabilityRequirement;
 
+mod activity;
 mod catalog;
 mod config;
 mod controller;
@@ -22,6 +23,7 @@ mod workspace;
 #[cfg(test)]
 mod tests;
 
+pub use activity::{RuntimeActivityDetail, RuntimeActivityDetailValue, RuntimeActivitySnapshot};
 pub use catalog::{
     RuntimeCatalogCancellationResult, RuntimeCatalogCapability, RuntimeCatalogConfirmation,
     RuntimeCatalogConfirmationResult, RuntimeCatalogEntry, RuntimeCatalogFailure,
@@ -53,13 +55,12 @@ pub use permission_types::{
     RuntimePermissionSensitivity, RuntimeSensitivity,
 };
 pub use snapshot_types::{
-    ObservationStart, RuntimeActivitySnapshot, RuntimeBindingSnapshot, RuntimeErrorSnapshot,
-    RuntimeEvent, RuntimeExactBuildCoordinate, RuntimeInstalledBuildAvailability,
-    RuntimeInstalledBuildSnapshot, RuntimeInstalledLibrarySnapshot, RuntimeObservation,
-    RuntimeObservationFrame, RuntimeObserver, RuntimePendingWriteSnapshot, RuntimeReceiptSnapshot,
-    RuntimeSessionSnapshot, RuntimeSnapshot, RuntimeWorkspaceAxis, RuntimeWorkspaceDefinition,
-    RuntimeWorkspaceRenderer, RuntimeWorkspaceRestore, RuntimeWorkspaceRole, RuntimeWorkspaceSlot,
-    RuntimeWorkspaceUpdate,
+    ObservationStart, RuntimeBindingSnapshot, RuntimeErrorSnapshot, RuntimeEvent,
+    RuntimeExactBuildCoordinate, RuntimeInstalledBuildAvailability, RuntimeInstalledBuildSnapshot,
+    RuntimeInstalledLibrarySnapshot, RuntimeObservation, RuntimeObservationFrame, RuntimeObserver,
+    RuntimePendingWriteSnapshot, RuntimeReceiptSnapshot, RuntimeSessionSnapshot, RuntimeSnapshot,
+    RuntimeWorkspaceAxis, RuntimeWorkspaceDefinition, RuntimeWorkspaceRenderer,
+    RuntimeWorkspaceRestore, RuntimeWorkspaceRole, RuntimeWorkspaceSlot, RuntimeWorkspaceUpdate,
 };
 pub use types::{
     ArtifactCoordinate, ArtifactExecutionMode, ArtifactVerification, NativeConfigCommit,
