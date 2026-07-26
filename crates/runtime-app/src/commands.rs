@@ -135,6 +135,13 @@ pub enum PlatformEvent {
     },
     EnvelopeIgnored {
         session: SessionId,
+        /// The envelope's own `type` string, read independently of whether
+        /// it parsed into a routable domain/action, bounded so an
+        /// adversarial value cannot grow this fact unfairly. `None` only
+        /// when the envelope was not even a JSON object with a `type`
+        /// field. Without this, an unroutable message drops with no way
+        /// to tell what was sent or why it went nowhere.
+        message_type: Option<String>,
     },
     ProviderOperationFinished {
         operation: ProviderOperationId,

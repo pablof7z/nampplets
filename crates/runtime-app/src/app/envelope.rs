@@ -97,6 +97,7 @@ impl RuntimeApp {
                     state,
                     PlatformEvent::EnvelopeIgnored {
                         session: session_id,
+                        message_type: envelope_type_evidence(bytes),
                     },
                 );
             }
@@ -251,6 +252,39 @@ pub(super) fn envelope_route(bytes: &[u8]) -> Option<(Capability, String)> {
     let message_type = value.get("type")?.as_str()?;
     let (domain, action) = message_type.split_once('.')?;
     Some((Capability::new(domain).ok()?, action.to_owned()))
+}
+
+/// The maximum number of UTF-8 bytes of an unroutable envelope's `type`
+/// string kept as diagnostic evidence. Deliberately independent of
+/// `AppLimits`: this is a fixed ceiling on one string, not a
+/// caller-configurable platform bound.
+const ENVELOPE_TYPE_EVIDENCE_MAXIMUM_BYTES: usize = 128;
+
+/// Reads the raw `type` string out of a mapped envelope for diagnostic
+/// evidence, independent of whether it parses into a routable domain/action.
+/// A napplet that sends an envelope the bridge cannot route (wrong case, an
+/// unregistered domain, an unsupported action) must not go dark with no way
+/// to tell what was sent; this is what lets `EnvelopeIgnored` name it.
+fn envelope_type_evidence(bytes: &[u8]) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    let message_type = value.get("type")?.as_str()?;
+    Some(bounded_utf8_prefix(
+        message_type,
+        ENVELOPE_TYPE_EVIDENCE_MAXIMUM_BYTES,
+    ))
+}
+
+/// Returns the longest prefix of `value` that is both valid UTF-8 and at
+/// most `maximum_bytes` long.
+fn bounded_utf8_prefix(value: &str, maximum_bytes: usize) -> String {
+    if value.len() <= maximum_bytes {
+        return value.to_owned();
+    }
+    let mut end = maximum_bytes;
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    value[..end].to_owned()
 }
 
 pub(super) fn exact_shell_ready(bytes: &[u8]) -> bool {

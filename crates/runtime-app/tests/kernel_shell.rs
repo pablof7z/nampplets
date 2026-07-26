@@ -48,18 +48,31 @@ fn nap_shell_gates_capabilities_and_emits_exactly_one_uncorrelated_init() {
         rig.app.snapshot().recent_errors.last().unwrap().code,
         AppErrorCode::Bridge
     );
+    let ignored_message_types: Vec<Option<String>> = rig
+        .app
+        .events_after(0)
+        .events
+        .into_iter()
+        .filter_map(|item| match item.event {
+            nmp_native_runtime_app::PlatformEvent::EnvelopeIgnored { message_type, .. } => {
+                Some(message_type)
+            }
+            _ => None,
+        })
+        .collect();
     assert_eq!(
-        rig.app
-            .events_after(0)
-            .events
-            .into_iter()
-            .filter(|item| matches!(
-                item.event,
-                nmp_native_runtime_app::PlatformEvent::EnvelopeIgnored { .. }
-            ))
-            .count(),
+        ignored_message_types.len(),
         2,
         "unknown well-formed messages remain forward-compatible before readiness"
+    );
+    // An unroutable envelope must not go dark: the raw `type` string is kept
+    // as evidence even though it never resolved to a domain/action.
+    assert_eq!(
+        ignored_message_types,
+        vec![
+            Some("future.unknown".to_owned()),
+            Some("canary.future".to_owned()),
+        ]
     );
 
     rig.ready(session);
