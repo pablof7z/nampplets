@@ -394,6 +394,18 @@
   var MAX_CONSOLE_MESSAGE_CHARS = 4000;
   var MAX_CONSOLE_ENTRIES = 500;
   var consoleEntriesForwarded = 0;
+  // WebKit's \`Error.prototype.stack\` is only the frame list: unlike V8 it does
+  // not begin with "Name: message". Why that matters: tests/trusted-shell-console.test.js.
+  function describeThrowable(value) {
+    if (typeof value === "string") return value;
+    if (!(value instanceof Error)) {
+      try { return JSON.stringify(value); } catch (_) { return String(value); }
+    }
+    var headline = (value.name || "Error") + (value.message ? ": " + value.message : "");
+    var stack = value.stack;
+    if (!stack) return headline;
+    return stack.indexOf(headline) === 0 ? stack : headline + "\\n" + stack;
+  }
   function forwardConsoleEntry(level, parts) {
     if (consoleEntriesForwarded >= MAX_CONSOLE_ENTRIES) {
       return;
@@ -401,15 +413,7 @@
     consoleEntriesForwarded += 1;
     var text;
     try {
-      text = Array.prototype.map.call(parts, function (value) {
-        if (typeof value === "string") return value;
-        if (value instanceof Error) return value.stack || value.message || String(value);
-        try {
-          return JSON.stringify(value);
-        } catch (_) {
-          return String(value);
-        }
-      }).join(" ");
+      text = Array.prototype.map.call(parts, function (value) { return describeThrowable(value); }).join(" ");
     } catch (_) {
       text = "<unprintable console arguments>";
     }
@@ -443,11 +447,7 @@
     forwardConsoleEntry("error", [detail]);
   });
   addEventListener("unhandledrejection", function (event) {
-    var reason = event && event.reason;
-    var detail = reason instanceof Error
-      ? (reason.stack || reason.message)
-      : String(reason);
-    forwardConsoleEntry("error", ["Unhandled rejection: " + detail]);
+    forwardConsoleEntry("error", ["Unhandled rejection: " + describeThrowable(event && event.reason)]);
   });
   var projectedDomains = Object.freeze(${JSON.stringify(projectedDomains)});
   var nextRequest = 1;
