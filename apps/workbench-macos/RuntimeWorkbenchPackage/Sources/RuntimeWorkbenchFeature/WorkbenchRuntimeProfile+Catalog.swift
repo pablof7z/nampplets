@@ -151,8 +151,12 @@ extension WorkbenchRuntimeProfile: RuntimeWorkbenchCatalogProfileBacking {
             return CatalogEntry(
                 id: entry.eventId,
                 title: entry.title ?? entry.dTag ?? "Untitled napplet",
-                summary: entry.description
-                    ?? "Signed public napplet manifest from the current NMP window.",
+                // A napplet with no description has none. Standing a sentence
+                // about NMP windows in its place put runtime vocabulary in the
+                // most-read position on the busiest screen, and told the
+                // reader nothing about the napplet. Absence renders as
+                // absence; the card omits the line entirely.
+                summary: entry.description ?? "",
                 publisher: CatalogPublisher(
                     displayName: nil,
                     publicKey: entry.manifestAuthor
