@@ -10,9 +10,17 @@ extension ContentView {
             layoutMenu
         }
 
-        if #available(macOS 26.0, *) {
-            ToolbarSpacer(.flexible)
-        }
+        // `#available` is a runtime check: the symbol still has to exist in the
+        // SDK at compile time. `ToolbarSpacer` ships with the macOS 26 SDK, so
+        // it must also be gated at parse time or the pinned Xcode 16.4
+        // toolchain (Swift 6.1) fails with "cannot find 'ToolbarSpacer' in
+        // scope". `#if compiler` is evaluated before type checking, so the body
+        // is not compiled under 6.1 and is kept under Xcode 26's Swift 6.2+.
+        #if compiler(>=6.2)
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.flexible)
+            }
+        #endif
 
         ToolbarItem(placement: .primaryAction) {
             accountMenu
