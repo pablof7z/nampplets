@@ -1,10 +1,10 @@
 //! Controller construction: every native capability wiring lives here.
 
-use std::path::PathBuf;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize},
 };
+use std::{collections::BTreeMap, path::PathBuf};
 
 use nmp::EngineConfig;
 use nmp_native_artifact::FileArtifactCache;
@@ -23,7 +23,6 @@ use nmp_native_runtime_core::{GrantLimits, ResourceLimits};
 use nmp_native_runtime_store::{RuntimeStore, StoreLimits};
 use nmp_native_surface::BindingLimits;
 use parking_lot::Mutex;
-use std::collections::BTreeMap;
 use tokio::sync::watch;
 
 use super::{RuntimeController, RuntimeShellEnvironment, SystemClock};

@@ -11,6 +11,7 @@ final class ActivityViewModel {
 
     private(set) var snapshot: ActivitySnapshot?
     private(set) var updateGap: ActivityUpdateGap?
+    private(set) var refreshRefusal: RuntimeWorkbenchActivitySourceRefusal?
     private(set) var developerModeEnabled = false
 
     private let source: any ActivitySource
@@ -51,7 +52,15 @@ final class ActivityViewModel {
     }
 
     func refresh() {
-        receive(.authoritative(source.refresh(scope: scope)))
+        do {
+            let refreshed = try source.refresh(scope: scope)
+            refreshRefusal = nil
+            receive(.authoritative(refreshed))
+        } catch let refusal as RuntimeWorkbenchActivitySourceRefusal {
+            refreshRefusal = refusal
+        } catch {
+            assertionFailure("Unexpected activity refresh error: \(error)")
+        }
     }
 
     func setSeverity(_ severity: ActivitySeverity, isIncluded: Bool) {
@@ -89,6 +98,7 @@ final class ActivityViewModel {
             }
             snapshot = nextSnapshot
             updateGap = nil
+            refreshRefusal = nil
 
         case let .next(nextSnapshot, predecessorRevision):
             guard nextSnapshot.scope == scope else {
@@ -114,6 +124,7 @@ final class ActivityViewModel {
                 )
             }
             snapshot = nextSnapshot
+            refreshRefusal = nil
         }
     }
 }

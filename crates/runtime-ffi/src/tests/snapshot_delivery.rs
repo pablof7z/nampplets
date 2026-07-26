@@ -9,6 +9,8 @@ use nmp_native_runtime_app::{AppSnapshot, WorkspaceView};
 
 use super::*;
 
+mod ring_overflow;
+
 fn malformed_view(id: &str) -> WorkspaceView {
     WorkspaceView {
         id: Arc::from(id),
@@ -110,16 +112,23 @@ fn observer_receives_the_refusal_in_the_frame_for_the_malformed_update() {
     });
 
     let deadline = Instant::now() + Duration::from_secs(10);
-    let refused = loop {
+    let refused_frame = loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
         let frame = receive
             .recv_timeout(remaining)
             .expect("observer did not receive the malformed projection");
         if matches!(frame.snapshot, RuntimeSnapshotProjection::Refused { .. }) {
-            break frame.snapshot;
+            break frame;
         }
     };
-    expect_workspace_refusal(refused, "broken-observer");
+    expect_workspace_refusal(refused_frame.snapshot, "broken-observer");
+    assert!(
+        refused_frame
+            .events
+            .iter()
+            .any(|event| event.kind == "workspace-saved"),
+        "event delivery must remain independent of snapshot refusal"
+    );
     observation.stop();
 }
 
