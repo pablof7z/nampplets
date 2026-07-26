@@ -191,8 +191,9 @@ public struct CatalogSheet: View {
                     .foregroundStyle(NappletInk.inkSecondary)
             }
             if let issue = model.issue, model.review == nil {
-                NappletNotice(
-                    verdict: .caution("\(issue.title). \(issue.message)")
+                CatalogIssueNotice(
+                    issue: issue,
+                    context: model.manualCoordinate.isEmpty ? .browse : .resolve
                 )
             }
 

@@ -50,11 +50,15 @@ public struct ActivityDrawer: View {
 
                 facts
             }
-            // On the content, not on the outermost modified `NavigationStack`.
-            // An identifier there produced no queryable element at all, so
-            // `runtime-activity-drawer` could not be found even by an
-            // any-type descendant query.
-            .accessibilityIdentifier("runtime-activity-drawer")
+            // Deliberately unidentified. `runtime-activity-drawer` lived here
+            // and CI proved it was masking its own descendants: clicking the
+            // "Which build this is" label resolved to a DisclosureTriangle
+            // carrying the container's identifier, and the dTag leaf inside
+            // never became queryable. Moving it was not enough, because
+            // SwiftUI propagates an identifier across the whole subtree it
+            // covers. Nothing queries this container -- the test discriminates
+            // on the evidence disclosure, which is the more meaningful
+            // assertion anyway -- so it is gone rather than relocated.
             .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -98,9 +98,11 @@ public final class CatalogViewModel {
 
     private func refreshFeed() async {
         guard let request = CatalogSearchRequest(query: query) else {
+            // These two are the shell's own words, not a projected refusal,
+            // so they say what to do rather than quoting a byte ceiling.
             issue = CatalogIssue(
                 title: "Search is too long",
-                message: "Use at most \(CatalogLimits.maximumQueryUTF8Bytes) UTF-8 bytes."
+                message: "Try a shorter search."
             )
             return
         }
@@ -138,9 +140,8 @@ public final class CatalogViewModel {
             coordinate: manualCoordinate
         ) else {
             issue = CatalogIssue(
-                title: "Coordinate is invalid",
-                message: "Enter a non-empty coordinate no larger than "
-                    + "\(CatalogLimits.maximumCoordinateUTF8Bytes) UTF-8 bytes."
+                title: "That address doesn't look right",
+                message: "Check you copied the whole thing."
             )
             return
         }

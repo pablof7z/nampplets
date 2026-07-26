@@ -33,10 +33,8 @@ struct CatalogInstallReviewSheet: View {
                         .padding(.top, NappletMetrics.roomy)
 
                     if let issue {
-                        NappletNotice(
-                            verdict: .caution("\(issue.title). \(issue.message)")
-                        )
-                        .padding(.top, NappletMetrics.snug)
+                        CatalogIssueNotice(issue: issue, context: .install)
+                            .padding(.top, NappletMetrics.snug)
                     }
 
                     capabilities
