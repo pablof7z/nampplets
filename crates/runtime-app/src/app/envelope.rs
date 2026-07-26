@@ -7,9 +7,14 @@ use nmp_native_runtime_core::{BoundedJson, Capability, SessionId, SessionState};
 
 use super::{ActiveOperation, AppState, RuntimeApp};
 use crate::{
+    activity::ActivityDetail,
     commands::{PlatformEvent, ProviderOperationId},
     views::AppErrorCode,
 };
+
+/// The most bytes of a raw, unroutable `type` value recorded on an activity
+/// fact. Bounded so a hostile envelope cannot inflate the activity ring.
+const MAXIMUM_RECORDED_MESSAGE_TYPE_BYTES: usize = 128;
 
 impl RuntimeApp {
     pub(super) fn dispatch_envelope(
@@ -57,6 +62,26 @@ impl RuntimeApp {
         let context = entry.context.clone();
         let plan = entry.plan.clone();
         let route = envelope_route(bytes);
+        if route.is_none() {
+            // The envelope cannot be routed: its `type` field is missing,
+            // is not a string, has no `domain.action` shape, or names a
+            // domain `Capability::new` rejects. Dispatch below still runs
+            // (the bridge does its own independent parse), but nothing
+            // downstream of a route-based branch will ever explain why a
+            // caller saw no response. Record the fact here, at the one
+            // point that still has the raw bytes, so "why is my napplet
+            // dead" is answerable from the activity ring instead of
+            // silence.
+            self.record_activity_with_details(
+                state,
+                &principal,
+                "envelope",
+                "route",
+                "unroutable",
+                vec![ActivityDetail::visible("type", &raw_message_type(bytes))],
+                now,
+            );
+        }
         let domain = route.as_ref().map(|(domain, _)| domain.clone());
         let is_shell_ready = route
             .as_ref()
@@ -251,6 +276,27 @@ pub(super) fn envelope_route(bytes: &[u8]) -> Option<(Capability, String)> {
     let message_type = value.get("type")?.as_str()?;
     let (domain, action) = message_type.split_once('.')?;
     Some((Capability::new(domain).ok()?, action.to_owned()))
+}
+
+/// Best-effort, bounded rendering of the raw `type` field of an envelope
+/// that [`envelope_route`] could not route, for the activity fact recorded
+/// alongside it. Never panics and never grows with attacker-controlled
+/// input beyond [`MAXIMUM_RECORDED_MESSAGE_TYPE_BYTES`].
+fn raw_message_type(bytes: &[u8]) -> String {
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+        return "<malformed-json>".to_owned();
+    };
+    let Some(message_type) = value.get("type").and_then(serde_json::Value::as_str) else {
+        return "<missing-or-non-string-type>".to_owned();
+    };
+    let mut truncated: String = message_type
+        .chars()
+        .take(MAXIMUM_RECORDED_MESSAGE_TYPE_BYTES)
+        .collect();
+    if truncated.len() < message_type.len() {
+        truncated.push('…');
+    }
+    truncated
 }
 
 pub(super) fn exact_shell_ready(bytes: &[u8]) -> bool {

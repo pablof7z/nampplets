@@ -117,6 +117,33 @@ fn nap_shell_gates_capabilities_and_emits_exactly_one_uncorrelated_init() {
 }
 
 #[test]
+fn unroutable_envelope_type_is_recorded_not_silently_dropped() {
+    let rig = Rig::new(false);
+    let principal = principal('c');
+    rig.install(principal.clone());
+    rig.allow_runtime(principal.clone());
+    let session = rig.launch(principal);
+
+    // `Relay.query` fails `Capability::new` (uppercase domain), so
+    // `envelope_route` returns `None`. Before this fix, that carried no
+    // trace anywhere: a napplet posting this would see its call never
+    // resolve, with nothing in the activity ring explaining why.
+    rig.app.dispatch(PlatformCommand::MappedEnvelope {
+        session,
+        bytes: mapped(serde_json::json!({"type": "Relay.query"})),
+    });
+
+    assert!(
+        rig.app.snapshot().recent_activity.iter().any(|fact| {
+            fact.category.as_ref() == "envelope"
+                && fact.operation.as_ref() == "route"
+                && fact.outcome.as_ref() == "unroutable"
+        }),
+        "an unroutable envelope type must leave a bounded activity fact"
+    );
+}
+
+#[test]
 fn nap_shell_rejects_id_extra_fields_and_payload_identity_claims() {
     let rig = Rig::new(false);
     let real = principal('b');
