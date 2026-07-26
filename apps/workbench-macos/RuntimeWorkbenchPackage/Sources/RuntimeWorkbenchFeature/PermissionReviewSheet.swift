@@ -31,89 +31,109 @@ public struct PermissionReviewSheet: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            ScrollViewReader { proxy in
-                VStack(spacing: 0) {
-                    if isUITestScrollHookEnabled {
-                        scrollAnchorRow(proxy: proxy)
-                    }
-                    ScrollView {
-                        VStack(
-                            alignment: .leading,
-                            spacing: NappletMetrics.roomy
-                        ) {
-                            NappletHeading(
-                                title: "Open \(model.review.nappletTitle)?",
-                                subtitle: subtitle
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                if isUITestScrollHookEnabled {
+                    scrollAnchorRow(proxy: proxy)
+                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(model.review.nappletTitle)
+                            .font(NappletType.display)
+                            .nappletDisplayFace()
+                            .foregroundStyle(NappletInk.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text(subtitle)
+                            .font(NappletType.lede)
+                            .foregroundStyle(NappletInk.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, NappletMetrics.tight)
+
+                        if let issue = model.issue {
+                            NappletNotice(
+                                verdict: .caution("\(issue.title). \(issue.message)")
                             )
-
-                            if let issue = model.issue {
-                                NappletNotice(
-                                    verdict: .caution("\(issue.title). \(issue.message)")
-                                )
-                            }
-
-                            capabilitySections
-
-                            customiseToggle
-
-                            NappletEvidence {
-                                PermissionEvidence(review: model.review)
-                            }
+                            .padding(.top, NappletMetrics.roomy)
                         }
-                        .padding(NappletMetrics.roomy)
-                    }
-                }
-            }
-            .navigationTitle("Permissions")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Not Now") {
-                        model.cancel()
-                        dismiss()
-                    }
-                    .keyboardShortcut(.cancelAction)
-                    .disabled(model.isSubmitting)
-                    .accessibilityHint(
-                        "Closes without giving this napplet access to anything"
-                    )
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(confirmTitle) {
-                        Task {
-                            if isChoosingIndividually {
-                                await model.confirm()
-                            } else {
-                                await model.allowRecommended()
-                            }
-                            if model.isApplied {
-                                dismiss()
-                            }
+
+                        capabilitySections
+                            .padding(.top, NappletMetrics.spacious)
+
+                        customiseToggle
+                            .padding(.top, NappletMetrics.roomy)
+
+                        NappletEvidence {
+                            PermissionEvidence(review: model.review)
                         }
+                        .font(NappletType.caption)
+                        .padding(.top, NappletMetrics.roomy)
                     }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!model.canConfirm)
-                    .accessibilityIdentifier("permission-confirm")
-                    .accessibilityHint(
-                        "Gives this napplet the access listed above and opens it"
-                    )
+                    .frame(maxWidth: NappletMetrics.measure, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, NappletMetrics.generous)
+                    .padding(.top, NappletMetrics.generous)
+                    .padding(.bottom, NappletMetrics.spacious)
                 }
+
+                actions
             }
         }
+        .background(NappletInk.paperRaised)
         #if os(macOS)
-        .frame(minWidth: 520, idealWidth: 580, minHeight: 480, idealHeight: 640)
+        .frame(minWidth: 580, idealWidth: 640, minHeight: 520, idealHeight: 700)
         #endif
         .interactiveDismissDisabled(model.isSubmitting)
     }
 
+    /// The accent appears here and nowhere else on this screen.
+    private var actions: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(NappletInk.rule)
+                .frame(height: 1)
+            HStack(spacing: NappletMetrics.snug) {
+                Spacer()
+                Button("Not Now") {
+                    model.cancel()
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                .disabled(model.isSubmitting)
+                .accessibilityHint(
+                    "Closes without giving this napplet access to anything"
+                )
+
+                Button(confirmTitle) {
+                    Task {
+                        if isChoosingIndividually {
+                            await model.confirm()
+                        } else {
+                            await model.allowRecommended()
+                        }
+                        if model.isApplied {
+                            dismiss()
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(NappletInk.accent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!model.canConfirm)
+                .accessibilityIdentifier("permission-confirm")
+                .accessibilityHint(
+                    "Gives this napplet the access listed above and opens it"
+                )
+            }
+            .padding(.horizontal, NappletMetrics.generous)
+            .padding(.vertical, NappletMetrics.comfortable)
+        }
+    }
+
     private var subtitle: String {
-        let publisher = NappletIdentityPresentation.publisherName(
-            displayName: model.review.publisherDisplayName,
-            publicKey: model.review.principal.manifestAuthorPublicKey
-        )
-        return model.review.capabilities.isEmpty
-            ? "From \(publisher)."
-            : "From \(publisher). Here's what it's asking for."
+        model.review.capabilities.isEmpty
+            ? "Opening for the first time."
+            : "Opening for the first time. Here's what it's asking for."
     }
 
     private var confirmTitle: String {
@@ -123,13 +143,10 @@ public struct PermissionReviewSheet: View {
     @ViewBuilder
     private var capabilitySections: some View {
         if model.review.capabilities.isEmpty {
-            NappletCard {
-                Label(
-                    "This napplet doesn't need access to anything.",
-                    systemImage: "checkmark"
-                )
-                .font(.callout)
-            }
+            Text("This napplet doesn't need access to anything.")
+                .font(NappletType.secondary)
+                .foregroundStyle(NappletInk.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         } else {
             VStack(alignment: .leading, spacing: NappletMetrics.comfortable) {
                 if !model.requiredCapabilities.isEmpty {
@@ -165,22 +182,31 @@ public struct PermissionReviewSheet: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: NappletMetrics.snug) {
             Text(title)
-                .font(.headline)
-            NappletCard {
-                VStack(alignment: .leading, spacing: NappletMetrics.comfortable) {
-                    ForEach(capabilities) { capability in
-                        PermissionCapabilityRow(
-                            capability: capability,
-                            isChoosingIndividually: isChoosingIndividually,
-                            selection: model.selection(for: capability),
-                            onSelect: { decision in
-                                model.select(decision, for: capability)
-                            }
-                        )
-                        .id(capability.domain)
-                    }
+                .font(NappletType.heading)
+                .foregroundStyle(NappletInk.ink)
+
+            VStack(alignment: .leading, spacing: NappletMetrics.comfortable) {
+                ForEach(capabilities) { capability in
+                    PermissionCapabilityRow(
+                        capability: capability,
+                        isChoosingIndividually: isChoosingIndividually,
+                        selection: model.selection(for: capability),
+                        onSelect: { decision in
+                            model.select(decision, for: capability)
+                        }
+                    )
+                    .id(capability.domain)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(NappletMetrics.comfortable)
+            .background(
+                NappletInk.fillQuiet,
+                in: RoundedRectangle(
+                    cornerRadius: NappletMetrics.cardCorner,
+                    style: .continuous
+                )
+            )
         }
     }
 
@@ -223,30 +249,31 @@ private struct PermissionCapabilityRow: View {
             Label {
                 VStack(alignment: .leading, spacing: NappletMetrics.hairline) {
                     Text(phrase.sentence)
-                        .font(.callout.weight(.medium))
+                        .font(NappletType.secondary.weight(.medium))
+                        .foregroundStyle(NappletInk.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(phrase.explanation)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(NappletType.caption)
+                        .foregroundStyle(NappletInk.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } icon: {
                 Image(systemName: phrase.symbol)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(NappletInk.inkSecondary)
             }
             .accessibilityElement(children: .combine)
 
             if let unavailable = unavailableMessage {
                 Text(unavailable)
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+                    .font(NappletType.caption)
+                    .foregroundStyle(NappletInk.caution)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             if capability.requestedDecision == nil {
                 Text(managedReason)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(NappletType.caption)
+                    .foregroundStyle(NappletInk.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if isChoosingIndividually {
                 decisionMenu
@@ -266,9 +293,11 @@ private struct PermissionCapabilityRow: View {
         case .available:
             nil
         case let .unknown(reason):
-            "This app can't tell whether that works here. \(reason)"
+            "This app can't tell whether that works here."
+                .appendingSentence(reason)
         case let .unavailable(reason):
-            "Not available on this device, so it won't work. \(reason)"
+            "Not available on this device, so it won't work."
+                .appendingSentence(reason)
         }
     }
 

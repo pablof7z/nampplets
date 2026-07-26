@@ -48,6 +48,26 @@ public enum NappletIdentityPresentation {
     }
 }
 
+extension String {
+    /// Joins a runtime-supplied clause onto a sentence the shell wrote.
+    ///
+    /// Rust's reason strings are fragments and start lowercase, so appending
+    /// one straight after a full stop produced "…works here. no provider
+    /// metadata is registered…". This capitalises the first letter and gives
+    /// it a full stop, without touching the rest of the runtime's wording.
+    func appendingSentence(_ clause: String) -> String {
+        let trimmed = clause.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first else {
+            return self
+        }
+        let capitalised = first.uppercased() + trimmed.dropFirst()
+        let terminated = ".!?".contains(capitalised.last!)
+            ? capitalised
+            : capitalised + "."
+        return "\(self) \(terminated)"
+    }
+}
+
 /// Whether the shell needs to say anything at all about trust.
 ///
 /// The default is silence. Verification is the application's job, and an

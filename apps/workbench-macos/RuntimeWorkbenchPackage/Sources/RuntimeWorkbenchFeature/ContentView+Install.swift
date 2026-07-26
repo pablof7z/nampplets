@@ -67,7 +67,7 @@ extension ContentView {
         if review.launchPermitted {
             launchInstalledIfPermitted(identity)
         } else {
-            activity = "Permission review required before launch"
+            activity = "Waiting for your permission"
             switch presentation {
             case .immediate:
                 isPermissionSheetPresented = true
@@ -86,7 +86,7 @@ extension ContentView {
         presentation: InstalledArtifactPresentation
     ) async -> Bool {
         guard let profile else {
-            activity = "Refused: the application runtime profile is unavailable"
+            activity = "Refused: the app isn't ready yet"
             return false
         }
         guard
@@ -96,7 +96,7 @@ extension ContentView {
             return false
         }
         reacquiringIdentities.insert(identity)
-        activity = "Reopening installed exact build"
+        activity = "Reopening…"
         let result = await Task.detached {
             profile.reacquirePersistedCanvasArtifact(for: identity)
         }.value
@@ -166,11 +166,11 @@ extension ContentView {
         guard review.refusal == nil,
               review.review?.launchPermitted == true
         else {
-            activity = "Permission review still requires a decision"
+            activity = "Still waiting for your permission"
             return
         }
         launchingIdentities.insert(identity)
-        activity = "Launching signed exact build"
+        activity = "Opening…"
         Task {
             defer { launchingIdentities.remove(identity) }
             do {
@@ -186,7 +186,7 @@ extension ContentView {
                 if permissionTargetIdentity == identity {
                     permissionTargetIdentity = nil
                 }
-                activity = "Signed exact-build session ready"
+                activity = "Ready"
             } catch {
                 activity = "Refused: \(error.localizedDescription)"
             }
