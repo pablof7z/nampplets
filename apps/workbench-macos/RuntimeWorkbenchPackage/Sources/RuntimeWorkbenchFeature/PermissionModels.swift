@@ -366,12 +366,12 @@ public struct PermissionReview: Equatable, Sendable {
             capabilities.count <= PermissionLimits.maximumCapabilities,
             uniqueDomains,
             isReadOnly
-                == capabilities.allSatisfy {
+                == capabilities.allSatisfy({
                     if case .hostPolicy = $0.controller {
                         return true
                     }
                     return false
-                },
+                }),
             displayTexts.allSatisfy({
                 $0.utf8.count <= PermissionLimits.maximumDisplayTextUTF8Bytes
             }),
