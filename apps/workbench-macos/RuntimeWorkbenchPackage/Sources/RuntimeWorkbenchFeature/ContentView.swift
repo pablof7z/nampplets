@@ -36,7 +36,11 @@ public struct ContentView: View {
     let layoutStore: any WorkbenchLayoutPersisting
     let accountManager: any WorkbenchAccountManaging
     private let catalogClient: any CatalogClient
-    private let libraryManager: any WorkbenchLibraryManaging
+    // Not `private`: ContentView+Inspector reads the authoritative session
+    // list off this to answer "is this exact build actually still running"
+    // instead of trusting only the window-close-keyed `runningArtifacts`
+    // bookkeeping below.
+    let libraryManager: any WorkbenchLibraryManaging
     let injectedPermissionManager: (any PermissionReviewManaging)?
     let profileAction: WorkbenchProfileActionHandler
 

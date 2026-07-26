@@ -8,6 +8,12 @@ import SwiftUI
 @MainActor
 final class RuntimeWorkbenchPendingWriteModel: ObservableObject {
     @Published private(set) var writes: [NativeRuntimePendingWrite] = []
+    /// Set when `observePendingWrites` itself threw, instead of only ever
+    /// leaving `writes` empty. An empty `writes` array is otherwise
+    /// indistinguishable from "no napplet has asked to write" -- a napplet
+    /// genuinely stuck waiting on approval would look identical to a
+    /// napplet doing nothing at all.
+    @Published private(set) var observationFailureReason: String?
 
     private var observation: NativeRuntimePendingWriteObservation?
 
@@ -22,6 +28,11 @@ final class RuntimeWorkbenchPendingWriteModel: ObservableObject {
             }
         } catch {
             writes = []
+            observationFailureReason = RuntimeWorkbenchLibraryManager.displaySafeReason(
+                "Pending-write observation could not be established: "
+                    + error.localizedDescription,
+                fallback: "Pending-write observation could not be established."
+            )
         }
     }
 
@@ -55,6 +66,10 @@ final class RuntimeWorkbenchPendingWriteModel: ObservableObject {
 final class RuntimeWorkbenchReceiptModel: ObservableObject {
     @Published private(set) var receipts: [NativeRuntimeReceipt] = []
     @Published private(set) var receiptIDs: [String] = []
+    /// Set when `observeReceipts` itself threw. See
+    /// `RuntimeWorkbenchPendingWriteModel.observationFailureReason` for why
+    /// an empty `receipts` array alone cannot carry this.
+    @Published private(set) var observationFailureReason: String?
 
     private var observation: NativeRuntimeReceiptObservation?
 
@@ -69,6 +84,10 @@ final class RuntimeWorkbenchReceiptModel: ObservableObject {
             }
         } catch {
             receipts = []
+            observationFailureReason = RuntimeWorkbenchLibraryManager.displaySafeReason(
+                "Receipt observation could not be established: " + error.localizedDescription,
+                fallback: "Receipt observation could not be established."
+            )
         }
     }
 

@@ -63,6 +63,16 @@ extension ContentView {
 
     @ViewBuilder
     var topStatusBars: some View {
+        // An observation setup failure must be visible on its own: an empty
+        // `writes`/`receipts` list alone is indistinguishable from "nothing
+        // is pending" and would otherwise hide a napplet stuck waiting on an
+        // approval or receipt update that can never arrive.
+        if let reason = pendingWrites.observationFailureReason {
+            ObservationFailureBar(title: "Pending writes unavailable", detail: reason)
+        }
+        if let reason = receipts.observationFailureReason {
+            ObservationFailureBar(title: "Receipts unavailable", detail: reason)
+        }
         if let pendingWrite = pendingWrites.writes.first {
             PendingWriteApprovalBar(write: pendingWrite) { approve in
                 pendingWrites.decide(
@@ -75,5 +85,32 @@ extension ContentView {
         if let receipt = receipts.receipts.last {
             ReceiptStatusBar(receipt: receipt)
         }
+    }
+}
+
+/// Compact top-of-canvas notice for an observation that could not be
+/// established, so its silence never reads as "nothing pending".
+struct ObservationFailureBar: View {
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: NappletMetrics.snug) {
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(NappletInk.caution)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: NappletMetrics.hairline) {
+                Text(title)
+                    .font(NappletType.heading)
+                Text(detail)
+                    .font(NappletType.caption)
+                    .foregroundStyle(NappletInk.inkSecondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(NappletMetrics.comfortable)
+        .background(NappletInk.ground(for: .caution("")))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("observation-failure-bar")
     }
 }

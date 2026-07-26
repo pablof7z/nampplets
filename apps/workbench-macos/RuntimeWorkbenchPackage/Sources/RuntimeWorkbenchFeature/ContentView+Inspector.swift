@@ -52,12 +52,7 @@ extension ContentView {
             VStack(alignment: .leading, spacing: NappletMetrics.snug) {
                 Text(window.title)
                     .font(.title3.weight(.semibold))
-                LabeledContent(
-                    "Status",
-                    value: window.exactBuild.flatMap {
-                        runningArtifacts[$0]
-                    } == nil ? "Not open" : "Running"
-                )
+                LabeledContent("Status", value: nappletStatus(for: window))
                 LabeledContent("Layout", value: layout.mode.title)
                 LabeledContent(
                     "Size",
@@ -187,5 +182,30 @@ extension ContentView {
                 .font(.caption)
             }
         }
+    }
+
+    /// Answers "is this exact build actually still running" from the
+    /// Rust-owned session list, not from `runningArtifacts` alone.
+    ///
+    /// `runningArtifacts` is keyed by identity and removed only when the
+    /// user closes the window (`ContentView+Canvas.swift`'s
+    /// `removeValue(forKey:)`); it is never cleared when Rust itself ends
+    /// the session (crash, revoke, stop). Before this fix the Inspector
+    /// read that dictionary alone, so a crashed napplet's window kept
+    /// reporting "Running" until the user closed it -- indistinguishable
+    /// from a napplet that was actually still working.
+    private func nappletStatus(for window: WorkbenchCanvasWindow) -> String {
+        guard let exactBuild = window.exactBuild,
+            runningArtifacts[exactBuild] != nil
+        else {
+            return "Not open"
+        }
+        let hasRunningSession = libraryManager.refresh().builds.contains { build in
+            build.exactBuild.manifestAuthor == exactBuild.manifestAuthor
+                && build.exactBuild.dTag == exactBuild.dTag
+                && build.exactBuild.aggregateHash == exactBuild.aggregateHash
+                && build.sessions.contains { $0.state == .running }
+        }
+        return hasRunningSession ? "Running" : "Session ended"
     }
 }
