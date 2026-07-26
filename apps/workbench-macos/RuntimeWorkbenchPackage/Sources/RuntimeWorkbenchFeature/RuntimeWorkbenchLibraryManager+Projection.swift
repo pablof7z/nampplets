@@ -102,7 +102,8 @@ extension RuntimeWorkbenchLibraryManager {
                 totalInstalled: native.totalInstalled,
                 builds: builds,
                 workspaces: workspaces,
-                refusals: refusals
+                refusals: refusals,
+                droppedRefusalCount: native.droppedRefusalCount
             )
         else {
             throw RuntimeWorkbenchLibraryProjectionError.invalidSnapshot

@@ -15,19 +15,53 @@ extension WorkbenchLibrarySheet {
     /// The refusal code is the runtime's own identifier and means nothing to
     /// the person reading it. The message is the part written for them, so it
     /// is the part shown; the code stays available in activity.
-    func refusalBanner(_ refusal: WorkbenchLibraryRefusal) -> some View {
+    /// Only the most recent refusal is shown. When it is not the only one, the
+    /// evidence has to say so — otherwise a single banner reads as a single
+    /// refusal, and the ones the runtime evicted leave no trace at all.
+    func refusalBanner(
+        _ refusal: WorkbenchLibraryRefusal,
+        retainedCount: Int,
+        droppedCount: UInt64
+    ) -> some View {
         LibraryStatusBanner(
             title: "That didn't work",
             message: WorkbenchLibraryPlainPresentation.refusalMessage,
             symbol: "hand.raised",
             color: NappletInk.refusal,
             accessibilityIdentifier: "workbench-library-refusal",
-            evidenceFields: [
-                NappletField("Code", refusal.code),
-                NappletField("Detail", refusal.message),
-                NappletField("Occurred at milliseconds", "\(refusal.occurredAtMillis)"),
-            ]
+            evidenceFields: Self.refusalEvidenceFields(
+                refusal,
+                retainedCount: retainedCount,
+                droppedCount: droppedCount
+            )
         )
+    }
+
+    /// Extracted so the decision is testable. Rendering it inline would leave
+    /// the one rule that matters — when the counts are stated at all — as view
+    /// logic no test can reach.
+    static func refusalEvidenceFields(
+        _ refusal: WorkbenchLibraryRefusal,
+        retainedCount: Int,
+        droppedCount: UInt64
+    ) -> [NappletField] {
+        let recorded = UInt64(retainedCount) &+ droppedCount
+        return [
+            NappletField("Code", refusal.code),
+            NappletField("Detail", refusal.message),
+            NappletField("Occurred at milliseconds", "\(refusal.occurredAtMillis)"),
+            // Silent when this is the only refusal ever recorded: saying
+            // "1 recorded, showing the most recent" would be noise.
+            recorded > 1
+                ? NappletField(
+                    "Refusals recorded",
+                    "\(recorded), showing the most recent"
+                )
+                : nil,
+            droppedCount > 0
+                ? NappletField("Older refusals discarded", "\(droppedCount)")
+                : nil,
+        ].compactMap { $0 }
     }
 
     func updateGapBanner(

@@ -170,6 +170,11 @@ public struct NativeRuntimeLibrarySnapshot:
     public let builds: [NativeRuntimeLibraryBuild]
     public let workspaces: [NativeRuntimeLibraryWorkspace]
     public let refusals: [NativeRuntimeLibraryRefusal]
+    /// Refusals the runtime's bounded ring evicted before this projection was
+    /// taken. `refusals` is only what survived the bound, so a consumer that
+    /// reports `refusals.count` alone understates how many times the runtime
+    /// actually refused.
+    public let droppedRefusalCount: UInt64
 
     public init(
         revision: UInt64,
@@ -178,7 +183,8 @@ public struct NativeRuntimeLibrarySnapshot:
         totalInstalled: UInt64,
         builds: [NativeRuntimeLibraryBuild],
         workspaces: [NativeRuntimeLibraryWorkspace],
-        refusals: [NativeRuntimeLibraryRefusal]
+        refusals: [NativeRuntimeLibraryRefusal],
+        droppedRefusalCount: UInt64 = 0
     ) {
         self.revision = revision
         self.profileClosed = profileClosed
@@ -187,5 +193,6 @@ public struct NativeRuntimeLibrarySnapshot:
         self.builds = builds
         self.workspaces = workspaces
         self.refusals = refusals
+        self.droppedRefusalCount = droppedRefusalCount
     }
 }
