@@ -1,5 +1,11 @@
 //! Cucumber scenario runner for the public runtime-ffi facade.
 
+// Step modules live under `tests/bdd/` so Cargo does not also auto-discover
+// them as standalone integration-test targets, where `super::` and
+// `crate::support` would not resolve. This file is the target's crate root, so
+// `mod` resolves against `tests/` and the path must be spelled out. Same shape
+// as `crates/runtime-app/tests/bdd.rs`.
+#[path = "bdd/receipt_steps.rs"]
 mod receipt_steps;
 mod support;
 
