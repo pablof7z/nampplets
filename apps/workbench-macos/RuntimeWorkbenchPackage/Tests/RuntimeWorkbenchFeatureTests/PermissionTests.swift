@@ -181,11 +181,16 @@ import Testing
 
     await model.confirm()
 
-    // Rust requires exact key-set equality while also refusing a user-supplied
-    // managed decision. Swift must not fabricate a partial-batch workaround.
+    // Nothing has been changed, so there is no batch to send and nothing is
+    // applied. Note what is deliberately NOT asserted here any more: that the
+    // review as a whole is blocked. Rust now validates a changed-domain batch
+    // and refuses only when a *submitted* decision names a host-policy
+    // capability, so a mixed review is legitimately submittable for its
+    // user-owned domains, and `isManagedReviewBlocked` narrowed to mean "the
+    // whole review is read-only". That leaves no Swift-side test proving a
+    // mixed review's batch excludes the managed domain; see the PR body.
     #expect(manager.submissions.isEmpty)
     #expect(!model.isApplied)
-    #expect(model.isManagedReviewBlocked)
 }
 
 @MainActor

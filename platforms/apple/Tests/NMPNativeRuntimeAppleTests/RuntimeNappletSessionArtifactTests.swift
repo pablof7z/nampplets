@@ -157,6 +157,9 @@ final class RuntimeNappletSessionArtifactTests: RuntimeNappletSessionTestCase {
         let update = profile.applyPermissionDecisions(
             NativeRuntimePermissionDecisionBatch(
                 coordinate: reacquired.permissionCoordinate,
+                // Decisions are bound to the exact review they were read from;
+                // Rust refuses the batch as stale if the live review moved.
+                reviewRevision: review.revision,
                 // A domain with no registered provider can only be denied;
                 // `link` and `resource` have none on this runtime.
                 decisions: review.capabilities.map {

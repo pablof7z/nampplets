@@ -287,7 +287,21 @@ final class TrustedShellOutboxTests: RuntimeNappletSessionTestCase {
             }.first
         )
         XCTAssertFalse(receipt.id.isEmpty)
-        XCTAssertFalse(receipt.delivery.isEmpty)
+        // The old `XCTAssertFalse(receipt.delivery.isEmpty)` claimed only that
+        // a delivery status existed at all. #217/#221 replaced that string
+        // with a non-optional typed `outcome` plus `observationLifecycle`, so
+        // that claim is now guaranteed by the type and cannot be false --
+        // there is no equal-strength successor to write.
+        //
+        // The useful successor is a which-outcome assertion, and it is
+        // deliberately NOT written here rather than guessed: this test opens a
+        // profile with no relays configured and samples the first receipt
+        // update to arrive after approval, so the outcome it observes is
+        // timing-dependent (`InProgress` while NMP is still observing/signing/
+        // delivering, versus a terminal classification once the empty relay
+        // set resolves). Pinning one would be invented coverage and flaky.
+        // A test that configures relays and awaits a terminal receipt is where
+        // that assertion belongs.
         XCTAssertTrue(
             try profile.snapshotForTesting.receipts.contains {
                 $0.receiptId == receipt.id

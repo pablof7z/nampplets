@@ -79,6 +79,9 @@ final class Nip29IntentIntegrationTests: XCTestCase {
         let chatGrant = profile.applyPermissionDecisions(
             NativeRuntimePermissionDecisionBatch(
                 coordinate: installedChat.permissionCoordinate,
+                // Decisions are bound to the exact review they were read from;
+                // Rust refuses the batch as stale if the live review moved.
+                reviewRevision: chatReview.revision,
                 decisions: chatReview.capabilities.map {
                     NativeRuntimePermissionDecisionSelection(
                         domain: $0.domain,

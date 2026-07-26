@@ -74,6 +74,11 @@ import Testing
     )
     let model = PermissionReviewSheetModel(manager: manager)
 
+    // A batch now carries only the domains the user actually changed, so
+    // `confirm()` is a no-op until something has been changed. This edit is
+    // the precondition for reaching a refusal at all; the assertions below,
+    // which are about how a refusal is worded and preserved, are unchanged.
+    model.select(.allowExactBuild, for: model.review.capabilities[0])
     await model.confirm()
 
     #expect(

@@ -91,6 +91,9 @@ final class GeneratedBindingTests: XCTestCase {
         let permissionUpdate = controller.applyPermissionDecisions(
             batch: RuntimePermissionDecisionBatch(
                 coordinate: coordinate,
+                // Decisions are bound to the exact review they were read from;
+                // Rust refuses the batch as stale if the live review moved.
+                reviewRevision: review.revision,
                 decisions: review.capabilities.map {
                     RuntimePermissionDecisionSelection(
                         domain: $0.domain,
