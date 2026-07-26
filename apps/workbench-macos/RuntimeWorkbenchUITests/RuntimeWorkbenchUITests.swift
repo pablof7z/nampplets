@@ -58,12 +58,14 @@ final class RuntimeWorkbenchUITests: XCTestCase {
             initialPermissionConfirm.waitForExistence(timeout: 10),
             "The exact build must enter native permission review"
         )
-        let cancelInitialReview = app.buttons["Cancel"].firstMatch
+        // "Not Now" rather than "Cancel": this dismissal declines access
+        // rather than abandoning an edit.
+        let declineInitialReview = app.buttons["Not Now"].firstMatch
         XCTAssertTrue(
-            cancelInitialReview.waitForExistence(timeout: 10),
-            "The native permission review must offer a cancel control"
+            declineInitialReview.waitForExistence(timeout: 10),
+            "The native permission review must offer a way to decline"
         )
-        cancelInitialReview.click()
+        declineInitialReview.click()
         XCTAssertTrue(
             waitForNonexistence(of: initialPermissionConfirm, timeout: 10)
         )
@@ -151,22 +153,39 @@ final class RuntimeWorkbenchUITests: XCTestCase {
             liveScope.waitForExistence(timeout: 30),
             "The sheet must identify the permanent feed as a bounded live NMP window"
         )
+        // The scope is still projected in full, one deliberate move away in
+        // the "Where these came from" evidence. What the footer says on the
+        // plain path is the only part that changes what a person does next:
+        // whether this list is everything. Asserting the old ambient
+        // "Live NMP catalog window" string here would be asserting the defect
+        // ADR 0008 removed.
+        let feedEvidence = app.descendants(matching: .any)[
+            "Where these came from"
+        ].firstMatch
         XCTAssertTrue(
-            liveScope.label.contains("Live NMP catalog window")
-                || (liveScope.value as? String)?.contains(
-                    "Live NMP catalog window"
-                ) == true
+            feedEvidence.waitForExistence(timeout: 10),
+            "The feed must offer its source evidence"
+        )
+        feedEvidence.click()
+        XCTAssertTrue(
+            app.staticTexts.containing(
+                NSPredicate(format: "value CONTAINS %@", "live NMP window")
+            ).firstMatch.waitForExistence(timeout: 10),
+            "Opening the evidence must name the bounded live window verbatim"
         )
 
         // Keep this a real network journey while selecting a known current
         // public candidate whose signed blob is reachable. The search is a
         // local filter over the permanent bounded window, never a new relay
         // query or a fixture substitution.
-        let search = app.textFields["Search napplet catalog"]
+        let search = app.textFields["Search napplets"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.click()
         search.typeText("STL Preview")
-        app.buttons["Search"].click()
+        // Submitting the field runs the filter; the separate Search button is
+        // gone, because a search field that needs a button beside it has not
+        // finished being designed.
+        search.typeText("\r")
 
         let catalogEntries = app.buttons.matching(identifier: "catalog-entry")
         XCTAssertTrue(
