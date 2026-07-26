@@ -7,25 +7,33 @@ import NMPNativeRuntimeApple
 /// only for the small schemas accepted by the pinned provider, and the
 /// Workbench still scopes presentation to the exact installed build that
 /// emitted the action.
+/// The decoding below is unchanged: it is the security boundary, and it still
+/// fails closed on anything the pinned provider does not accept. What changed
+/// is the split between `summary`, which a person reads, and `evidence`, which
+/// carries the identifiers. This surface rendered "event <64 hex> · kind 1"
+/// into the inspector -- the literal complaint that a raw event id is not
+/// something to show a human. See `docs/adr/0008-verdicts-on-the-path.md`.
 struct NativeActionNotice: Identifiable, Equatable, Sendable {
     let id: UUID
     let kind: NativeWorkbenchActionKind
     let title: String
-    let target: String
-    let detail: String
+    /// Plain language. Never contains an identifier.
+    let summary: String
+    /// The identifiers, for the technical tier only.
+    let evidence: [NappletField]
 
     init(
         id: UUID = UUID(),
         kind: NativeWorkbenchActionKind,
         title: String,
-        target: String,
-        detail: String
+        summary: String,
+        evidence: [NappletField] = []
     ) {
         self.id = id
         self.kind = kind
         self.title = title
-        self.target = target
-        self.detail = detail
+        self.summary = summary
+        self.evidence = evidence
     }
 
     static func decode(
@@ -48,17 +56,18 @@ struct NativeActionNotice: Identifiable, Equatable, Sendable {
             else {
                 return nil
             }
-            let kind = boundedInteger(target["kind"])
-            let author = boundedHex(target["pubkey"], length: 64)
-            let targetText = kind.map { "event \(eventID) · kind \($0)" }
-                ?? "event \(eventID)"
-            let detail = author.map { "Author \($0)" }
-                ?? "The napplet requested a note target."
+            var evidence = [NappletField("Event id", eventID)]
+            if let kind = boundedInteger(target["kind"]) {
+                evidence.append(NappletField("Kind", "\(kind)"))
+            }
+            if let author = boundedHex(target["pubkey"], length: 64) {
+                evidence.append(NappletField("Author key", author))
+            }
             return NativeActionNotice(
                 kind: action.kind,
-                title: "Note requested",
-                target: targetText,
-                detail: detail
+                title: "Open a post",
+                summary: "This napplet wants to show you a post.",
+                evidence: evidence
             )
         case .profileOpen:
             guard let pubkey = boundedHex(object["pubkey"], length: 64) else {
@@ -66,27 +75,27 @@ struct NativeActionNotice: Identifiable, Equatable, Sendable {
             }
             return NativeActionNotice(
                 kind: action.kind,
-                title: "Profile requested",
-                target: pubkey,
-                detail: "The napplet requested a profile target."
+                title: "Open a profile",
+                summary: "This napplet wants to show you someone's profile.",
+                evidence: [NappletField("Profile key", pubkey)]
             )
         case .composeOpen:
             guard let replyTo = object["replyTo"] as? [String: Any] else {
                 return NativeActionNotice(
                     kind: action.kind,
-                    title: "Compose requested",
-                    target: "No reply target",
-                    detail: "The Workbench does not provide a composer."
+                    title: "Write something",
+                    summary: "This napplet wants you to write a post. "
+                        + "Napplets can't do that here yet."
                 )
             }
-            let target = boundedHex(replyTo["id"], length: 64)
-                .map { "reply to event \($0)" }
-                ?? "reply target unavailable"
+            let evidence = boundedHex(replyTo["id"], length: 64)
+                .map { [NappletField("Replying to event", $0)] } ?? []
             return NativeActionNotice(
                 kind: action.kind,
-                title: "Compose requested",
-                target: target,
-                detail: "The Workbench does not provide a composer."
+                title: "Write a reply",
+                summary: "This napplet wants you to reply to a post. "
+                    + "Napplets can't do that here yet.",
+                evidence: evidence
             )
         }
     }

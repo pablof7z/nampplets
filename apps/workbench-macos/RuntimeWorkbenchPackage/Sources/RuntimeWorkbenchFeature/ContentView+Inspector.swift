@@ -93,15 +93,17 @@ extension ContentView {
                             : "arrow.up.right"
                     )
                     .font(.subheadline.weight(.semibold))
-                    Text(nativeActionNotice.target)
+                    Text(nativeActionNotice.summary)
                         .font(.callout)
-                        .textSelection(.enabled)
-                        .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(nativeActionNotice.detail)
+                    if !nativeActionNotice.evidence.isEmpty {
+                        NappletEvidence {
+                            NappletFieldGrid(
+                                fields: nativeActionNotice.evidence
+                            )
+                        }
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    }
                     Button("Dismiss") {
                         self.nativeActionNotice = nil
                     }

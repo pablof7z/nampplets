@@ -109,7 +109,7 @@ struct NappletEvidence<Content: View>: View {
 /// `[(label: String, value: String)]` are different array types in Swift, and
 /// building these lists conditionally makes that difference show up as a
 /// confusing error at every call site.
-struct NappletField: Identifiable {
+struct NappletField: Identifiable, Equatable, Hashable, Sendable {
     let label: String
     let value: String
 

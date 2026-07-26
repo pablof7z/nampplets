@@ -21,9 +21,19 @@ struct NativeActionPresentationTests {
 
         let notice = NativeActionNotice.decode(action)
 
-        #expect(notice?.title == "Note requested")
-        #expect(notice?.target.contains("kind 1") == true)
-        #expect(notice?.detail.contains(author) == true)
+        #expect(notice?.title == "Open a post")
+        // The bounded target is still projected in full -- it moved to the
+        // technical tier rather than being dropped. Nothing the napplet sent
+        // outside the accepted schema (`extra.secret`) appears anywhere.
+        let evidence = notice?.evidence ?? []
+        #expect(evidence.contains { $0.value == eventID })
+        #expect(evidence.contains { $0.label == "Kind" && $0.value == "1" })
+        #expect(evidence.contains { $0.value == author })
+        #expect(!evidence.contains { $0.value.contains("ignored") })
+
+        // An identifier on the plain path is the defect this surface had.
+        #expect(notice?.summary.contains(eventID) == false)
+        #expect(notice?.summary.contains(author) == false)
     }
 
     @Test
@@ -56,8 +66,11 @@ struct NativeActionPresentationTests {
 
         let notice = NativeActionNotice.decode(action)
 
-        #expect(notice?.title == "Compose requested")
-        #expect(notice?.detail == "The Workbench does not provide a composer.")
-        #expect(notice?.target.contains(eventID) == true)
+        #expect(notice?.title == "Write a reply")
+        // Still says plainly that no composer exists, without pretending one
+        // is coming and without naming the event on the plain path.
+        #expect(notice?.summary.contains("can't do that here yet") == true)
+        #expect(notice?.summary.contains(eventID) == false)
+        #expect(notice?.evidence.contains { $0.value == eventID } == true)
     }
 }
