@@ -76,8 +76,8 @@ final class NativeRuntimeSnapshotRefusalTests: XCTestCase {
                         responseJson: #"{"type":"event-independent"}"#
                     )
                 ],
-                oldestAvailableEvent: 0,
-                newestAvailableEvent: 0,
+                oldestAvailableEvent: 1,
+                newestAvailableEvent: 1,
                 eventCursorWasStale: false,
                 lostBeforeBatch: 0
             )
