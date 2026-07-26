@@ -4,27 +4,21 @@ struct ActivityRefreshRefusalBanner: View {
     let refusal: RuntimeWorkbenchActivitySourceRefusal
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Activity refresh refused")
-                    .font(.headline)
-                Text(
-                    "The last accepted activity remains visible and was not refreshed."
-                )
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Activity couldn’t refresh")
+                .font(.headline)
+            Text("Showing the last accepted activity; it may be out of date.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            DisclosureGroup("Technical details") {
                 Text(refusal.localizedDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
-            Spacer()
+            .font(.caption)
         }
         .padding()
-        .background(.orange.opacity(0.08))
-        .accessibilityElement(children: .combine)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
