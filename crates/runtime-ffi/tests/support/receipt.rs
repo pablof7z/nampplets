@@ -106,7 +106,6 @@ impl ReceiptProjectionRig {
                 .expect("receipt fixture is bounded valid JSON"),
         })
     }
-
 }
 
 fn receipt_id() -> WriteReceiptId {

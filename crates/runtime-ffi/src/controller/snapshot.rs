@@ -12,8 +12,7 @@ use crate::{
     RuntimeInstalledBuildAvailability, RuntimeInstalledBuildSnapshot,
     RuntimeInstalledLibrarySnapshot, RuntimePendingWriteSnapshot, RuntimeSessionSnapshot,
     RuntimeSnapshot, RuntimeSnapshotProjection, project_receipt, projection::project_profile,
-    snapshot_integrity::check_snapshot_integrity,
-    workspace::workspace_from_view,
+    snapshot_integrity::check_snapshot_integrity, workspace::workspace_from_view,
 };
 
 struct ProjectedWorkspaces {
