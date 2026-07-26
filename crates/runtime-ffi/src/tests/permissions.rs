@@ -274,3 +274,63 @@ fn outbox_grant_survives_default_profile_restart() {
         "the trusted shell must receive the same Rust-negotiated domain set"
     );
 }
+
+#[test]
+fn malformed_declared_config_schema_reaches_the_snapshot_surface() {
+    // The sibling unit tests in `controller::support` prove the parse half
+    // returns an error instead of `None`. They cannot prove anyone ever sees
+    // it. This asserts the whole seam: a malformed declaration becomes a
+    // boundary refusal that is actually present in the snapshot the host
+    // reads, which is the difference between a signal existing and a signal
+    // arriving.
+    //
+    // The launch must still succeed. Failing open is the deliberate choice
+    // here -- refusing to launch over a bad config schema would be a worse
+    // answer than launching without one -- but failing open silently is what
+    // this fixes: `config.subscribe` otherwise answers `no-schema` forever
+    // for a napplet that plainly did declare a schema, and nothing anywhere
+    // records why.
+    let temp = TempDir::new().unwrap();
+    let content: &[u8] =
+        br#"<head><meta name="napplet-config-schema" content="{not valid json"></head><body></body>"#;
+    let (event, author, digest) =
+        signed_manifest_event("malformed-config-schema-test", content, Vec::new());
+    let coordinate = ArtifactCoordinate::Named {
+        author,
+        d_tag: "malformed-config-schema-test".to_owned(),
+    };
+    let controller = RuntimeController::open(
+        RuntimeConfig {
+            runtime_store_path: temp.path().join("runtime.sqlite3").display().to_string(),
+            nmp_store_path: None,
+            artifact_cache_path: temp.path().join("artifacts").display().to_string(),
+            ..RuntimeConfig::default()
+        },
+        Box::new(FixtureSource(BTreeMap::from([(digest, content.to_vec())]))),
+    )
+    .unwrap();
+    let artifact = controller
+        .verify_artifact(event, coordinate)
+        .artifact
+        .expect("locally signed fixture with no `requires` tags verifies");
+
+    controller.install(Arc::clone(&artifact));
+    controller.launch(artifact, RuntimeExecutionProfile::Legacy);
+
+    let snapshot = controller.snapshot_value();
+    assert_eq!(
+        snapshot.sessions.len(),
+        1,
+        "a malformed config schema must not block the launch itself"
+    );
+    let refusal = snapshot
+        .boundary_refusals
+        .iter()
+        .find(|refusal| refusal.code == "config-schema-malformed")
+        .expect("the malformed declaration must be a recorded boundary refusal");
+    assert!(
+        refusal.detail.contains("napplet-config-schema"),
+        "the refusal detail should name what was malformed: {}",
+        refusal.detail
+    );
+}
