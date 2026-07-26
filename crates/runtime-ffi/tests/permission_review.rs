@@ -22,20 +22,21 @@ fn published_exact_build_review_and_launch_refusal_cross_the_ffi_facade() {
     let mut embedded_domains = rig.embedded_domains().to_vec();
     embedded_domains.sort();
     assert_eq!(reviewed_domains, embedded_domains);
-    assert_eq!(
+    // The inventory is the artifact's own embedded declaration and nothing
+    // else. No build's identity selects a profile, so nothing is softened to
+    // optional on the strength of an author/d-tag/aggregate match -- every
+    // domain the napplet declared is required.
+    assert!(
+        review
+            .capabilities
+            .iter()
+            .all(|capability| capability.requirement == RuntimePermissionRequirement::Required),
+        "a declared domain must not be downgraded to optional: {:?}",
         review
             .capabilities
             .iter()
             .map(|capability| (capability.domain.as_str(), capability.requirement))
-            .collect::<Vec<_>>(),
-        vec![
-            ("identity", RuntimePermissionRequirement::Required),
-            ("inc", RuntimePermissionRequirement::Required),
-            ("outbox", RuntimePermissionRequirement::Required),
-            ("resource", RuntimePermissionRequirement::Optional),
-            ("theme", RuntimePermissionRequirement::Optional),
-            ("link", RuntimePermissionRequirement::Optional),
-        ]
+            .collect::<Vec<_>>()
     );
     assert!(!review.launch_permitted);
     assert_eq!(
