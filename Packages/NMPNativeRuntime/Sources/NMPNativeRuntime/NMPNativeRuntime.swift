@@ -595,10 +595,15 @@ public protocol RuntimeControllerProtocol: AnyObject, Sendable {
 
     /**
      * Consumes one opaque review and installs the immutable exact bytes that
-     * were already verified before review. The pinned Good Morning demo profile receives the Rust-owned
-     * exact-build grant set immediately so the native Workbench can exercise
-     * the complete journey; other builds remain review-gated. This never
-     * launches the napplet.
+     * were already verified before review. Every build goes through the
+     * same review-gated `install()` path here -- no author, d-tag, or
+     * aggregate hash is special-cased, and the capability inventory
+     * `installation_capability_requests` derives comes only from the
+     * artifact's own verified bytes (see that function's doc for the pin
+     * this replaced, and
+     * `crates/runtime-ffi/src/tests/permissions.rs`'s
+     * `no_published_build_receives_a_runtime_pinned_capability_profile` for
+     * the test that keeps it gone). This never launches the napplet.
      */
     func catalogConfirmInstall(token: String, expectedAuthor: String, expectedDTag: String, expectedAggregateHash: String)  -> RuntimeCatalogConfirmationResult
 
@@ -1002,10 +1007,15 @@ open func catalogCancelReview(token: String) -> RuntimeCatalogCancellationResult
 
     /**
      * Consumes one opaque review and installs the immutable exact bytes that
-     * were already verified before review. The pinned Good Morning demo profile receives the Rust-owned
-     * exact-build grant set immediately so the native Workbench can exercise
-     * the complete journey; other builds remain review-gated. This never
-     * launches the napplet.
+     * were already verified before review. Every build goes through the
+     * same review-gated `install()` path here -- no author, d-tag, or
+     * aggregate hash is special-cased, and the capability inventory
+     * `installation_capability_requests` derives comes only from the
+     * artifact's own verified bytes (see that function's doc for the pin
+     * this replaced, and
+     * `crates/runtime-ffi/src/tests/permissions.rs`'s
+     * `no_published_build_receives_a_runtime_pinned_capability_profile` for
+     * the test that keeps it gone). This never launches the napplet.
      */
 open func catalogConfirmInstall(token: String, expectedAuthor: String, expectedDTag: String, expectedAggregateHash: String) -> RuntimeCatalogConfirmationResult  {
     return try!  FfiConverterTypeRuntimeCatalogConfirmationResult_lift(try! rustCall() {
@@ -13817,7 +13827,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_cancel_review() != 5050) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_confirm_install() != 16784) {
+    if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_confirm_install() != 31473) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_feed_snapshot() != 58762) {
