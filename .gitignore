@@ -9,3 +9,9 @@ __pycache__/
 # Xcode derived data from local build/test gates.
 /.build-derived/
 /.build-derived-ios/
+
+# Redb stores the test suites open in the crate directory rather than a
+# temporary one. Untracked and unignored, these are one `git add -A` away
+# from being committed.
+*.redb
+*.redb.lock
