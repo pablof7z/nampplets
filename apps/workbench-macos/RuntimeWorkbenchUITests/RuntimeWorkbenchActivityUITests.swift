@@ -26,7 +26,13 @@ extension RuntimeWorkbenchUITests {
         // shorter one is not a meaningful optimisation: it only decides which
         // step trips first when the machine is loaded, and these run against
         // the shared desktop session (see #137, #147).
-        let workspaceActions = app.menuButtons["Workspace Actions"]
+        // Queried by accessibility identifier, like every other control in
+        // this suite. A `menuButtons["Workspace Actions"]` label query does
+        // not match: the menu is `.labelStyle(.iconOnly)`, so its rendered
+        // element carries neither that title nor the `menuButton` type.
+        let workspaceActions = app.descendants(matching: .any)[
+            "workspace-actions"
+        ]
         XCTAssertTrue(
             workspaceActions.waitForExistence(timeout: 10),
             "The workspace actions menu must appear after the review is dismissed"

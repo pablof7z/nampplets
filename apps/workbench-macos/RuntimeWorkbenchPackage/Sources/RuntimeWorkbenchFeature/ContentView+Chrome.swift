@@ -216,6 +216,13 @@ extension ContentView {
         }
         .labelStyle(.iconOnly)
         .menuStyle(.borderlessButton)
+        // `.labelStyle(.iconOnly)` drops the label's text from the rendered
+        // control, so the name must be restated for assistive technology —
+        // otherwise this is an unnamed icon under VoiceOver. The identifier
+        // is what every UI test queries by; matching on a localised label is
+        // not a stable contract. This mirrors `account-switcher` above.
+        .accessibilityLabel("Workspace Actions")
+        .accessibilityIdentifier("workspace-actions")
         .accessibilityHint(
             "Opens installed napplets, activity, permissions, or settings"
         )
