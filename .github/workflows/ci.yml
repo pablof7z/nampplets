@@ -237,10 +237,16 @@ jobs:
       - name: Run trusted-shell tests with a per-test deadline
         run: node --test --test-timeout=10000 "web/trusted-shell/tests/*.test.js"
 
+  # 45 minutes was never binding: for most of this job's life it died at a
+  # build gate inside ten. Once the Swift targets compiled again it reached the
+  # test steps for the first time and ran out of budget mid-way through
+  # `Test the Workbench feature package` -- steps 1-10 alone take ~28 minutes
+  # and that step another ~20, with the shared-scheme step still behind it.
+  # A timeout only constrains a pipeline that gets far enough to feel it.
   apple:
     name: Apple package and shared scheme
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     steps:
