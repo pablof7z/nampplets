@@ -36,7 +36,7 @@ public struct ContentView: View {
     let layoutStore: any WorkbenchLayoutPersisting
     let accountManager: any WorkbenchAccountManaging
     private let catalogClient: any CatalogClient
-    private let libraryManager: any WorkbenchLibraryManaging
+    let libraryManager: any WorkbenchLibraryManaging
     let injectedPermissionManager: (any PermissionReviewManaging)?
     let profileAction: WorkbenchProfileActionHandler
 
@@ -51,6 +51,13 @@ public struct ContentView: View {
         WorkbenchExactBuildIdentity?
     @State var runningArtifacts:
         [WorkbenchExactBuildIdentity: NappletArtifact] = [:]
+    /// Exact builds the Rust-owned installed-library projection currently
+    /// reports at least one `.running` session for. `runningArtifacts`
+    /// tracks *window* bookkeeping (removed only when the operator closes
+    /// the window) and must not be read as a live session-state claim; this
+    /// set is what the Inspector's "Status" row actually reflects.
+    @State var runningLibrarySessionBuilds: Set<WorkbenchLibraryExactBuild> = []
+    @State var librarySessionSubscription: (any WorkbenchLibrarySubscription)?
     @State var reacquiringIdentities:
         Set<WorkbenchExactBuildIdentity> = []
     @State var launchingIdentities:
@@ -263,6 +270,8 @@ public struct ContentView: View {
             persistLayoutImmediately()
             profile?.native.setIncActionHandler(nil)
             profile?.native.setIntentActivationHandler(nil)
+            librarySessionSubscription?.cancel()
+            librarySessionSubscription = nil
         }
         #if os(macOS)
         // This is the root cause of the Dock overlap, and it is a hard floor,

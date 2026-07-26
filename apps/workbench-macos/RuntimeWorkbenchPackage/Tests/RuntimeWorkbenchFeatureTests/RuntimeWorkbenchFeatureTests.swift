@@ -19,6 +19,74 @@ import Testing
     #expect(String(describing: type(of: view)) == "ContentView")
 }
 
+/// Regression for the Inspector reading "Running" from local window
+/// bookkeeping instead of Rust's own live session state: an exact build
+/// with no `.running` session in the observed installed-library snapshot
+/// must not be reported as running, even though a window for it can stay
+/// open long after Rust ends the session.
+@Test func exactBuildAbsentFromTheObservedSnapshotIsNotReportedAsRunning() {
+    let exactBuild = WorkbenchExactBuildIdentity(
+        manifestAuthor: String(repeating: "a", count: 64),
+        dTag: "napplet",
+        aggregateHash: String(repeating: "b", count: 64)
+    )
+
+    #expect(
+        !ContentView.hasObservedRunningSession(
+            for: exactBuild,
+            among: []
+        )
+    )
+}
+
+@Test func exactBuildWithAnObservedRunningSessionIsReportedAsRunning() throws {
+    let exactBuild = WorkbenchExactBuildIdentity(
+        manifestAuthor: String(repeating: "a", count: 64),
+        dTag: "napplet",
+        aggregateHash: String(repeating: "b", count: 64)
+    )
+    let libraryExactBuild = try #require(
+        WorkbenchLibraryExactBuild(
+            manifestAuthor: exactBuild.manifestAuthor,
+            dTag: exactBuild.dTag,
+            aggregateHash: exactBuild.aggregateHash
+        )
+    )
+
+    #expect(
+        ContentView.hasObservedRunningSession(
+            for: exactBuild,
+            among: [libraryExactBuild]
+        )
+    )
+}
+
+@Test func exactBuildWithOnlySuspendedSessionsInTheSnapshotIsNotReportedAsRunning() throws {
+    // `runningLibrarySessionBuilds` is built by filtering builds down to
+    // those with at least one `.running` session before this lookup ever
+    // runs — a build with only suspended sessions must never appear in the
+    // set passed in here.
+    let exactBuild = WorkbenchExactBuildIdentity(
+        manifestAuthor: String(repeating: "a", count: 64),
+        dTag: "napplet",
+        aggregateHash: String(repeating: "b", count: 64)
+    )
+    let otherLibraryExactBuild = try #require(
+        WorkbenchLibraryExactBuild(
+            manifestAuthor: String(repeating: "c", count: 64),
+            dTag: "other-napplet",
+            aggregateHash: String(repeating: "d", count: 64)
+        )
+    )
+
+    #expect(
+        !ContentView.hasObservedRunningSession(
+            for: exactBuild,
+            among: [otherLibraryExactBuild]
+        )
+    )
+}
+
 @Test func defaultLayoutIsAnEmptyFreeformCanvas() {
     let layout = WorkbenchLayoutModel()
 

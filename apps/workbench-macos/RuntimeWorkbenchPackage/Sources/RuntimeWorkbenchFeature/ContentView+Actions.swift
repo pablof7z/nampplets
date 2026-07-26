@@ -22,6 +22,7 @@ extension ContentView {
                 handleIntentActivation(request)
             }
         }
+        subscribeToRunningLibrarySessions()
         if await restorePersistedCanvasWindows() {
             return
         }
@@ -40,6 +41,31 @@ extension ContentView {
             try prepareInstalledArtifact(installed, identity: seed.identity)
         } catch {
             activity = .failed(detail: error.localizedDescription)
+        }
+    }
+
+    /// Keeps `runningLibrarySessionBuilds` in step with Rust's own view of
+    /// which exact builds have a live `.running` session, independent of
+    /// whether this process's window bookkeeping (`runningArtifacts`) still
+    /// thinks a napplet is open. Without this, the Inspector can only ever
+    /// say "Running" or "Not open" — it has no way to notice that Rust
+    /// already ended a session out from under an still-open window.
+    @MainActor
+    private func subscribeToRunningLibrarySessions() {
+        librarySessionSubscription?.cancel()
+        librarySessionSubscription = libraryManager.subscribe { [self] update in
+            let snapshot: WorkbenchLibrarySnapshot =
+                switch update {
+                case let .authoritative(snapshot), let .next(snapshot, _):
+                    snapshot
+                }
+            runningLibrarySessionBuilds = Set(
+                snapshot.builds
+                    .filter { build in
+                        build.sessions.contains { $0.state == .running }
+                    }
+                    .map(\.exactBuild)
+            )
         }
     }
 

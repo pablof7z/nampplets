@@ -54,9 +54,7 @@ extension ContentView {
                     .font(.title3.weight(.semibold))
                 LabeledContent(
                     "Status",
-                    value: window.exactBuild.flatMap {
-                        runningArtifacts[$0]
-                    } == nil ? "Not open" : "Running"
+                    value: inspectorStatus(for: window)
                 )
                 LabeledContent("Layout", value: layout.mode.title)
                 LabeledContent(
@@ -187,5 +185,47 @@ extension ContentView {
                 .font(.caption)
             }
         }
+    }
+
+    /// "Not open" reflects this window's own bookkeeping (no window means
+    /// nothing to report on). Once a window is open, "Running" vs. "Session
+    /// ended" is read from Rust's own live session projection
+    /// (`runningLibrarySessionBuilds`), never from whether the window
+    /// happens to still be on screen — a window stays open long after Rust
+    /// ends its session.
+    fileprivate func inspectorStatus(for window: WorkbenchCanvasWindow) -> String {
+        guard
+            let exactBuild = window.exactBuild,
+            runningArtifacts[exactBuild] != nil
+        else {
+            return "Not open"
+        }
+        return ContentView.hasObservedRunningSession(
+            for: exactBuild,
+            among: runningLibrarySessionBuilds
+        ) ? "Running" : "Session ended"
+    }
+
+    /// Whether Rust's own live installed-library projection currently
+    /// reports at least one `.running` session for `exactBuild`. Kept as a
+    /// pure lookup, separate from `inspectorStatus` and the window-open
+    /// bookkeeping it also depends on, so this is the one piece that
+    /// actually needed fixing — "derive session state from the observed
+    /// snapshot" — stays independently testable without a live runtime or
+    /// a `NappletArtifact` fixture.
+    nonisolated static func hasObservedRunningSession(
+        for exactBuild: WorkbenchExactBuildIdentity,
+        among runningLibrarySessionBuilds: Set<WorkbenchLibraryExactBuild>
+    ) -> Bool {
+        guard
+            let libraryExactBuild = WorkbenchLibraryExactBuild(
+                manifestAuthor: exactBuild.manifestAuthor,
+                dTag: exactBuild.dTag,
+                aggregateHash: exactBuild.aggregateHash
+            )
+        else {
+            return false
+        }
+        return runningLibrarySessionBuilds.contains(libraryExactBuild)
     }
 }
