@@ -157,6 +157,7 @@ final class RuntimeNappletSessionArtifactTests: RuntimeNappletSessionTestCase {
         let update = profile.applyPermissionDecisions(
             NativeRuntimePermissionDecisionBatch(
                 coordinate: reacquired.permissionCoordinate,
+                reviewRevision: review.revision,
                 // A domain with no registered provider can only be denied;
                 // `link` and `resource` have none on this runtime.
                 decisions: review.capabilities.map {

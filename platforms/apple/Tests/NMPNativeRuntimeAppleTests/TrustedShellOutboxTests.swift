@@ -287,7 +287,13 @@ final class TrustedShellOutboxTests: RuntimeNappletSessionTestCase {
             }.first
         )
         XCTAssertFalse(receipt.id.isEmpty)
-        XCTAssertFalse(receipt.delivery.isEmpty)
+        // `delivery` was a free-form string; the outcome is typed now. An
+        // approved write is either still in flight or already delivered — any
+        // other outcome here means the approval did not reach the relay.
+        XCTAssertTrue(
+            [.inProgress, .delivered].contains(receipt.outcome),
+            "approved write produced outcome \(receipt.outcome)"
+        )
         XCTAssertTrue(
             try profile.snapshotForTesting.receipts.contains {
                 $0.receiptId == receipt.id
