@@ -203,6 +203,9 @@ pub struct RuntimeSnapshot {
 /// the same revision and lifecycle state so native consumers can advance their
 /// control-plane bookkeeping without deriving any view from invalid rows.
 #[derive(Clone, Debug, uniffi::Enum)]
+// UniFFI exports record-valued enum fields by value; boxing this variant would
+// change the supported facade instead of reducing an internal-only enum.
+#[allow(clippy::large_enum_variant)]
 pub enum RuntimeSnapshotProjection {
     Snapshot {
         snapshot: RuntimeSnapshot,
