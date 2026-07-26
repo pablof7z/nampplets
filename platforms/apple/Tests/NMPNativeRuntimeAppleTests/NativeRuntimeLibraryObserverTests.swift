@@ -54,7 +54,8 @@ final class NativeRuntimeLibraryObserverTests: RuntimeNappletSessionTestCase {
         guard case let .next(
             nextProjection,
             predecessorRevision,
-            eventCursorWasStale
+            eventCursorWasStale,
+            _
         ) = next else {
             return XCTFail("Expected a next library replacement")
         }
@@ -147,7 +148,8 @@ final class NativeRuntimeLibraryObserverTests: RuntimeNappletSessionTestCase {
         guard case let .next(
             nextProjection,
             predecessorRevision,
-            eventCursorWasStale
+            eventCursorWasStale,
+            _
         ) = delivered.last else {
             return XCTFail("The newest pending replacement must drain second")
         }

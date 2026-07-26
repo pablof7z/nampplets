@@ -149,19 +149,29 @@ public final class RuntimeWorkbenchLibraryManager:
         case .next(
             let projection,
             let predecessorRevision,
-            _
+            _,
+            let lostBeforeBatch
         ):
             let projected = Self.project(projection)
-            guard projected.revision > current.revision else {
+            // The frame layer re-delivers at the same revision when the cursor
+            // was stale, precisely so a loss is not swallowed. Returning early
+            // here on that replacement discarded the only notice of it, so the
+            // freshness guard now only governs whether the snapshot advances.
+            guard projected.revision > current.revision
+                || lostBeforeBatch > 0
+            else {
                 return
             }
             observationFailureReason = nil
-            current = projected
+            if projected.revision > current.revision {
+                current = projected
+            }
             for subscriber in subscribers.values {
                 subscriber.receive(
                     .next(
                         current,
-                        predecessorRevision: predecessorRevision
+                        predecessorRevision: predecessorRevision,
+                        lostBeforeBatch: lostBeforeBatch
                     )
                 )
             }

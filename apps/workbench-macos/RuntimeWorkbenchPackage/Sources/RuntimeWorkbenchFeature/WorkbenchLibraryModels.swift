@@ -304,7 +304,11 @@ public enum WorkbenchLibraryUpdate: Equatable, Sendable {
     case authoritative(WorkbenchLibrarySnapshot)
     case next(
         WorkbenchLibrarySnapshot,
-        predecessorRevision: UInt64
+        predecessorRevision: UInt64,
+        /// Runtime events lost before this batch. Carried explicitly so a
+        /// stale cursor never has to be inferred from, or encoded into, the
+        /// revision numbers.
+        lostBeforeBatch: UInt64
     )
 }
 
@@ -312,14 +316,20 @@ public struct WorkbenchLibraryUpdateGap: Equatable, Sendable {
     public let expectedPredecessorRevision: UInt64
     public let receivedPredecessorRevision: UInt64
     public let receivedRevision: UInt64
+    /// Runtime events the observer's cursor fell behind, reported by the
+    /// runtime rather than inferred from the revisions above. Zero means the
+    /// revisions themselves disagreed without a reported loss.
+    public let lostBeforeBatch: UInt64
 
     public init(
         expectedPredecessorRevision: UInt64,
         receivedPredecessorRevision: UInt64,
-        receivedRevision: UInt64
+        receivedRevision: UInt64,
+        lostBeforeBatch: UInt64 = 0
     ) {
         self.expectedPredecessorRevision = expectedPredecessorRevision
         self.receivedPredecessorRevision = receivedPredecessorRevision
         self.receivedRevision = receivedRevision
+        self.lostBeforeBatch = lostBeforeBatch
     }
 }

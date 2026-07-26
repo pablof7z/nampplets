@@ -69,7 +69,8 @@ extension NativeRuntimeProfile {
             let update = NativeRuntimeLibraryUpdate.next(
                 projection,
                 predecessorRevision: previousLibraryRevision,
-                eventCursorWasStale: frame.eventCursorWasStale
+                eventCursorWasStale: frame.eventCursorWasStale,
+                lostBeforeBatch: frame.lostBeforeBatch
             )
             for identifier in Array(libraryObservers.keys) {
                 guard var observer = libraryObservers[identifier] else {

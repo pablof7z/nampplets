@@ -97,7 +97,8 @@ final class NativeRuntimeSnapshotRefusalTests: XCTestCase {
         guard case let .next(
             projection,
             predecessorRevision,
-            eventCursorWasStale
+            eventCursorWasStale,
+            _
         ) = captured.library.last else {
             return XCTFail("Refusal must advance the installed-library stream")
         }

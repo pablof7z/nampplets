@@ -58,7 +58,18 @@ extension WorkbenchLibrarySheet {
                             "Received revision",
                             "\(gap.receivedRevision)"
                         ),
-                    ])
+                    ]
+                    // Only when the runtime reported a loss. Printing "0" for
+                    // a plain revision discontinuity would assert something it
+                    // never said.
+                    + (gap.lostBeforeBatch > 0
+                        ? [
+                            NappletField(
+                                "Events lost before this batch",
+                                "\(gap.lostBeforeBatch)"
+                            ),
+                        ]
+                        : []))
                 }
                 .font(.caption)
             }

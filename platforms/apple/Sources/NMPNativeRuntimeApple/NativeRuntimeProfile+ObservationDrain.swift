@@ -111,7 +111,7 @@ extension NativeRuntimeProfile {
     ) -> UInt64 {
         switch update {
         case let .authoritative(projection),
-             let .next(projection, _, _):
+             let .next(projection, _, _, _):
             projection.revision
         }
     }

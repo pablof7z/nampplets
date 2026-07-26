@@ -328,7 +328,7 @@ private final class RecordingLibraryManager: WorkbenchLibraryManaging {
     let model = WorkbenchLibrarySheetModel(manager: manager)
 
     model.start()
-    manager.push(.next(refused, predecessorRevision: 5))
+    manager.push(.next(refused, predecessorRevision: 5, lostBeforeBatch: 0))
 
     #expect(model.snapshot == refused)
     #expect(
@@ -354,4 +354,51 @@ private final class RecordingLibraryManager: WorkbenchLibraryManaging {
 
     #expect(String(describing: type(of: sheet)) == "WorkbenchLibrarySheet")
     #expect(manager.actions.isEmpty)
+}
+
+/// The runtime evicted events the observer never saw. That is true whether or
+/// not the replacement carries a newer revision, and the frame layer
+/// deliberately re-delivers at the same one. Warning only about newer
+/// snapshots would drop precisely the case this exists to catch.
+@MainActor
+@Test func aReportedLossWarnsEvenWhenTheRevisionDoesNotAdvance() {
+    let initial = librarySnapshot(revision: 4, query: "")
+    let manager = RecordingLibraryManager(snapshot: initial)
+    let model = WorkbenchLibrarySheetModel(manager: manager)
+
+    model.start()
+    manager.push(
+        .next(
+            librarySnapshot(revision: 4, query: ""),
+            predecessorRevision: 4,
+            lostBeforeBatch: 6
+        )
+    )
+
+    #expect(model.updateGap?.lostBeforeBatch == 6)
+    // The revisions agreed; nothing about them is wrong and neither is
+    // reported as suspect.
+    #expect(model.updateGap?.expectedPredecessorRevision == 4)
+    #expect(model.updateGap?.receivedPredecessorRevision == 4)
+}
+
+/// A revision discontinuity with no reported loss still warns, but must not
+/// claim events were lost — the runtime never said so.
+@MainActor
+@Test func aRevisionDiscontinuityAloneClaimsNoLostEvents() {
+    let initial = librarySnapshot(revision: 4, query: "")
+    let manager = RecordingLibraryManager(snapshot: initial)
+    let model = WorkbenchLibrarySheetModel(manager: manager)
+
+    model.start()
+    manager.push(
+        .next(
+            librarySnapshot(revision: 7, query: ""),
+            predecessorRevision: 5,
+            lostBeforeBatch: 0
+        )
+    )
+
+    #expect(model.updateGap != nil)
+    #expect(model.updateGap?.lostBeforeBatch == 0)
 }
