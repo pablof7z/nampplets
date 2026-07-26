@@ -8,9 +8,12 @@ capabilities, WebView isolation, workspace bindings, and product policy.
 The runnable macOS app now verifies a signed named-kind manifest in Rust,
 installs its exact-build principal, derives its manifest requirements, launches
 it through the Rust-owned session kernel, and serves only sealed artifact bytes
-to a nested sandboxed WebView. The bundled Good Morning fixture currently runs
-in its intentional limited-runtime state with the mandatory `shell` handshake
-and pinned `storage` provider available.
+to a nested sandboxed WebView. The Good Morning fixture currently runs in its
+intentional limited-runtime state: only the mandatory `shell` handshake is
+available. `compatibility.lock` lists `supported_domains = []` for every
+platform today -- a provider domain (including `storage`, which Good
+Morning does not itself declare) moves to supported only after its
+platform implementation passes the pinned contract suite.
 
 This is not a claim that M2 or M3 is complete. The unchanged legacy evidence
 still contains pinned-conformance failures and one native-only external-asset

@@ -141,10 +141,15 @@ impl RuntimeController {
     }
 
     /// Consumes one opaque review and installs the immutable exact bytes that
-    /// were already verified before review. The pinned Good Morning demo profile receives the Rust-owned
-    /// exact-build grant set immediately so the native Workbench can exercise
-    /// the complete journey; other builds remain review-gated. This never
-    /// launches the napplet.
+    /// were already verified before review. Every build goes through the
+    /// same review-gated `install()` path here -- no author, d-tag, or
+    /// aggregate hash is special-cased, and the capability inventory
+    /// `installation_capability_requests` derives comes only from the
+    /// artifact's own verified bytes (see that function's doc for the pin
+    /// this replaced, and
+    /// `crates/runtime-ffi/src/tests/permissions.rs`'s
+    /// `no_published_build_receives_a_runtime_pinned_capability_profile` for
+    /// the test that keeps it gone). This never launches the napplet.
     pub fn catalog_confirm_install(
         &self,
         token: String,
