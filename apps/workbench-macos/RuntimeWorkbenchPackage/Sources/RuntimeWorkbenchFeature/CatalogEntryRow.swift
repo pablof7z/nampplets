@@ -21,9 +21,11 @@ struct CatalogEntryRow: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text(publisherLine)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                if let publisherLine {
+                    Text(publisherLine)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
 
             Spacer(minLength: NappletMetrics.snug)
@@ -46,17 +48,26 @@ struct CatalogEntryRow: View {
         .contentShape(Rectangle())
     }
 
-    private var publisherLine: String {
-        let name = NappletIdentityPresentation.publisherName(
+    /// Absence renders as absence.
+    ///
+    /// Naming every unnamed publisher put the identical non-fact on every row
+    /// -- which is the same mistake as a green seal on every screen, made by
+    /// me, one screen later. The install review still states it, because there
+    /// it bears on a decision. Here it would only be noise that crowds out the
+    /// rows where a publisher *is* named.
+    private var publisherLine: String? {
+        guard
+            !NappletIdentityPresentation.publisherIsUnnamed(
+                displayName: entry.publisher.displayName,
+                publicKey: entry.publisher.publicKey
+            )
+        else {
+            return nil
+        }
+        return "by " + NappletIdentityPresentation.publisherName(
             displayName: entry.publisher.displayName,
             publicKey: entry.publisher.publicKey
         )
-        return NappletIdentityPresentation.publisherIsUnnamed(
-            displayName: entry.publisher.displayName,
-            publicKey: entry.publisher.publicKey
-        )
-            ? name
-            : "by \(name)"
     }
 
     /// Silence when there is nothing wrong. A row that flags every napplet as

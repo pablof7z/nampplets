@@ -147,21 +147,46 @@ any curated component adapter, but they are not themselves slots.
 deliberately does **not** classify how much authority a capability carries,
 and native code must not start inferring that from the domain string.
 
-The distinction is real and the vocabulary cannot currently express it. A
-capability may be a mediated outcome (this runtime's `keys` is a mediated
-signing request where the secret never leaves the host), a privileged broker, a
-raw escape hatch, or host-managed plumbing. Calling a mediated service "raw
-access" would be as misleading as smoothing genuine ambient authority into
-another calm row, and the same domain may mix levels across operations.
+The distinction is real and the vocabulary cannot currently express it. It also
+has more than one dimension, and collapsing them is itself a modelling error.
+Four axes, all Rust's to project:
 
-Rust does not project an authority class today. `sensitivity`
-(ordinary/sensitive/unknown) is not sufficient to express it. Until an
-authority class and reason are projected — ideally per operation, or else at
-the highest authority a grant enables — native renders every capability with
-the same weight and says only what it does. **An escape hatch must never be
-smoothed, and a mediated service must never be exaggerated into ambient
-access**; neither is achievable in native code alone, so this is recorded as a
-known gap rather than papered over with string matching.
+- **Authority shape** — mediated outcome, privileged broker, raw escape hatch,
+  or infrastructure. This runtime's `keys` is a *mediated* signing request
+  where the secret never leaves the host, so calling it raw key access would
+  mislead as badly as smoothing genuine ambient authority into another calm
+  row. The same domain may mix shapes across operations.
+- **Decision controller** — the user, or host policy. This is provenance, not
+  authority, and it is orthogonal to the other three.
+- **Effective access** — allowed or denied.
+- **User consequence** — none, or an explicitly projected consequence.
+
+`sensitivity` (ordinary/sensitive/unknown) expresses none of this. Until these
+are projected — ideally per operation, or else at the highest authority a grant
+enables — native renders every capability with the same weight and says only
+what it does. **An escape hatch must never be smoothed, and a mediated service
+must never be exaggerated into ambient access**; neither is achievable in native
+code alone, so this is a known gap rather than something to paper over with
+string matching.
+
+**The on-path inclusion rule follows from the axes, not from who decided.**
+Every capability the person is deciding now appears on the plain path, *and so
+does every already-effective capability with user consequence, regardless of
+who granted it*. A host-managed grant to post as the user is effective,
+identity-bearing authority: the posts go out under their name whether they
+chose it or an administrator did, so omitting it would make "what this napplet
+can do" false. Lying by omission on a consent surface is a worse failure than
+showing a row the person cannot act on.
+
+Only genuinely consequence-free infrastructure may move off-path, and only once
+Rust marks its user consequence as none. Native cannot infer that safely. With
+no such marker today, everything effective is shown. The future executable
+invariant: every projected capability with effective access must appear on the
+plain path unless Rust explicitly marks its user consequence as none.
+
+Presentation leads with the effect and annotates provenance afterwards — "It
+can already …", then who decided it — rather than heading the group with who
+decided, which conflates effect with provenance and reads as paternalistic.
 
 ### Honest degradation is preserved
 

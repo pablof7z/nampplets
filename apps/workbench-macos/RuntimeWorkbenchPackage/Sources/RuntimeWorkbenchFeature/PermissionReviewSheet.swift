@@ -144,9 +144,14 @@ public struct PermissionReviewSheet: View {
                         capabilities: model.optionalCapabilities
                     )
                 }
+                // Leads with the effect rather than with who decided.
+                // "Already decided for you" conflated effect with provenance
+                // and read as paternalistic; what matters to the person is
+                // that this access is already in force. Provenance is
+                // annotated per row, from Rust's own reason text.
                 if !model.managedCapabilities.isEmpty {
                     capabilityGroup(
-                        title: "Already decided for you",
+                        title: "It can already",
                         capabilities: model.managedCapabilities
                     )
                 }
@@ -267,11 +272,12 @@ private struct PermissionCapabilityRow: View {
         }
     }
 
+    /// Provenance, annotated after the effect rather than instead of it.
     private var managedReason: String {
         capability.decisionOptions
             .compactMap(\.invalidReason)
             .first
-            ?? "This one isn't yours to change."
+            ?? "This one isn't yours to change here."
     }
 
     /// Deliberately a `Menu` of `Button`s rather than a `Picker`: a
@@ -326,6 +332,19 @@ private struct PermissionCapabilityRow: View {
         return "\(base) (Recommended)"
     }
 
+    /// Plain wording for the decisions Rust offers.
+    ///
+    /// `allowExactBuild` reads "Always allow this version" rather than
+    /// "Always allow": ADR 0002 binds a grant to `(manifest author, dTag,
+    /// aggregateHash)` and forbids it transferring to a new aggregate, so an
+    /// unqualified "always" would promise scope the runtime does not grant --
+    /// a verdict the app cannot stand behind, which ADR 0008 forbids.
+    ///
+    /// This switch is deliberately exhaustive over `PermissionRequestedDecision`.
+    /// If Rust ever projects a broader, author-scoped decision it will fail to
+    /// compile here, which is the intended outcome: the wording is a decision
+    /// someone must make, not something to be defaulted or synthesised from an
+    /// existing case.
     private func plainDecisionTitle(
         _ decision: PermissionRequestedDecision
     ) -> String {
@@ -333,7 +352,7 @@ private struct PermissionCapabilityRow: View {
         case .deny: "Don't allow"
         case .askEveryTime: "Ask me each time"
         case .allowSession: "Allow while it's open"
-        case .allowExactBuild: "Always allow"
+        case .allowExactBuild: "Always allow this version"
         }
     }
 }
