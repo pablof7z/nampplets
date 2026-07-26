@@ -91,7 +91,12 @@ private func searchPage(
         query: "resource"
     )
 
-    #expect(page.entries.map(\.title) == ["Good Morning Protocol", "Resource Demo"])
+    // #223 removed the hardcoded "Good Morning Protocol" from
+    // `publishedRecord` and derives every catalog title from the fixture's own
+    // name via `displayCatalogTitle`, exactly as the neighbouring
+    // "Resource Demo" entry already was. So "good-morning" reads as
+    // "Good Morning"; the product is right and this assertion was stale.
+    #expect(page.entries.map(\.title) == ["Good Morning", "Resource Demo"])
     #expect(page.evidence.scope == .offlineFixture)
     #expect(page.evidence.queryWasLocalFilter)
     #expect(page.evidence.locallyFilteredRows == 18)

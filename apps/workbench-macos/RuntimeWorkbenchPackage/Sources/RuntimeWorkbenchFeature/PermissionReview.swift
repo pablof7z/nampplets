@@ -84,11 +84,24 @@ final class PermissionReviewSheetModel {
         snapshot.submissionState == .applied
     }
 
+    /// A napplet that requests nothing produces a review with no capabilities.
+    /// There is nothing to decide and nothing to submit, so confirming it is a
+    /// pure dismissal rather than a transaction. Note such a review is also
+    /// vacuously `isReadOnly` -- `allSatisfy` over no capabilities is `true` --
+    /// so without this case the sheet would be blocked on two independent
+    /// counts and the user could never clear it.
+    var hasNothingToDecide: Bool {
+        review.capabilities.isEmpty
+    }
+
     var canConfirm: Bool {
-        !isSubmitting
-            && !isApplied
-            && transientIssue == nil
-            && !isManagedReviewBlocked
+        guard !isSubmitting, !isApplied, transientIssue == nil else {
+            return false
+        }
+        guard !hasNothingToDecide else {
+            return true
+        }
+        return !isManagedReviewBlocked
             && !changedDomains.isEmpty
             && invalidSelections.isEmpty
     }
@@ -192,6 +205,13 @@ final class PermissionReviewSheetModel {
         guard canConfirm else {
             return
         }
+        guard !hasNothingToDecide else {
+            snapshot = PermissionReviewSnapshot(
+                review: review,
+                submissionState: .applied
+            )
+            return
+        }
         guard
             let batch = PermissionDecisionBatch(
                 principal: review.principal,
@@ -228,9 +248,28 @@ final class PermissionReviewSheetModel {
                 message: "The permission review no longer matches this verified build."
             )!
         } else {
+            // Pending choices were made against one exact review revision.
+            // Discard them only when that revision moved out from under them,
+            // which is exactly the stale-review case: Rust ships the *current*
+            // review with a `StaleReview` refusal, so its revision differs from
+            // the one this batch carried. A validation refusal (unknown or
+            // managed capability, unavailable decision, denied dependency)
+            // returns the same review at the same revision, and the user's
+            // input is still meaningful -- keeping it is what lets them correct
+            // one domain and retry instead of starting over.
+            //
+            // The revision is the honest signal here rather than the refusal
+            // code, which this layer never sees: `PermissionSubmissionState`
+            // carries only a bounded issue, and matching on its title would
+            // couple the model to the manager's user-facing copy.
+            let reviewMoved = updatedSnapshot.review.revision
+                != batch.reviewRevision
+            let wasApplied = updatedSnapshot.submissionState == .applied
             snapshot = updatedSnapshot
-            selections = Self.defaultSelections(for: updatedSnapshot.review)
-            changedDomains.removeAll()
+            if wasApplied || reviewMoved {
+                selections = Self.defaultSelections(for: updatedSnapshot.review)
+                changedDomains.removeAll()
+            }
         }
         isSubmitting = false
     }
