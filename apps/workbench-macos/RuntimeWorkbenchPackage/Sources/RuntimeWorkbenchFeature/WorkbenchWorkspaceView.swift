@@ -4,6 +4,7 @@ struct WorkbenchWorkspaceView<WindowContent: View>: View {
     @Binding var layout: WorkbenchLayoutModel
     let onLayoutChange: () -> Void
     let onClose: (WorkbenchCanvasWindow) -> Void
+    var onAddNapplet: (() -> Void)?
     @ViewBuilder let windowContent: (WorkbenchCanvasWindow) -> WindowContent
 
     private let canvasPadding = 12.0
@@ -15,12 +16,8 @@ struct WorkbenchWorkspaceView<WindowContent: View>: View {
                 canvasBackground
 
                 if layout.windows.isEmpty {
-                    ContentUnavailableView {
-                        Label("Your canvas is empty", systemImage: "macwindow")
-                    } description: {
-                        Text("Choose Add Napplet to place one here.")
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    emptyCanvas
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ForEach(layout.windows) { window in
                         canvasWindow(
@@ -45,6 +42,40 @@ struct WorkbenchWorkspaceView<WindowContent: View>: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Napplet canvas")
         .accessibilityIdentifier("napplet-canvas")
+    }
+
+    /// The first thing a new person sees, so it says what this app is for
+    /// rather than reporting that a data structure is empty.
+    private var emptyCanvas: some View {
+        VStack(spacing: NappletMetrics.comfortable) {
+            Image(systemName: "square.grid.2x2")
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+
+            VStack(spacing: NappletMetrics.tight) {
+                Text("Nothing open yet")
+                    .font(.title3.weight(.semibold))
+                Text(
+                    "Napplets are small apps you can add and arrange here. "
+                        + "Everything they're allowed to do is up to you."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 380)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let onAddNapplet {
+                Button("Browse Napplets", action: onAddNapplet)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .accessibilityIdentifier("empty-canvas-add-napplet")
+            }
+        }
+        .padding(NappletMetrics.generous)
+        .accessibilityElement(children: .contain)
     }
 
     private var canvasBackground: some View {

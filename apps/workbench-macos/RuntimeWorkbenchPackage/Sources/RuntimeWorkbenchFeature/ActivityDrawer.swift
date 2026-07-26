@@ -1,13 +1,23 @@
 import SwiftUI
 
+/// What a napplet has actually been doing.
+///
+/// This is the destination that makes the rest of the app able to stay quiet:
+/// it is where evidence lives, so its content is deliberately complete. What
+/// changed is the frame around it. A person arrives here asking "what has this
+/// thing been doing?", so it opens with that answer rather than with the build
+/// identity, and the identity moves to where evidence belongs.
+/// See `docs/adr/0008-verdicts-on-the-path.md`.
 public struct ActivityDrawer: View {
     @State private var model: ActivityViewModel
     @Environment(\.dismiss) private var dismiss
+    private let nappletTitle: String?
 
     @MainActor
     public init(
         source: any ActivitySource,
         scope: ActivityExactBuildScope,
+        nappletTitle: String? = nil,
         developerModeAvailable: Bool = false
     ) {
         _model = State(
@@ -17,12 +27,13 @@ public struct ActivityDrawer: View {
                 developerModeAvailable: developerModeAvailable
             )
         )
+        self.nappletTitle = nappletTitle
     }
 
     public var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                exactBuildHeader
+                header
                 Divider()
                 inventory
                 Divider()
@@ -34,10 +45,10 @@ public struct ActivityDrawer: View {
 
                 facts
             }
-            .navigationTitle("Runtime Activity")
+            .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
+                    Button("Done") {
                         dismiss()
                     }
                     .keyboardShortcut(.cancelAction)
@@ -49,9 +60,7 @@ public struct ActivityDrawer: View {
                     Button("Refresh", systemImage: "arrow.clockwise") {
                         model.refresh()
                     }
-                    .accessibilityHint(
-                        "Requests one fresh activity snapshot for this exact build"
-                    )
+                    .accessibilityHint("Checks for the latest activity")
 
                     if model.developerModeAvailable {
                         Toggle(
@@ -65,15 +74,13 @@ public struct ActivityDrawer: View {
                             )
                         )
                         .toggleStyle(.button)
-                        .accessibilityHint(
-                            "Shows bounded redacted detail fields"
-                        )
+                        .accessibilityHint("Shows extra fields on each entry")
                     }
                 }
             }
         }
         #if os(macOS)
-        .frame(minWidth: 700, idealWidth: 820, minHeight: 500, idealHeight: 680)
+        .frame(minWidth: 640, idealWidth: 760, minHeight: 480, idealHeight: 640)
         #endif
         .onAppear {
             model.start()
@@ -84,51 +91,59 @@ public struct ActivityDrawer: View {
         .accessibilityIdentifier("runtime-activity-drawer")
     }
 
-    private var exactBuildHeader: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Label("Exact verified build", systemImage: "checkmark.seal")
-                .font(.headline)
-            LabeledContent("Publisher", value: model.scope.manifestAuthor)
-            LabeledContent("d-tag", value: model.scope.dTag)
-            LabeledContent("Aggregate hash", value: model.scope.aggregateHash)
+    private var title: String {
+        nappletTitle.map { "\($0) Activity" } ?? "Activity"
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: NappletMetrics.tight) {
+            Text(
+                "Everything this napplet has asked for, and everything it was "
+                    + "refused."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            NappletEvidence(label: "Which build this is") {
+                NappletFieldGrid(fields: [
+                    NappletField("Publisher key", model.scope.manifestAuthor),
+                    NappletField("dTag", model.scope.dTag),
+                    NappletField("Aggregate hash", model.scope.aggregateHash),
+                ])
+            }
+            .font(.caption)
         }
-        .font(.caption)
-        .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "Activity for exact build \(model.scope.dTag), "
-                + "aggregate hash \(model.scope.aggregateHash)"
-        )
+        .padding(NappletMetrics.comfortable)
     }
 
     @ViewBuilder
     private var inventory: some View {
         let inventory = model.snapshot?.inventory ?? .empty
-        HStack(spacing: 12) {
+        HStack(spacing: NappletMetrics.snug) {
             inventoryCell(
-                title: "Sessions",
+                title: "Open now",
                 value: inventory.activeSessions,
-                symbol: "rectangle.connected.to.line.below"
+                symbol: "play.rectangle"
             )
             inventoryCell(
-                title: "Bindings",
+                title: "Connections",
                 value: inventory.activeBindings,
                 symbol: "link"
             )
             inventoryCell(
-                title: "Resources",
+                title: "Files loaded",
                 value: inventory.activeResources,
                 symbol: "shippingbox"
             )
             inventoryCell(
-                title: "Pending receipts",
+                title: "Waiting to send",
                 value: inventory.pendingReceipts,
-                symbol: "clock.badge.exclamationmark"
+                symbol: "clock"
             )
         }
-        .padding()
+        .padding(NappletMetrics.comfortable)
         .accessibilityElement(children: .contain)
     }
 
@@ -137,7 +152,7 @@ public struct ActivityDrawer: View {
         value: Int,
         symbol: String
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: NappletMetrics.hairline + 2) {
             Label(title, systemImage: symbol)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -145,72 +160,82 @@ public struct ActivityDrawer: View {
                 .font(.title2.monospacedDigit().weight(.semibold))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+        .padding(NappletMetrics.snug)
+        .background(
+            .quaternary.opacity(0.35),
+            in: RoundedRectangle(cornerRadius: NappletMetrics.tight)
+        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title): \(value)")
     }
 
     private func updateGapBanner(_ gap: ActivityUpdateGap) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: NappletMetrics.snug) {
             Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Activity may be incomplete")
+            VStack(alignment: .leading, spacing: NappletMetrics.hairline) {
+                Text("Some entries may be missing")
                     .font(.headline)
-                Text(
-                    "Expected update after revision "
-                        + "\(gap.expectedPredecessorRevision), received "
-                        + "\(gap.receivedPredecessorRevision). Refresh to "
-                        + "replace it with an authoritative snapshot."
-                )
+                Text("Refresh to get a complete picture.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                NappletEvidence(label: "Why") {
+                    NappletFieldGrid(fields: [
+                        NappletField(
+                            "Expected predecessor revision",
+                            "\(gap.expectedPredecessorRevision)"
+                        ),
+                        NappletField(
+                            "Received predecessor revision",
+                            "\(gap.receivedPredecessorRevision)"
+                        ),
+                        NappletField(
+                            "Received revision",
+                            "\(gap.receivedRevision)"
+                        ),
+                    ])
+                }
                 .font(.caption)
-                .foregroundStyle(.secondary)
             }
             Spacer()
             Button("Refresh") {
                 model.refresh()
             }
         }
-        .padding()
+        .padding(NappletMetrics.comfortable)
         .background(.orange.opacity(0.08))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(
-            "Activity may be incomplete. Expected predecessor revision "
-                + "\(gap.expectedPredecessorRevision), received "
-                + "\(gap.receivedPredecessorRevision)."
+            "Some entries may be missing. Refresh to get a complete picture."
         )
-        .accessibilityHint("Activate Refresh to request a complete snapshot")
         .accessibilityIdentifier("runtime-activity-update-gap")
     }
 
     @ViewBuilder
     private var facts: some View {
         if model.snapshot == nil {
-            ProgressView("Waiting for runtime activity…")
+            ProgressView("Loading…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityLabel("Waiting for the first activity snapshot")
+                .accessibilityLabel("Loading activity")
         } else if
             model.visibleFacts.isEmpty,
             let omitted = model.snapshot?.omittedFactCount,
             omitted > 0
         {
             ContentUnavailableView(
-                "Activity detail unavailable",
+                "Nothing to show here",
                 systemImage: "ellipsis.rectangle",
                 description: Text(
-                    "\(omitted) scoped runtime facts are not present in this "
-                        + "typed native projection yet."
+                    "\(omitted) entries exist but this version of the app "
+                        + "can't display them yet."
                 )
             )
         } else if model.visibleFacts.isEmpty {
             ContentUnavailableView(
-                "No matching activity",
+                "Nothing matches",
                 systemImage: "line.3.horizontal.decrease.circle",
-                description: Text(
-                    "Change the severity or category filters to show more facts."
-                )
+                description: Text("Change the filters to see more.")
             )
         } else {
             List(model.visibleFacts) { fact in
@@ -219,17 +244,19 @@ public struct ActivityDrawer: View {
                     detailFields: model.detailFields(for: fact)
                 )
             }
-            .overlay(alignment: .bottomTrailing) {
+            .listStyle(.inset)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 if let omitted = model.snapshot?.omittedFactCount, omitted > 0 {
-                    Text("\(omitted) facts omitted by the runtime projection")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(8)
-                        .background(.bar, in: Capsule())
-                        .padding()
-                        .accessibilityLabel(
-                            "\(omitted) activity facts omitted by the runtime projection"
-                        )
+                    VStack(spacing: 0) {
+                        Divider()
+                        Text("\(omitted) more entries can't be shown yet")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, NappletMetrics.comfortable)
+                            .padding(.vertical, NappletMetrics.tight)
+                    }
+                    .background(.bar)
                 }
             }
         }
@@ -237,33 +264,25 @@ public struct ActivityDrawer: View {
 
     private var filters: some View {
         Menu {
-            Section("Severity") {
+            Section("Importance") {
                 ForEach(ActivitySeverity.allCases, id: \.self) { severity in
                     Toggle(
                         severity.title,
                         isOn: Binding(
-                            get: {
-                                model.severityFilter.contains(severity)
-                            },
-                            set: {
-                                model.setSeverity(severity, isIncluded: $0)
-                            }
+                            get: { model.severityFilter.contains(severity) },
+                            set: { model.setSeverity(severity, isIncluded: $0) }
                         )
                     )
                 }
             }
 
-            Section("Category") {
+            Section("Kind") {
                 ForEach(ActivityCategory.allCases, id: \.self) { category in
                     Toggle(
                         category.title,
                         isOn: Binding(
-                            get: {
-                                model.categoryFilter.contains(category)
-                            },
-                            set: {
-                                model.setCategory(category, isIncluded: $0)
-                            }
+                            get: { model.categoryFilter.contains(category) },
+                            set: { model.setCategory(category, isIncluded: $0) }
                         )
                     )
                 }
@@ -271,7 +290,7 @@ public struct ActivityDrawer: View {
         } label: {
             Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
         }
-        .accessibilityHint("Filters activity by severity and category")
+        .accessibilityHint("Filters what's listed below")
     }
 }
 
@@ -280,14 +299,14 @@ private struct ActivityFactRow: View {
     let detailFields: [ActivityDetailField]
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: NappletMetrics.snug) {
             Image(systemName: symbol)
-                .foregroundStyle(color)
+                .foregroundStyle(tint)
                 .frame(width: 22)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 5) {
-                HStack {
+            VStack(alignment: .leading, spacing: NappletMetrics.hairline + 1) {
+                HStack(alignment: .firstTextBaseline) {
                     Text(fact.title)
                         .font(.headline)
                     Spacer()
@@ -298,32 +317,17 @@ private struct ActivityFactRow: View {
 
                 Text(fact.summary)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                if let evidence = fact.evidenceSummary {
-                    LabeledContent("Evidence", value: evidence)
-                        .font(.caption)
-                        .textSelection(.enabled)
-                }
-
-                if !detailFields.isEmpty {
-                    DisclosureGroup("Developer detail") {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(detailFields) { field in
-                                LabeledContent(
-                                    field.key,
-                                    value: field.displayValue
-                                )
-                                    .font(.caption.monospaced())
-                                    .textSelection(.enabled)
-                            }
-                        }
-                        .padding(.top, 4)
+                if fact.evidenceSummary != nil || !detailFields.isEmpty {
+                    NappletEvidence(label: "Details") {
+                        NappletFieldGrid(fields: evidenceFields)
                     }
                     .font(.caption)
                 }
             }
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, NappletMetrics.hairline + 1)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "\(fact.severity.title), \(fact.kind.title), "
@@ -331,23 +335,35 @@ private struct ActivityFactRow: View {
         )
     }
 
+    private var evidenceFields: [NappletField] {
+        var fields: [NappletField] = []
+        if let evidence = fact.evidenceSummary {
+            fields.append(NappletField("Evidence", evidence))
+        }
+        fields.append(contentsOf: detailFields.map { field in
+            NappletField(field.key, field.displayValue)
+        })
+        return fields
+    }
+
     private var symbol: String {
         switch fact.kind {
         case .providerCall: "arrow.left.arrow.right"
         case .providerRefusal: "hand.raised"
-        case .activeSession: "rectangle.connected.to.line.below"
+        case .activeSession: "play.rectangle"
         case .activeBinding: "link"
         case .activeResource: "shippingbox"
-        case .pendingReceipt: "clock.badge.exclamationmark"
+        case .pendingReceipt: "clock"
         case .crash: "bolt.trianglebadge.exclamationmark"
         case .recovery: "cross.case"
         }
     }
 
-    private var color: Color {
+    /// Colour reinforces the severity word already printed on the row; it is
+    /// never the only thing carrying it.
+    private var tint: Color {
         switch fact.severity {
-        case .debug: .secondary
-        case .information: .blue
+        case .debug, .information: .secondary
         case .warning: .orange
         case .error: .red
         }

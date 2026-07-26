@@ -1,78 +1,75 @@
 import SwiftUI
 
+/// One napplet in the browse list.
+///
+/// A person scanning this list is deciding what to look at, not auditing a
+/// build. The address, the compatibility vocabulary and the publisher's key
+/// belong to the review sheet's evidence, not here.
+/// See `docs/adr/0008-verdicts-on-the-path.md`.
 struct CatalogEntryRow: View {
     let entry: CatalogEntry
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: compatibilitySymbol)
-                .foregroundStyle(compatibilityColor)
-                .frame(width: 24)
-
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .top, spacing: NappletMetrics.snug) {
+            VStack(alignment: .leading, spacing: NappletMetrics.hairline) {
                 Text(entry.title)
                     .font(.headline)
+
                 Text(entry.summary)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                LabeledContent("Publisher", value: entry.publisher.visibleName)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(publisherLine)
                     .font(.caption)
-                Text(entry.coordinate)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                    .foregroundStyle(.tertiary)
             }
 
-            Spacer()
+            Spacer(minLength: NappletMetrics.snug)
 
-            Text(entry.compatibility.title)
+            if let problem {
+                Text(problem)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 140, alignment: .trailing)
+                    .multilineTextAlignment(.trailing)
+            }
+
+            Image(systemName: "chevron.right")
                 .font(.caption)
-                .foregroundStyle(compatibilityColor)
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, NappletMetrics.tight)
+        .contentShape(Rectangle())
     }
 
-    private var compatibilitySymbol: String {
+    private var publisherLine: String {
+        let name = NappletIdentityPresentation.publisherName(
+            displayName: entry.publisher.displayName,
+            publicKey: entry.publisher.publicKey
+        )
+        return NappletIdentityPresentation.publisherIsUnnamed(
+            displayName: entry.publisher.displayName,
+            publicKey: entry.publisher.publicKey
+        )
+            ? name
+            : "by \(name)"
+    }
+
+    /// Silence when there is nothing wrong. A row that flags every napplet as
+    /// "Compatible" or "Review required" has told the reader nothing; a row
+    /// that speaks only when something is off is worth reading.
+    private var problem: String? {
         switch entry.compatibility {
-        case .unreviewed:
-            "doc.text.magnifyingglass"
-        case .compatible:
-            "checkmark.seal"
+        case .compatible, .unreviewed:
+            nil
         case .incompatible:
-            "xmark.octagon"
+            "Won't run here"
         case .unknown:
-            "questionmark.diamond"
+            "Might not run here"
         }
-    }
-
-    private var compatibilityColor: Color {
-        switch entry.compatibility {
-        case .unreviewed:
-            .secondary
-        case .compatible:
-            .green
-        case .incompatible:
-            .red
-        case .unknown:
-            .orange
-        }
-    }
-}
-
-struct CatalogIssueView: View {
-    let issue: CatalogIssue
-
-    var body: some View {
-        Label {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(issue.title)
-                    .font(.headline)
-                Text(issue.message)
-            }
-        } icon: {
-            Image(systemName: "exclamationmark.triangle")
-        }
-        .foregroundStyle(.orange)
-        .accessibilityElement(children: .combine)
     }
 }

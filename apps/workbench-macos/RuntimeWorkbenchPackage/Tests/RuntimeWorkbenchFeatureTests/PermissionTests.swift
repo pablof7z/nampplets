@@ -104,6 +104,106 @@ import Testing
 }
 
 @MainActor
+@Test func aReviewMixingManagedAndDecidableCapabilitiesStaysConfirmable()
+    async
+{
+    let initial = mixedManagedPermissionSnapshot()
+    let manager = RecordingPermissionManager(snapshot: initial)
+    manager.response = PermissionReviewSnapshot(
+        review: initial.review,
+        submissionState: .applied
+    )
+    let model = PermissionReviewSheetModel(manager: manager)
+
+    #expect(model.review.capabilities.count == 2)
+    #expect(model.decidableCapabilities.map(\.domain) == ["outbox"])
+    #expect(model.managedCapabilities.map(\.domain) == ["identity"])
+    #expect(model.canConfirm)
+
+    await model.confirm()
+
+    // The host-managed capability is Rust's, so it is absent from the batch
+    // rather than counted toward its completeness. Counting it made every
+    // mixed review permanently unconfirmable.
+    #expect(
+        manager.submissions.first?.decisions == [
+            PermissionDecisionSelection(
+                domain: "outbox",
+                decision: .askEveryTime
+            )!,
+        ]
+    )
+    #expect(model.isApplied)
+}
+
+@MainActor
+@Test func allowingTheRecommendedChoiceSubmitsRustsOwnRecommendation() async {
+    let initial = permissionSnapshot()
+    let manager = RecordingPermissionManager(snapshot: initial)
+    manager.response = PermissionReviewSnapshot(
+        review: initial.review,
+        submissionState: .applied
+    )
+    let model = PermissionReviewSheetModel(manager: manager)
+
+    await model.allowRecommended()
+
+    // Every submitted decision is the `recommendedDecision` Rust projected --
+    // the sheet never invents or ranks one of its own.
+    #expect(
+        manager.submissions.first?.decisions == [
+            PermissionDecisionSelection(
+                domain: "identity",
+                decision: .allowExactBuild
+            )!,
+            PermissionDecisionSelection(
+                domain: "outbox",
+                decision: .allowExactBuild
+            )!,
+        ]
+    )
+    #expect(model.isApplied)
+}
+
+@MainActor
+@Test func allowingTheRecommendedChoiceNeverWidensBeyondAnOfferedOption()
+    async
+{
+    // `resource` recommends `.deny` and offers nothing broader, so the one
+    // gesture must leave it denied rather than reaching for a wider grant.
+    let initial = unavailablePermissionSnapshot()
+    let manager = RecordingPermissionManager(snapshot: initial)
+    manager.response = PermissionReviewSnapshot(
+        review: initial.review,
+        submissionState: .applied
+    )
+    let model = PermissionReviewSheetModel(manager: manager)
+
+    await model.allowRecommended()
+
+    #expect(
+        manager.submissions.first?.decisions == [
+            PermissionDecisionSelection(domain: "resource", decision: .deny)!,
+        ]
+    )
+}
+
+@MainActor
+@Test func sensitiveCapabilitiesArePresentedWhereTheyWillBeRead() {
+    let manager = RecordingPermissionManager(
+        snapshot: orderingPermissionSnapshot()
+    )
+    let model = PermissionReviewSheetModel(manager: manager)
+
+    // Rust owns sensitivity and requirement; the sheet only orders by them.
+    #expect(
+        model.orderedCapabilities.map(\.domain) == ["outbox", "theme", "link"]
+    )
+    #expect(model.requiredCapabilities.map(\.domain) == ["outbox", "theme"])
+    #expect(model.optionalCapabilities.map(\.domain) == ["link"])
+}
+
+@MainActor
 @Test func permissionReviewSheetBuildsWithInjectedManagerOnly() {
     let manager = RecordingPermissionManager(snapshot: permissionSnapshot())
     let view = PermissionReviewSheet(manager: manager)
@@ -226,6 +326,98 @@ private func noCapabilitiesPermissionSnapshot() -> PermissionReviewSnapshot {
         publisherDisplayName: nil,
         nappletTitle: "Good Morning",
         capabilities: []
+    )!
+    return PermissionReviewSnapshot(review: review)
+}
+
+/// One host-managed capability the user cannot decide, alongside one they can.
+private func mixedManagedPermissionSnapshot() -> PermissionReviewSnapshot {
+    let managed = PermissionCapabilityReview(
+        domain: "identity",
+        title: "Identity",
+        requirement: .required,
+        sensitivity: .sensitive,
+        rationale: "Reads the active public key.",
+        dependencies: [],
+        platformAvailability: .available,
+        existingDecision: .managed,
+        isGranted: true,
+        requestedDecision: nil,
+        recommendedDecision: nil,
+        decisionOptions: PermissionRequestedDecision.allCases.map { decision in
+            PermissionDecisionOption(
+                decision: decision,
+                isValid: false,
+                invalidReason: "This capability is managed by host policy."
+            )!
+        }
+    )!
+    let decidable = PermissionCapabilityReview(
+        domain: "outbox",
+        title: "Outbox",
+        requirement: .required,
+        sensitivity: .sensitive,
+        rationale: "Publishes approved replies through NMP.",
+        dependencies: [],
+        platformAvailability: .available,
+        existingDecision: .askEveryTime,
+        isGranted: false,
+        requestedDecision: .askEveryTime,
+        recommendedDecision: .askEveryTime,
+        decisionOptions: validOptions()
+    )!
+    let review = PermissionReview(
+        principal: permissionPrincipal(hash: "e"),
+        publisherDisplayName: "Alice",
+        nappletTitle: "Good Morning",
+        capabilities: [managed, decidable]
+    )!
+    return PermissionReviewSnapshot(review: review)
+}
+
+/// Declared least-attention-first so that ordering cannot pass by accident.
+private func orderingPermissionSnapshot() -> PermissionReviewSnapshot {
+    func capability(
+        domain: String,
+        requirement: PermissionCapabilityRequirement,
+        sensitivity: PermissionCapabilitySensitivity
+    ) -> PermissionCapabilityReview {
+        PermissionCapabilityReview(
+            domain: domain,
+            title: domain.capitalized,
+            requirement: requirement,
+            sensitivity: sensitivity,
+            rationale: "Rationale for \(domain).",
+            dependencies: [],
+            platformAvailability: .available,
+            existingDecision: .askEveryTime,
+            isGranted: false,
+            requestedDecision: .askEveryTime,
+            recommendedDecision: .askEveryTime,
+            decisionOptions: validOptions()
+        )!
+    }
+    let review = PermissionReview(
+        principal: permissionPrincipal(hash: "f"),
+        publisherDisplayName: "Alice",
+        nappletTitle: "Good Morning",
+        capabilities: [
+            capability(
+                domain: "link",
+                requirement: .optional,
+                sensitivity: .ordinary
+            ),
+            capability(
+                domain: "theme",
+                requirement: .required,
+                sensitivity: .ordinary
+            ),
+            capability(
+                domain: "outbox",
+                requirement: .required,
+                sensitivity: .sensitive
+            ),
+        ]
     )!
     return PermissionReviewSnapshot(review: review)
 }

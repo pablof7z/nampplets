@@ -70,7 +70,10 @@ final class RuntimeWorkbenchUITests: XCTestCase {
 
         registerAndActivateDeterministicAccount(in: app)
 
-        let reopenReview = app.buttons["Review Permissions"]
+        // Queried by identifier, not label: the visible wording is product
+        // copy and is expected to change, while the identifier is the stable
+        // contract (the same rule `workspace-actions` already follows).
+        let reopenReview = app.buttons["review-installed-permissions"]
         XCTAssertTrue(
             reopenReview.waitForExistence(timeout: 10),
             "Installation must place a recoverable permission action on the canvas"
@@ -206,9 +209,13 @@ final class RuntimeWorkbenchUITests: XCTestCase {
                 continue
             }
 
+            // The control still installs exactly the hash under review — that
+            // is enforced by `CatalogInstallConfirmation`, not by its wording.
+            // What this asserts is that the review offers one install action
+            // and that it is the enabled, default one.
             XCTAssertTrue(
-                installExactBuild.label.contains("Install Exact Build"),
-                "The review must offer only the frozen exact-build action"
+                installExactBuild.label.contains("Add Napplet"),
+                "The review must offer a single install action"
             )
             installExactBuild.click()
 

@@ -10,6 +10,7 @@ extension ContentView {
                     layout: $layout,
                     onLayoutChange: scheduleLayoutSave,
                     onClose: closeWindow,
+                    onAddNapplet: { isCatalogSheetPresented = true },
                     windowContent: windowContent
                 )
                 if isInspectorPresented {
@@ -37,13 +38,10 @@ extension ContentView {
             launchingIdentities.contains(identity)
                 || reacquiringIdentities.contains(identity)
         {
-            VStack(spacing: 12) {
+            VStack(spacing: NappletMetrics.snug) {
                 ProgressView()
-                Text("Launching verified napplet")
+                Text("Opening \(window.title)…")
                     .font(.headline)
-                Text("The exact build is opening inside its isolated runtime.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             .accessibilityIdentifier("napplet-launching")
         } else if
@@ -51,14 +49,13 @@ extension ContentView {
             installedArtifacts[identity] != nil
         {
             ContentUnavailableView {
-                Label("Permission review required", systemImage: "lock.shield")
+                Label("Ready when you are", systemImage: "hand.wave")
             } description: {
                 Text(
-                    "This exact verified build is installed. Review its required "
-                        + "capabilities before it runs."
+                    "\(window.title) needs your permission before it can run."
                 )
             } actions: {
-                Button("Review Permissions") {
+                Button("Continue") {
                     permissionTargetIdentity = identity
                     openPermissionReview()
                 }
@@ -67,13 +64,11 @@ extension ContentView {
             .accessibilityIdentifier("installed-napplet-awaiting-permission")
         } else if let identity = window.exactBuild {
             ContentUnavailableView {
-                Label("Napplet is not running", systemImage: "app.badge")
+                Label("Not open", systemImage: "app.dashed")
             } description: {
-                Text(
-                    "Reopen this installed exact build without changing its grants."
-                )
+                Text("Opening it again won't change what it's allowed to do.")
             } actions: {
-                Button("Open Installed Napplet") {
+                Button("Open") {
                     Task {
                         await reacquireInstalledArtifact(
                             identity,
@@ -85,9 +80,9 @@ extension ContentView {
             }
         } else {
             ContentUnavailableView(
-                "Napplet is not running",
-                systemImage: "app.badge",
-                description: Text("This canvas window has no exact installed build.")
+                "Nothing here",
+                systemImage: "app.dashed",
+                description: Text("This window has no napplet in it.")
             )
         }
     }
@@ -100,15 +95,19 @@ extension ContentView {
         TrustedNappletView(artifact: artifact) { event in
             switch event {
             case .loading:
-                activity = "Loading trusted shell"
+                activity = "Opening \(title)…"
             case .mounted:
-                activity = "Signed \(title) napplet mounted"
-            case .request(let type):
-                activity = "Mapped \(type) from napplet window"
+                activity = "\(title) is running"
+            case .request:
+                // A napplet asking the runtime for something is the system
+                // working, not news. Narrating every request turned this bar
+                // into a log; it now speaks only when something changed for
+                // the person watching.
+                break
             case .refused(let reason):
                 activity = "Refused: \(reason)"
             case .crashed:
-                activity = "\(title) WebView crashed"
+                activity = "\(title) stopped unexpectedly"
             }
         }
         .accessibilityIdentifier("bundled-napplet")
@@ -143,7 +142,7 @@ extension ContentView {
                 deferredPermissionIdentity = nil
             }
         }
-        activity = "Closed \(window.title) without uninstalling it"
+        activity = "Closed \(window.title). It's still installed."
     }
 
     func scheduleLayoutSave() {

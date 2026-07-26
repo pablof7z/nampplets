@@ -1,7 +1,14 @@
 import SwiftUI
 
+/// The front door: where a person finds something to run.
+///
+/// It is a place to browse, not a report on the state of a subscription. What
+/// the runtime observed, from which sources, and where the window stopped is
+/// real and is kept -- one deliberate move away, in `CatalogBrowseEvidenceView`.
+/// See `docs/adr/0008-verdicts-on-the-path.md`.
 public struct CatalogSheet: View {
     @State private var model: CatalogViewModel
+    @State private var isShowingAddress = false
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focus: FocusTarget?
 
@@ -28,14 +35,14 @@ public struct CatalogSheet: View {
     public var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                searchControls
+                searchBar
                 Divider()
                 results
             }
-            .navigationTitle("Napplet Catalog")
+            .navigationTitle("Add a Napplet")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
+                    Button("Done") {
                         model.cancelReview()
                         dismiss()
                     }
@@ -44,7 +51,7 @@ public struct CatalogSheet: View {
             }
         }
         #if os(macOS)
-        .frame(minWidth: 720, idealWidth: 860, minHeight: 540, idealHeight: 680)
+        .frame(minWidth: 640, idealWidth: 760, minHeight: 520, idealHeight: 660)
         #endif
         .sheet(
             item: Binding(
@@ -81,123 +88,119 @@ public struct CatalogSheet: View {
         }
     }
 
-    private var searchControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                TextField("Filter the current catalog window", text: $model.query)
-                    .textFieldStyle(.roundedBorder)
+    private var searchBar: some View {
+        VStack(alignment: .leading, spacing: NappletMetrics.snug) {
+            HStack(spacing: NappletMetrics.tight) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                TextField("Search napplets", text: $model.query)
+                    .textFieldStyle(.plain)
                     .focused($focus, equals: .search)
                     .onSubmit {
-                        Task {
-                            await model.search()
-                        }
+                        Task { await model.search() }
                     }
-                    .accessibilityLabel("Search napplet catalog")
-                    .accessibilityHint(
-                        "Filters the current bounded NMP window locally"
-                    )
-
-                Button("Search", systemImage: "magnifyingglass") {
-                    Task {
-                        await model.search()
+                    .accessibilityLabel("Search napplets")
+                if !model.query.isEmpty {
+                    Button {
+                        model.query = ""
+                        Task { await model.search() }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
                 }
-                .keyboardShortcut(.return, modifiers: [.command])
             }
-
-            Text(
-                "The pinned NMP facade does not expose NIP-50 full-text search. "
-                    + "Live queries filter the current finite window locally."
+            .padding(NappletMetrics.tight)
+            .background(
+                .quaternary.opacity(0.4),
+                in: RoundedRectangle(cornerRadius: NappletMetrics.tight)
             )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            HStack {
-                TextField(
-                    "Manual manifest coordinate",
-                    text: $model.manualCoordinate
-                )
-                .textFieldStyle(.roundedBorder)
-                .focused($focus, equals: .coordinate)
-                .onSubmit {
-                    Task {
-                        await model.reviewManualCoordinate()
-                    }
-                }
-                .accessibilityLabel("Manual napplet coordinate")
-                .accessibilityHint(
-                    "Resolves the coordinate before showing an install review"
-                )
-
-                Button("Review Coordinate", systemImage: "doc.text.magnifyingglass") {
-                    Task {
-                        await model.reviewManualCoordinate()
-                    }
-                }
-                .keyboardShortcut("i", modifiers: [.command])
-                .disabled(model.isResolvingReview)
-            }
 
             if model.isResolvingReview {
-                ProgressView(
-                    "Resolving verified build"
-                )
-                .controlSize(.small)
-                .accessibilityLabel(
-                    "Resolving napplet coordinate"
-                )
+                ProgressView("Checking this napplet…")
+                    .controlSize(.small)
             }
 
             if let issue = model.issue, model.review == nil {
-                CatalogIssueView(issue: issue)
+                NappletNotice(
+                    verdict: .caution("\(issue.title). \(issue.message)")
+                )
             }
+
+            addressField
         }
-        .padding()
+        .padding(NappletMetrics.comfortable)
+    }
+
+    /// Adding by address is a real need and a rare one. It stays available
+    /// without being the second thing a newcomer meets.
+    @ViewBuilder
+    private var addressField: some View {
+        DisclosureGroup(isExpanded: $isShowingAddress) {
+            VStack(alignment: .leading, spacing: NappletMetrics.tight) {
+                HStack {
+                    TextField(
+                        "Paste a napplet address",
+                        text: $model.manualCoordinate
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .fontDesign(.monospaced)
+                    .focused($focus, equals: .coordinate)
+                    .onSubmit {
+                        Task { await model.reviewManualCoordinate() }
+                    }
+                    .accessibilityLabel("Napplet address")
+
+                    Button("Find") {
+                        Task { await model.reviewManualCoordinate() }
+                    }
+                    .keyboardShortcut("i", modifiers: [.command])
+                    .disabled(
+                        model.isResolvingReview
+                            || model.manualCoordinate.isEmpty
+                    )
+                }
+                Text(
+                    "If someone sent you a napplet's address directly, paste it here."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .padding(.top, NappletMetrics.tight)
+        } label: {
+            Text("Have an address?")
+                .font(.callout)
+        }
+        .accessibilityIdentifier("catalog-manual-address")
     }
 
     @ViewBuilder
     private var results: some View {
-        VStack(spacing: 0) {
-            if let evidence = model.evidence ?? model.connectingEvidence {
-                CatalogBrowseEvidenceView(
-                    evidence: evidence,
-                    hasMore: model.hasMore
+        if model.entries.isEmpty, model.evidence?.window == .requesting {
+            ContentUnavailableView {
+                Label(
+                    "Looking for napplets",
+                    systemImage: "antenna.radiowaves.left.and.right"
                 )
-                Divider()
+            } description: {
+                Text("This takes a moment the first time.")
             }
-
-            resultRows
-        }
-    }
-
-    @ViewBuilder
-    private var resultRows: some View {
-        if model.entries.isEmpty,
-           model.evidence?.window == .requesting
-        {
-            ContentUnavailableView(
-                "Connecting to the live catalog",
-                systemImage: "antenna.radiowaves.left.and.right",
-                description: Text(
-                    "The permanent NMP subscription is waiting for its next bounded replacement."
-                )
-            )
         } else if model.entries.isEmpty {
-            ContentUnavailableView(
-                "No napplets in this feed",
-                systemImage: "square.grid.2x2",
-                description: Text(
-                    model.evidence == nil
-                        ? "The live catalog is unavailable for this profile."
-                        : "The current bounded live replacement has no matching napplets."
+            ContentUnavailableView {
+                Label(
+                    model.query.isEmpty ? "Nothing here yet" : "No matches",
+                    systemImage: "square.grid.2x2"
                 )
-            )
+            } description: {
+                Text(emptyDescription)
+            }
         } else {
             List(model.entries) { entry in
                 Button {
-                    Task {
-                        await model.review(entry: entry)
-                    }
+                    Task { await model.review(entry: entry) }
                 } label: {
                     CatalogEntryRow(entry: entry)
                 }
@@ -205,12 +208,37 @@ public struct CatalogSheet: View {
                 .disabled(model.isResolvingReview)
                 .accessibilityIdentifier("catalog-entry")
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel(
-                    "\(entry.title), by \(entry.publisher.visibleName), "
-                        + "\(entry.compatibility.title)"
+                .accessibilityLabel(accessibilityLabel(for: entry))
+                .accessibilityHint(
+                    "Shows what this napplet does before you add it"
                 )
-                .accessibilityHint("Opens the verified install review")
+            }
+            .listStyle(.inset)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if let evidence = model.evidence ?? model.connectingEvidence {
+                    CatalogBrowseEvidenceView(
+                        evidence: evidence,
+                        hasMore: model.hasMore
+                    )
+                }
             }
         }
+    }
+
+    private var emptyDescription: String {
+        if !model.query.isEmpty {
+            return "Nothing matched “\(model.query)”. Try a shorter word."
+        }
+        return model.evidence == nil
+            ? "Napplets couldn't reach the network. Check your connection and try again."
+            : "No napplets have turned up yet. Try again in a moment."
+    }
+
+    private func accessibilityLabel(for entry: CatalogEntry) -> String {
+        let publisher = NappletIdentityPresentation.publisherName(
+            displayName: entry.publisher.displayName,
+            publicKey: entry.publisher.publicKey
+        )
+        return "\(entry.title), from \(publisher). \(entry.summary)"
     }
 }

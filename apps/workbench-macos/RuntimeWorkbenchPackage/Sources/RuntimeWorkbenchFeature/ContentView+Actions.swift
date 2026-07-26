@@ -13,7 +13,8 @@ extension ContentView {
         }
         guard let scope = selectedActivityScope else {
             activitySheetPresentation = .unavailable(
-                reason: "Select an exact-build napplet window to view its activity."
+                reason: "Select a napplet window first — activity is shown one "
+                    + "napplet at a time."
             )
             return
         }
@@ -24,7 +25,8 @@ extension ContentView {
             )
             activitySheetPresentation = .admitted(
                 source: source,
-                scope: scope
+                scope: scope,
+                title: layout.selectedWindow?.title
             )
         } catch {
             activitySheetPresentation = .unavailable(

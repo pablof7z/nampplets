@@ -1,189 +1,169 @@
 import SwiftUI
 
+/// A quiet footer under the browse list.
+///
+/// What the runtime observed is kept in full -- source-by-source status, the
+/// window state, refused and omitted row counts -- but a person looking for
+/// something to install is not made to read it first. The plain line says
+/// only whether the list is complete, because that is the only part of this
+/// that changes what they should do next.
+/// See `docs/adr/0008-verdicts-on-the-path.md`.
 struct CatalogBrowseEvidenceView: View {
     let evidence: CatalogBrowseEvidence
     let hasMore: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Label(scopeTitle, systemImage: scopeSymbol)
-                    .font(.headline)
-                Spacer()
-                Text(
-                    "\(evidence.projectedRows) candidates"
-                )
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-            }
-
-            Text(scopeDetail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if evidence.scope == .liveNMPWindow {
-                Text(windowDetail)
+        VStack(alignment: .leading, spacing: 0) {
+            Divider()
+            HStack(spacing: NappletMetrics.tight) {
+                Text(summary)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+                    .foregroundStyle(isPartial ? .orange : .secondary)
 
-            if evidence.locallyFilteredRows > 0 {
-                Text(
-                    "\(evidence.locallyFilteredRows) rows were excluded by "
-                        + "the local filter."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
+                Spacer()
 
-            if evidence.projectionLimitedRows > 0 {
-                Text(
-                    "\(evidence.projectionLimitedRows) matching rows were "
-                        + "omitted by the bounded screen projection."
-                )
+                NappletEvidence(label: "Where these came from") {
+                    evidenceDetail
+                }
                 .font(.caption)
-                .foregroundStyle(.orange)
             }
+            .padding(.horizontal, NappletMetrics.comfortable)
+            .padding(.vertical, NappletMetrics.tight)
+        }
+        .background(.bar)
+        .accessibilityIdentifier("catalog-feed-evidence")
+        .accessibilityLabel(summary)
+    }
 
-            if evidence.refusedRows > 0 {
-                Text(
-                    "\(evidence.refusedRows) malformed or oversized rows were refused."
-                )
-                .font(.caption)
-                .foregroundStyle(.orange)
+    /// The one thing worth saying on the path: is this everything, or not?
+    private var summary: String {
+        if evidence.window == .requesting, evidence.projectedRows == 0 {
+            return "Still looking…"
+        }
+        let count = evidence.projectedRows
+        let noun = count == 1 ? "napplet" : "napplets"
+        guard isPartial else {
+            return "\(count) \(noun)"
+        }
+        return "\(count) \(noun) so far — there are more than fit here"
+    }
+
+    private var isPartial: Bool {
+        hasMore
+            || evidence.projectionLimitedRows > 0
+            || !evidence.shortfalls.isEmpty
+            || evidence.sourceEvidence.contains { source in
+                switch source.status {
+                case .disconnected, .authenticationDenied, .error: true
+                case .requesting, .connecting, .awaitingAuthentication: false
+                }
             }
+    }
 
-            if hasMore {
-                Label(
-                    "More rows exist outside this projection; refine the local filter.",
-                    systemImage: "ellipsis.circle"
-                )
-                .font(.caption)
-                .foregroundStyle(.orange)
+    private var evidenceDetail: some View {
+        VStack(alignment: .leading, spacing: NappletMetrics.snug) {
+            NappletFieldGrid(fields: countFields)
+
+            if !evidence.sourceEvidence.isEmpty {
+                VStack(alignment: .leading, spacing: NappletMetrics.hairline) {
+                    Text("Sources")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    NappletFieldGrid(
+                        fields: evidence.sourceEvidence.map { source in
+                            NappletField(
+                                source.source,
+                                "\(statusWord(source.status)) · "
+                                    + accessWord(source.access)
+                                    + reconciledSuffix(source.reconciledThrough)
+                            )
+                        }
+                    )
+                }
             }
 
             if !evidence.shortfalls.isEmpty {
-                Text(evidence.shortfalls.map(shortfallTitle).joined(separator: " · "))
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-
-            if !evidence.sourceEvidence.isEmpty {
-                HStack(spacing: 12) {
-                    ForEach(evidence.sourceEvidence.prefix(3)) { source in
-                        Label(
-                            "\(source.source) · \(accessTitle(source.access))",
-                            systemImage: sourceSymbol(source.status)
-                        )
-                        .font(.caption)
-                        .foregroundStyle(sourceColor(source.status))
-                    }
-                    if evidence.sourceEvidence.count > 3 {
-                        Text("+\(evidence.sourceEvidence.count - 3) sources")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .lineLimit(1)
-                .help("Source-scoped evidence from the current NMP observation")
+                NappletFieldGrid(fields: [NappletField(
+                    "Shortfalls",
+                    evidence.shortfalls.map(shortfallWord).joined(separator: ", ")
+                )])
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
-        .background(.bar)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(scopeTitle) · \(evidence.projectedRows) candidates · \(scopeDetail)"
-        )
-        .accessibilityValue(
-            "\(scopeTitle) · \(evidence.projectedRows) candidates · \(scopeDetail)"
-        )
-        .accessibilityIdentifier("catalog-feed-evidence")
     }
 
-    private var scopeTitle: String {
+    private var countFields: [NappletField] {
+        var fields = [
+            NappletField("Scope", scopeWord),
+            NappletField("Window", windowWord),
+            NappletField("Projected rows", "\(evidence.projectedRows)"),
+        ]
+        if evidence.queryWasLocalFilter {
+            fields.append(NappletField(
+                "Excluded by local filter",
+                "\(evidence.locallyFilteredRows)"
+            ))
+        }
+        if evidence.projectionLimitedRows > 0 {
+            fields.append(NappletField(
+                "Omitted by projection limit",
+                "\(evidence.projectionLimitedRows)"
+            ))
+        }
+        if evidence.refusedRows > 0 {
+            fields.append(NappletField(
+                "Refused as malformed or oversized",
+                "\(evidence.refusedRows)"
+            ))
+        }
+        return fields
+    }
+
+    private var scopeWord: String {
         switch evidence.scope {
         case .liveNMPWindow:
-            "Live NMP catalog window"
+            "live NMP window — source-scoped, not a complete network result"
         case .offlineFixture:
-            "Offline UI-test catalog"
+            "offline bundled fixture — no network lookup performed"
         }
     }
 
-    private var scopeSymbol: String {
-        switch evidence.scope {
-        case .liveNMPWindow:
-            "network"
-        case .offlineFixture:
-            "testtube.2"
-        }
-    }
-
-    private var scopeDetail: String {
-        switch evidence.scope {
-        case .liveNMPWindow:
-            "Source-scoped evidence only; this is not a globally complete network result."
-        case .offlineFixture:
-            "Deterministic bundled compatibility data; no network lookup is performed."
-        }
-    }
-
-    private var windowDetail: String {
+    private var windowWord: String {
         switch evidence.window {
-        case .idle:
-            "The NMP window is idle."
-        case .requesting:
-            "The NMP window is requesting more rows."
-        case let .returned(addedRows):
-            "The NMP window added \(addedRows) rows."
-        case let .atBound(maximumRows):
-            "The NMP window reached its \(maximumRows)-row bound."
-        case .unknown:
-            "The NMP facade did not classify this bounded window state."
+        case .idle: "idle"
+        case .requesting: "requesting more rows"
+        case let .returned(addedRows): "returned \(addedRows) rows"
+        case let .atBound(maximumRows): "at its \(maximumRows)-row bound"
+        case .unknown: "not classified by the NMP facade"
         }
     }
 
-    private func shortfallTitle(_ shortfall: CatalogBrowseShortfall) -> String {
-        switch shortfall {
-        case .noPlannedSource:
-            "No planned source"
-        case .noResolvedDemand:
-            "No resolved demand"
-        case .localLimit:
-            "Local limit reached"
-        }
-    }
-
-    private func sourceSymbol(_ status: CatalogBrowseSourceStatus) -> String {
+    private func statusWord(_ status: CatalogBrowseSourceStatus) -> String {
         switch status {
-        case .requesting, .connecting:
-            "arrow.trianglehead.2.clockwise"
-        case .disconnected:
-            "bolt.slash"
-        case .awaitingAuthentication:
-            "person.badge.clock"
-        case .authenticationDenied:
-            "person.badge.minus"
-        case .error:
-            "exclamationmark.triangle"
+        case .requesting: "requesting"
+        case .connecting: "connecting"
+        case .disconnected: "disconnected"
+        case .awaitingAuthentication: "awaiting authentication"
+        case .authenticationDenied: "authentication denied"
+        case .error: "error"
         }
     }
 
-    private func accessTitle(_ access: CatalogBrowseAccessContext) -> String {
+    private func accessWord(_ access: CatalogBrowseAccessContext) -> String {
         switch access {
-        case .public:
-            "public"
-        case .nip42:
-            "NIP-42"
+        case .public: "public"
+        case let .nip42(publicKey): "NIP-42 as \(publicKey)"
         }
     }
 
-    private func sourceColor(_ status: CatalogBrowseSourceStatus) -> Color {
-        switch status {
-        case .requesting, .connecting, .awaitingAuthentication:
-            .secondary
-        case .disconnected, .authenticationDenied, .error:
-            .orange
+    private func reconciledSuffix(_ reconciledThrough: UInt64?) -> String {
+        reconciledThrough.map { " · reconciled through \($0)" } ?? ""
+    }
+
+    private func shortfallWord(_ shortfall: CatalogBrowseShortfall) -> String {
+        switch shortfall {
+        case .noPlannedSource: "no planned source"
+        case .noResolvedDemand: "no resolved demand"
+        case .localLimit: "local limit reached"
         }
     }
 }

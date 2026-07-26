@@ -4,7 +4,8 @@ struct ActivitySheetPresentation: Identifiable {
     enum Content {
         case admitted(
             source: RuntimeWorkbenchActivitySource,
-            scope: ActivityExactBuildScope
+            scope: ActivityExactBuildScope,
+            title: String?
         )
         case unavailable(reason: String)
     }
@@ -14,9 +15,10 @@ struct ActivitySheetPresentation: Identifiable {
 
     static func admitted(
         source: RuntimeWorkbenchActivitySource,
-        scope: ActivityExactBuildScope
+        scope: ActivityExactBuildScope,
+        title: String? = nil
     ) -> Self {
-        Self(content: .admitted(source: source, scope: scope))
+        Self(content: .admitted(source: source, scope: scope, title: title))
     }
 
     static func unavailable(reason: String) -> Self {
@@ -32,19 +34,20 @@ struct ActivitySheetHost: View {
     @ViewBuilder
     var body: some View {
         switch presentation.content {
-        case let .admitted(source, scope):
+        case let .admitted(source, scope, title):
             ActivityDrawer(
                 source: source,
-                scope: scope
+                scope: scope,
+                nappletTitle: title
             )
         case let .unavailable(reason):
             NavigationStack {
                 ContentUnavailableView(
-                    "Activity unavailable",
+                    "Nothing to show yet",
                     systemImage: "waveform.path.ecg.rectangle",
                     description: Text(reason)
                 )
-                .navigationTitle("Runtime Activity")
+                .navigationTitle("Activity")
                 #if os(macOS)
                 .frame(minWidth: 620, minHeight: 420)
                 #endif
