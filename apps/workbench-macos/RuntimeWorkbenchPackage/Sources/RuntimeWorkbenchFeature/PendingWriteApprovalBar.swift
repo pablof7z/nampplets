@@ -69,58 +69,43 @@ struct PendingWriteApprovalBar: View {
         .accessibilityIdentifier("nap-outbox-pending-approval")
     }
 
-    /// What is actually about to be published, as close to plainly as the
-    /// draft allows. If the draft has no readable message, the raw draft is
-    /// shown rather than nothing -- never signing blind is the higher rule.
-    @ViewBuilder
+    /// The complete draft, for every shape, always.
+    ///
+    /// This deliberately does NOT summarise. An earlier version lifted
+    /// `content` out and showed it as "what is about to be published", which
+    /// is wrong in the way that matters most on this screen: a draft is an
+    /// `nmp::UnsignedEvent` -- author, timestamp, kind, tags, content -- and
+    /// for a large class of events the effect is not in the content. A
+    /// deletion carries an optional human *reason* in `content` and names its
+    /// targets in `tags`, so it previewed as that sentence under a heading
+    /// reading "Publish this as you?". Someone could read it, approve, and
+    /// destroy their own posts having been shown nothing about it.
+    ///
+    /// A narrower classifier -- kind 1 with no tags -- was written and
+    /// rejected, correctly: it is still Swift asserting protocol semantics on
+    /// its own authority, and it fails the same way, more rarely and
+    /// therefore less catchably. Rust owns that judgement. Until #24 provides
+    /// a typed `PendingWriteConsentSummary`, this surface is intentionally
+    /// safe and deliberately hostile: unreadable beats untrue, and it is the
+    /// one screen in this app where completeness IS the verdict.
+    ///
+    /// See `docs/adr/0008-verdicts-on-the-path.md`.
     private var draftPreview: some View {
-        if let message = draftMessage, !message.isEmpty {
-            Text(message)
-                .font(.callout)
-                .textSelection(.enabled)
-                .lineLimit(6)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(NappletMetrics.snug)
-                .background(
-                    .quaternary.opacity(0.4),
-                    in: RoundedRectangle(cornerRadius: NappletMetrics.tight)
-                )
-                .accessibilityLabel("Message to publish: \(message)")
-        } else {
-            VStack(alignment: .leading, spacing: NappletMetrics.hairline) {
-                Text("This one has no readable message. Here it is in full:")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(write.draftJSON)
-                    .font(.caption2.monospaced())
-                    .textSelection(.enabled)
-                    .lineLimit(8)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        Text(write.draftJSON)
+            .font(NappletType.record)
+            .foregroundStyle(NappletInk.ink)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(NappletMetrics.snug)
             .background(
-                .quaternary.opacity(0.4),
-                in: RoundedRectangle(cornerRadius: NappletMetrics.tight)
+                NappletInk.fillQuiet,
+                in: RoundedRectangle(
+                    cornerRadius: NappletMetrics.tight,
+                    style: .continuous
+                )
             )
-        }
-    }
-
-    /// Presentation-only: lifts the human-readable message out of the draft
-    /// for display. It interprets nothing and decides nothing -- the draft
-    /// that gets signed is `write.draftJSON`, untouched, and the full text is
-    /// always one disclosure away regardless of what this returns.
-    private var draftMessage: String? {
-        guard
-            let data = write.draftJSON.data(using: .utf8),
-            let object = try? JSONSerialization.jsonObject(with: data),
-            let fields = object as? [String: Any],
-            let content = fields["content"] as? String
-        else {
-            return nil
-        }
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+            .accessibilityLabel("Exact content to be published")
     }
 
     private var evidenceFields: [NappletField] {
