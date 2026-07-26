@@ -93,46 +93,6 @@ fn parse_declared_config_schema(document: &[u8]) -> Result<Option<serde_json::Va
         .map_err(|error| format!("declared napplet-config-schema is invalid JSON: {error}"))
 }
 
-#[cfg(test)]
-mod declared_config_schema_tests {
-    use super::parse_declared_config_schema;
-
-    #[test]
-    fn no_declaration_is_ok_none() {
-        assert_eq!(
-            parse_declared_config_schema(b"<head></head>"),
-            Ok(None),
-            "an entry document with no napplet-config-schema meta has nothing to report"
-        );
-    }
-
-    #[test]
-    fn valid_declaration_parses() {
-        let document = concat!(
-            "<head><meta name=\"napplet-config-schema\" content=\"{&quot;type&quot;:",
-            "&quot;object&quot;}\"></head>"
-        );
-        assert_eq!(
-            parse_declared_config_schema(document.as_bytes()),
-            Ok(Some(serde_json::json!({"type": "object"})))
-        );
-    }
-
-    #[test]
-    fn malformed_declaration_is_a_reported_error_not_absence() {
-        // Before this fix, invalid JSON here was swallowed by `.ok()` and
-        // produced `None` -- byte-identical to "no schema declared". A
-        // napplet whose settings never worked had no way to find out why.
-        let document =
-            "<head><meta name=\"napplet-config-schema\" content=\"{not valid json\"></head>";
-        let result = parse_declared_config_schema(document.as_bytes());
-        assert!(
-            result.is_err(),
-            "malformed declared schema JSON must be reported, not treated as absent: {result:?}"
-        );
-    }
-}
-
 /// Reads the verified entry document, or `None` when the artifact has no
 /// `/index.html` entry to read.
 fn verified_index_document(artifact: &VerifiedArtifact) -> Result<Option<Vec<u8>>, String> {
@@ -298,5 +258,45 @@ impl RuntimeController {
             .lock()
             .push(self.maximum_boundary_events, refusal);
         bump_signal(&self.signal);
+    }
+}
+
+#[cfg(test)]
+mod declared_config_schema_tests {
+    use super::parse_declared_config_schema;
+
+    #[test]
+    fn no_declaration_is_ok_none() {
+        assert_eq!(
+            parse_declared_config_schema(b"<head></head>"),
+            Ok(None),
+            "an entry document with no napplet-config-schema meta has nothing to report"
+        );
+    }
+
+    #[test]
+    fn valid_declaration_parses() {
+        let document = concat!(
+            "<head><meta name=\"napplet-config-schema\" content=\"{&quot;type&quot;:",
+            "&quot;object&quot;}\"></head>"
+        );
+        assert_eq!(
+            parse_declared_config_schema(document.as_bytes()),
+            Ok(Some(serde_json::json!({"type": "object"})))
+        );
+    }
+
+    #[test]
+    fn malformed_declaration_is_a_reported_error_not_absence() {
+        // Before this fix, invalid JSON here was swallowed by `.ok()` and
+        // produced `None` -- byte-identical to "no schema declared". A
+        // napplet whose settings never worked had no way to find out why.
+        let document =
+            "<head><meta name=\"napplet-config-schema\" content=\"{not valid json\"></head>";
+        let result = parse_declared_config_schema(document.as_bytes());
+        assert!(
+            result.is_err(),
+            "malformed declared schema JSON must be reported, not treated as absent: {result:?}"
+        );
     }
 }

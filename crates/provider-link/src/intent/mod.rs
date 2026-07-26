@@ -287,8 +287,7 @@ impl IntentProvider {
                             .to_owned()
                     }
                     NativeIntentFailureReason::HandlerNeverObservedRunning => {
-                        "handler never reached a running session within the poll budget"
-                            .to_owned()
+                        "handler never reached a running session within the poll budget".to_owned()
                     }
                     NativeIntentFailureReason::HandlerSessionEnded => {
                         "handler session ended before the intent could be delivered".to_owned()
