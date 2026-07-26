@@ -365,7 +365,15 @@ import Testing
     #expect(restored.snapshot == .workbenchDefault)
 }
 
-@Test func versionOneSlotLayoutMigratesToAFreeformWindow() throws {
+/// A version 1 record carries a slot role, a component name, and slot sizes,
+/// but never an `exactBuild` — and `exactBuild` is what every launch path
+/// keys on. So there is nothing in a v1 layout that can be honestly
+/// reacquired and relaunched, and migration projects no windows at all rather
+/// than resurrecting one pinned to a build the app used to bundle.
+///
+/// Decoding still succeeds rather than throwing, deliberately: a v1 layout
+/// left on disk must not brick startup. It lands the user on an empty canvas.
+@Test func versionOneSlotLayoutMigratesToAnEmptyCanvas() throws {
     let data = try #require(
         """
         {
@@ -385,9 +393,8 @@ import Testing
 
     #expect(restored.snapshot.version == WorkbenchLayoutSnapshot.currentVersion)
     #expect(restored.mode == .freeform)
-    #expect(restored.selectedWindow?.componentID == .goodMorning)
-    #expect(restored.selectedWindow?.frame.width == 880)
-    #expect(restored.selectedWindow?.frame.height == 300)
+    #expect(restored.snapshot.windows.isEmpty)
+    #expect(restored.selectedWindow == nil)
 }
 
 @MainActor

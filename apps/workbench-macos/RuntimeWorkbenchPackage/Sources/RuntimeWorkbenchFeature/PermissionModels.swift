@@ -365,13 +365,16 @@ public struct PermissionReview: Equatable, Sendable {
             Self.isReviewRevision(revision),
             capabilities.count <= PermissionLimits.maximumCapabilities,
             uniqueDomains,
+            // Parenthesised deliberately: a trailing closure is not allowed
+            // anywhere in a `guard` condition, so `allSatisfy { … }` here
+            // parses as the end of the condition and the start of a block.
             isReadOnly
-                == capabilities.allSatisfy {
+                == capabilities.allSatisfy({
                     if case .hostPolicy = $0.controller {
                         return true
                     }
                     return false
-                },
+                }),
             displayTexts.allSatisfy({
                 $0.utf8.count <= PermissionLimits.maximumDisplayTextUTF8Bytes
             }),

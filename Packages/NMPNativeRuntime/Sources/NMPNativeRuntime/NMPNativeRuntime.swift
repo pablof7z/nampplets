@@ -594,8 +594,8 @@ public protocol RuntimeControllerProtocol: AnyObject, Sendable {
     func catalogCancelReview(token: String)  -> RuntimeCatalogCancellationResult
 
     /**
-     * Confirms one opaque frozen review and installs its immutable exact
-     * bytes. The pinned Good Morning demo profile receives the Rust-owned
+     * Consumes one opaque review and installs the immutable exact bytes that
+     * were already verified before review. The pinned Good Morning demo profile receives the Rust-owned
      * exact-build grant set immediately so the native Workbench can exercise
      * the complete journey; other builds remain review-gated. This never
      * launches the napplet.
@@ -609,13 +609,15 @@ public protocol RuntimeControllerProtocol: AnyObject, Sendable {
     func catalogFeedSnapshot()  -> RuntimeCatalogFeedSnapshot
 
     /**
-     * Freezes an exact review from one entry in the most recent bounded page.
+     * Resolves immutable hash-matching bytes and then freezes an exact review
+     * from one entry in the most recent bounded page.
      */
     func catalogReviewEntry(eventId: String)  -> RuntimeCatalogReviewResult
 
     /**
-     * Parses and freezes an exact public manifest coordinate entirely in
-     * Rust. Native presentation never interprets Nostr coordinate identity.
+     * Parses, verifies, and freezes an exact public manifest coordinate
+     * entirely in Rust. Native presentation never interprets Nostr coordinate
+     * identity or reconstructs requirements.
      */
     func catalogReviewManual(coordinate: String)  -> RuntimeCatalogReviewResult
 
@@ -999,8 +1001,8 @@ open func catalogCancelReview(token: String) -> RuntimeCatalogCancellationResult
 }
 
     /**
-     * Confirms one opaque frozen review and installs its immutable exact
-     * bytes. The pinned Good Morning demo profile receives the Rust-owned
+     * Consumes one opaque review and installs the immutable exact bytes that
+     * were already verified before review. The pinned Good Morning demo profile receives the Rust-owned
      * exact-build grant set immediately so the native Workbench can exercise
      * the complete journey; other builds remain review-gated. This never
      * launches the napplet.
@@ -1028,7 +1030,8 @@ open func catalogFeedSnapshot() -> RuntimeCatalogFeedSnapshot  {
 }
 
     /**
-     * Freezes an exact review from one entry in the most recent bounded page.
+     * Resolves immutable hash-matching bytes and then freezes an exact review
+     * from one entry in the most recent bounded page.
      */
 open func catalogReviewEntry(eventId: String) -> RuntimeCatalogReviewResult  {
     return try!  FfiConverterTypeRuntimeCatalogReviewResult_lift(try! rustCall() {
@@ -1039,8 +1042,9 @@ open func catalogReviewEntry(eventId: String) -> RuntimeCatalogReviewResult  {
 }
 
     /**
-     * Parses and freezes an exact public manifest coordinate entirely in
-     * Rust. Native presentation never interprets Nostr coordinate identity.
+     * Parses, verifies, and freezes an exact public manifest coordinate
+     * entirely in Rust. Native presentation never interprets Nostr coordinate
+     * identity or reconstructs requirements.
      */
 open func catalogReviewManual(coordinate: String) -> RuntimeCatalogReviewResult  {
     return try!  FfiConverterTypeRuntimeCatalogReviewResult_lift(try! rustCall() {
@@ -4361,7 +4365,9 @@ public func FfiConverterTypeRuntimeCatalogProvenance_lower(_ value: RuntimeCatal
 
 
 /**
- * An opaque exact review frozen from one verified signed manifest event.
+ * An opaque exact review frozen from one signed manifest and its verified
+ * immutable bytes. `capabilities` is the authenticated exact-build
+ * requirement inventory; native renders it without merging catalog hints.
  */
 public struct RuntimeCatalogReview {
     public var token: String
@@ -13811,16 +13817,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_cancel_review() != 5050) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_confirm_install() != 20556) {
+    if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_confirm_install() != 16784) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_feed_snapshot() != 58762) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_review_entry() != 55651) {
+    if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_review_entry() != 34406) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_review_manual() != 20937) {
+    if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_catalog_review_manual() != 58903) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_clear_build_from_workspace() != 62607) {
