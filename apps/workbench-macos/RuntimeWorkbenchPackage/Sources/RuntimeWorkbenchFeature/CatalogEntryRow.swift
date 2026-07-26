@@ -59,7 +59,14 @@ struct CatalogEntryRow: View {
                     .padding(.top, NappletMetrics.hairline)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // Fills its grid row so cards in a row share a height. Without this a
+        // napplet with no description sits in a visibly shorter box beside one
+        // that has one, and the grid reads as broken rather than as sparse.
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity,
+            alignment: .topLeading
+        )
         .padding(NappletMetrics.comfortable)
         .background(
             isPressed ? NappletInk.fillSelected : NappletInk.fillQuiet,

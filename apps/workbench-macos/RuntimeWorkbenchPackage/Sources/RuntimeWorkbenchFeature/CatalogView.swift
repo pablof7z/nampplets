@@ -52,10 +52,13 @@ public struct CatalogSheet: View {
         .background(NappletInk.paper)
         #if os(macOS)
         .frame(
-            minWidth: 720,
+            // Wide enough that the two-column grid actually engages: a sheet
+            // sized to its minimum was rendering a single column of cards in
+            // a tall thin strip, which is the shape of a list, not a store.
+            minWidth: 940,
             idealWidth: 1_040,
-            minHeight: 560,
-            idealHeight: 800
+            minHeight: 620,
+            idealHeight: 820
         )
         #endif
         .sheet(
