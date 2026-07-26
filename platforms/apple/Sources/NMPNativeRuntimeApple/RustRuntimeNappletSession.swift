@@ -7,6 +7,11 @@ protocol TrustedNappletRuntimeSession: VerifiedArtifactByteReader {
     var sessionID: UInt64 { get }
 
     func setResponseSink(_ sink: (@Sendable (Data) -> Void)?)
+    func setResponseSink(
+        owner: UUID,
+        _ sink: @escaping @Sendable (Data) -> Void
+    )
+    func clearResponseSink(owner: UUID)
     func mappedEnvelope(_ bytes: Data)
     func stop()
     func crash(reason: String)
@@ -20,7 +25,8 @@ final class RustRuntimeNappletSession: TrustedNappletRuntimeSession, @unchecked 
     private weak var profile: NativeRuntimeProfile?
     private let maximumReadBytes: UInt64
     private let lock = NSLock()
-    private var responseSink: (@Sendable (Data) -> Void)?
+    private var responseSink:
+        (owner: UUID, receive: @Sendable (Data) -> Void)?
     private var isStopped = false
 
     init(
@@ -53,7 +59,28 @@ final class RustRuntimeNappletSession: TrustedNappletRuntimeSession, @unchecked 
 
     func setResponseSink(_ sink: (@Sendable (Data) -> Void)?) {
         lock.lock()
-        responseSink = sink
+        responseSink = sink.map { (UUID(), $0) }
+        lock.unlock()
+    }
+
+    func setResponseSink(
+        owner: UUID,
+        _ sink: @escaping @Sendable (Data) -> Void
+    ) {
+        lock.lock()
+        guard !isStopped else {
+            lock.unlock()
+            return
+        }
+        responseSink = (owner, sink)
+        lock.unlock()
+    }
+
+    func clearResponseSink(owner: UUID) {
+        lock.lock()
+        if responseSink?.owner == owner {
+            responseSink = nil
+        }
         lock.unlock()
     }
 
@@ -67,7 +94,7 @@ final class RustRuntimeNappletSession: TrustedNappletRuntimeSession, @unchecked 
 
     func deliver(frame: RuntimeObservationFrame) {
         lock.lock()
-        let sink = responseSink
+        let sink = responseSink?.receive
         let stopped = isStopped
         lock.unlock()
         guard !stopped, let sink else { return }

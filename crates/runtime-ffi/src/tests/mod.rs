@@ -7,6 +7,7 @@ mod envelope;
 mod library;
 mod native_capabilities;
 mod permissions;
+mod profile_preferences;
 mod workspace;
 
 use std::{collections::BTreeMap, fs, sync::Arc};

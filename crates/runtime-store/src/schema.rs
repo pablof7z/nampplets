@@ -2,7 +2,7 @@ use rusqlite::{Connection, OptionalExtension};
 
 use crate::StoreError;
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 pub(crate) fn migrate(connection: &Connection) -> Result<(), StoreError> {
     connection.execute_batch(
@@ -49,6 +49,12 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StoreError> {
             operation TEXT NOT NULL,
             outcome TEXT NOT NULL,
             occurred_at_millis INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS profile_preferences (
+            id INTEGER PRIMARY KEY NOT NULL CHECK(id = 1),
+            indexer_relays TEXT NOT NULL,
+            app_relays TEXT NOT NULL,
+            permission_default TEXT NOT NULL
         );",
     )?;
     let existing: Option<i64> = connection
@@ -60,6 +66,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StoreError> {
         None => {
             create_workspace_assignments(connection)?;
             add_capability_requests_column(connection)?;
+            create_profile_preferences(connection)?;
             connection.execute(
                 "INSERT INTO runtime_schema(version) VALUES (?1)",
                 [SCHEMA_VERSION],
@@ -68,15 +75,33 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StoreError> {
         Some(1) => {
             create_workspace_assignments(connection)?;
             add_capability_requests_column(connection)?;
+            create_profile_preferences(connection)?;
             connection.execute("UPDATE runtime_schema SET version = ?1", [SCHEMA_VERSION])?;
         }
         Some(2) => {
             add_capability_requests_column(connection)?;
+            create_profile_preferences(connection)?;
+            connection.execute("UPDATE runtime_schema SET version = ?1", [SCHEMA_VERSION])?;
+        }
+        Some(3) => {
+            create_profile_preferences(connection)?;
             connection.execute("UPDATE runtime_schema SET version = ?1", [SCHEMA_VERSION])?;
         }
         Some(SCHEMA_VERSION) => {}
         Some(version) => return Err(StoreError::UnsupportedSchema(version)),
     }
+    Ok(())
+}
+
+fn create_profile_preferences(connection: &Connection) -> Result<(), StoreError> {
+    connection.execute_batch(
+        "CREATE TABLE IF NOT EXISTS profile_preferences (
+            id INTEGER PRIMARY KEY NOT NULL CHECK(id = 1),
+            indexer_relays TEXT NOT NULL,
+            app_relays TEXT NOT NULL,
+            permission_default TEXT NOT NULL
+        );",
+    )?;
     Ok(())
 }
 

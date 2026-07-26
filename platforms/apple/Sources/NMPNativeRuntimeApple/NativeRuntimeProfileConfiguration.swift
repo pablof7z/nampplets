@@ -80,6 +80,7 @@ public struct NativeRuntimeProfileConfiguration: Sendable {
     public let allowedLocalRelayHosts: [String]
     public let accountPersistence: NativeRuntimeAccountPersistence
     public let permissionMode: NativeRuntimePermissionMode
+    public let permissionDefault: NativeRuntimePermissionDefault
 
     public init(
         storageRoot: URL,
@@ -88,7 +89,8 @@ public struct NativeRuntimeProfileConfiguration: Sendable {
         fallbackRelays: [String] = [],
         allowedLocalRelayHosts: [String] = [],
         accountPersistence: NativeRuntimeAccountPersistence = .transient,
-        permissionMode: NativeRuntimePermissionMode = .interactive
+        permissionMode: NativeRuntimePermissionMode = .interactive,
+        permissionDefault: NativeRuntimePermissionDefault = .askEveryTime
     ) {
         self.storageRoot = storageRoot
         self.indexerRelays = indexerRelays
@@ -97,5 +99,6 @@ public struct NativeRuntimeProfileConfiguration: Sendable {
         self.allowedLocalRelayHosts = allowedLocalRelayHosts
         self.accountPersistence = accountPersistence
         self.permissionMode = permissionMode
+        self.permissionDefault = permissionDefault
     }
 }

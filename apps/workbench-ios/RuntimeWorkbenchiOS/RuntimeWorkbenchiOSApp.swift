@@ -11,7 +11,12 @@ struct RuntimeWorkbenchiOSApp: App {
         WindowGroup {
             Group {
                 if let runtimeProfile {
-                    ContentView(profile: runtimeProfile)
+                    ContentView(
+                        profile: runtimeProfile,
+                        profileAction: { action in
+                            try await performProfileAction(action)
+                        }
+                    )
                         .id(ObjectIdentifier(runtimeProfile))
                 } else if let runtimeError {
                     ContentView(bootstrapError: runtimeError)
@@ -49,6 +54,41 @@ struct RuntimeWorkbenchiOSApp: App {
             }.value
         } catch {
             runtimeError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func performProfileAction(
+        _ action: WorkbenchProfileAction
+    ) async throws {
+        guard let profile = runtimeProfile else {
+            throw WorkbenchPreferencesError.unavailable(
+                "Preferences are unavailable while the app is opening."
+            )
+        }
+        let restartRequired = try await Task.detached {
+            switch action {
+            case let .savePreferences(preferences):
+                return try profile.savePreferences(preferences)
+            case .clearNetworkCache:
+                try profile.clearNetworkCache()
+                return true
+            }
+        }.value
+        guard restartRequired else {
+            return
+        }
+        do {
+            let reopened = try await Task.detached {
+                profile.close()
+                return try profile.reopened()
+            }.value
+            runtimeError = nil
+            runtimeProfile = reopened
+        } catch {
+            runtimeProfile = nil
+            runtimeError = error.localizedDescription
+            throw error
         }
     }
 }

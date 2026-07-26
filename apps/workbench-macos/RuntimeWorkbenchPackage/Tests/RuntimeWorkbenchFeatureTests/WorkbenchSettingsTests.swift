@@ -3,13 +3,30 @@ import Testing
 
 @testable import RuntimeWorkbenchFeature
 
+private let samplePreferences = WorkbenchProfilePreferences(
+    appRelays: ["wss://relay.example"],
+    indexerRelays: ["wss://search.example"],
+    permissionDefault: .askEveryTime
+)
+
+private let sampleStorage = WorkbenchStorageSummary(
+    networkBytes: 1_024,
+    appBytes: 2_048,
+    totalBytes: 3_072,
+    isEstimate: false
+)
+
 @MainActor
 @Test
-func settingsSnapshotReportsOpenProfileWithoutPathsOrSecrets() {
-    let snapshot = WorkbenchSettingsSnapshot(profileAvailable: true)
+func settingsSnapshotCarriesPreferencesWithoutPathsOrSecrets() {
+    let snapshot = WorkbenchSettingsSnapshot(
+        preferences: samplePreferences,
+        storage: sampleStorage
+    )
 
-    #expect(snapshot?.profileStatus == .open)
-    #expect(snapshot?.profileStatus.detail.contains("/") == false)
+    #expect(snapshot.profileStatus == .ready)
+    #expect(snapshot.preferences == samplePreferences)
+    #expect(snapshot.storage == sampleStorage)
 }
 
 @MainActor
@@ -17,20 +34,13 @@ func settingsSnapshotReportsOpenProfileWithoutPathsOrSecrets() {
 func unavailableSettingsSnapshotRequiresBoundedDisplaySafeEvidence() {
     #expect(
         WorkbenchSettingsSnapshot(
-            profileAvailable: false,
-            unavailableReason: "Profile bootstrap was refused."
+            unavailableReason: "Preferences could not be opened."
         )?.profileStatus
-            == .unavailable(reason: "Profile bootstrap was refused.")
+            == .unavailable(reason: "Preferences could not be opened.")
     )
+    #expect(WorkbenchSettingsSnapshot(unavailableReason: " ") == nil)
     #expect(
         WorkbenchSettingsSnapshot(
-            profileAvailable: false,
-            unavailableReason: " "
-        ) == nil
-    )
-    #expect(
-        WorkbenchSettingsSnapshot(
-            profileAvailable: false,
             unavailableReason: String(
                 repeating: "x",
                 count: WorkbenchSettingsSnapshot.maximumReasonUTF8Bytes + 1
@@ -41,13 +51,45 @@ func unavailableSettingsSnapshotRequiresBoundedDisplaySafeEvidence() {
 
 @MainActor
 @Test
-func settingsSheetBuildsWithNativeDestinationsOnly() {
-    let snapshot = WorkbenchSettingsSnapshot(profileAvailable: true)!
-    _ = WorkbenchSettingsSheet(snapshot: snapshot) { destination in
-        switch destination {
-        case .account, .installedLibrary, .activity:
-            break
-        }
+func settingsSheetBuildsWithEditableNativePreferences() {
+    let snapshot = WorkbenchSettingsSnapshot(
+        preferences: samplePreferences,
+        storage: sampleStorage
+    )
+    _ = WorkbenchSettingsSheet(
+        snapshot: snapshot,
+        openDestination: { _ in },
+        performAction: { _ in }
+    )
+}
+
+@Test
+func relayPreferencesNormalizeWhitespaceAndRefuseUnsafeOrDuplicateAddresses()
+    throws
+{
+    let normalized = try WorkbenchProfilePreferences(
+        appRelays: ["  wss://relay.example  "],
+        indexerRelays: ["wss://search.example"],
+        permissionDefault: .allowSession
+    ).normalized()
+    #expect(normalized.appRelays == ["wss://relay.example"])
+
+    #expect(throws: WorkbenchPreferencesError.self) {
+        try WorkbenchProfilePreferences(
+            appRelays: ["ws://relay.example"],
+            indexerRelays: ["wss://search.example"],
+            permissionDefault: .askEveryTime
+        ).normalized()
+    }
+    #expect(throws: WorkbenchPreferencesError.self) {
+        try WorkbenchProfilePreferences(
+            appRelays: [
+                "wss://relay.example",
+                "wss://relay.example",
+            ],
+            indexerRelays: ["wss://search.example"],
+            permissionDefault: .askEveryTime
+        ).normalized()
     }
 }
 

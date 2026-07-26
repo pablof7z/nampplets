@@ -29,7 +29,9 @@ use nmp_native_runtime_core::{
     BindingRequest, Capability, GrantLedger, HostDataPlane, Principal, ResourceTracker, Session,
     SessionId, SessionState, WorkLease, WriteReceiptId,
 };
-use nmp_native_runtime_store::{InstalledBuild, RuntimeStore, WorkspaceRecord};
+use nmp_native_runtime_store::{
+    InstalledBuild, PermissionDefaultPreference, RuntimeStore, WorkspaceRecord,
+};
 use nmp_native_surface::{Binding, BindingLimits};
 use parking_lot::Mutex;
 use thiserror::Error;
@@ -80,6 +82,7 @@ pub struct RuntimeApp {
     store: Arc<RuntimeStore>,
     data_plane: Arc<dyn HostDataPlane>,
     clock: Arc<dyn KernelClock>,
+    permission_default: PermissionDefaultPreference,
     state: Mutex<AppState>,
     snapshots: watch::Sender<Arc<AppSnapshot>>,
 }
@@ -236,6 +239,7 @@ impl RuntimeApp {
             store: config.store,
             data_plane: config.data_plane,
             clock: config.clock,
+            permission_default: config.permission_default,
             state: Mutex::new(AppState {
                 next_session_id: 0,
                 next_source_window_id: 0,

@@ -1,277 +1,287 @@
-import Foundation
 import SwiftUI
-
-public enum WorkbenchSettingsDestination: Hashable, Sendable {
-    case account
-    case installedLibrary
-    case activity
-
-    var title: String {
-        switch self {
-        case .account:
-            "Account"
-        case .installedLibrary:
-            "Installed Library"
-        case .activity:
-            "Runtime Activity"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .account:
-            "person.crop.circle"
-        case .installedLibrary:
-            "shippingbox"
-        case .activity:
-            "waveform.path.ecg"
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .account:
-            "Register, activate, sign out, or remove local signing accounts."
-        case .installedLibrary:
-            "Inspect exact installed builds, sessions, and workspace assignments."
-        case .activity:
-            "Inspect bounded activity and refusal evidence for the selected build."
-        }
-    }
-
-    var accessibilityIdentifier: String {
-        switch self {
-        case .account:
-            "settings-account"
-        case .installedLibrary:
-            "settings-installed-library"
-        case .activity:
-            "settings-activity"
-        }
-    }
-}
-
-/// One-slot handoff between the Settings sheet and its parent presentation
-/// owner. A destination is consumed only after Settings is dismissed, which
-/// prevents nested-sheet presentation races without introducing a queue.
-struct WorkbenchSettingsRouteState: Equatable, Sendable {
-    private(set) var pendingDestination: WorkbenchSettingsDestination?
-
-    mutating func schedule(_ destination: WorkbenchSettingsDestination) {
-        pendingDestination = destination
-    }
-
-    mutating func consumeAfterDismiss(
-        settingsIsPresented: Bool
-    ) -> WorkbenchSettingsDestination? {
-        guard !settingsIsPresented, let pendingDestination else {
-            return nil
-        }
-        self.pendingDestination = nil
-        return pendingDestination
-    }
-}
-
-public enum WorkbenchRuntimeProfileStatus: Equatable, Sendable {
-    case open
-    case unavailable(reason: String)
-
-    var title: String {
-        switch self {
-        case .open:
-            "Runtime profile open"
-        case .unavailable:
-            "Runtime profile unavailable"
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .open:
-            "This window shares one application-owned runtime and NMP trust profile."
-        case let .unavailable(reason):
-            reason
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .open:
-            "checkmark.shield"
-        case .unavailable:
-            "exclamationmark.triangle"
-        }
-    }
-}
-
-/// Native settings state that describes ownership without exposing secret
-/// material, filesystem paths, or a destructive action that the runtime cannot
-/// safely perform yet.
-public struct WorkbenchSettingsSnapshot: Equatable, Sendable {
-    public static let maximumReasonUTF8Bytes = 16 * 1_024
-
-    public let profileStatus: WorkbenchRuntimeProfileStatus
-
-    public init?(
-        profileAvailable: Bool,
-        unavailableReason: String? = nil
-    ) {
-        if profileAvailable {
-            profileStatus = .open
-            return
-        }
-
-        let reason = unavailableReason?.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        ) ?? ""
-        guard
-            !reason.isEmpty,
-            reason.utf8.count <= Self.maximumReasonUTF8Bytes,
-            !reason.unicodeScalars.contains(where: {
-                CharacterSet.controlCharacters.contains($0)
-                    && $0 != "\n"
-                    && $0 != "\t"
-            })
-        else {
-            return nil
-        }
-        profileStatus = .unavailable(reason: reason)
-    }
-}
 
 public struct WorkbenchSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private let snapshot: WorkbenchSettingsSnapshot
     private let openDestination: (WorkbenchSettingsDestination) -> Void
+    private let performAction: WorkbenchProfileActionHandler
+
+    @State private var draft: WorkbenchProfilePreferences
+    @State private var actionError: String?
+    @State private var isSaving = false
+    @State private var isClearing = false
+    @State private var showsClearConfirmation = false
 
     public init(
         snapshot: WorkbenchSettingsSnapshot,
-        openDestination: @escaping (WorkbenchSettingsDestination) -> Void
+        openDestination: @escaping (WorkbenchSettingsDestination) -> Void,
+        performAction: @escaping WorkbenchProfileActionHandler
     ) {
         self.snapshot = snapshot
         self.openDestination = openDestination
+        self.performAction = performAction
+        _draft = State(
+            initialValue: snapshot.preferences
+                ?? WorkbenchProfilePreferences(
+                    appRelays: [],
+                    indexerRelays: [],
+                    permissionDefault: .askEveryTime
+                )
+        )
     }
 
     public var body: some View {
         NavigationStack {
             Form {
-                Section("Runtime profile") {
+                availabilitySection
+                connectionsSection
+                permissionsSection
+                storageSection
+                moreSection
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Preferences")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Saving…" : "Save") {
+                        save()
+                    }
+                    .disabled(!canSave)
+                    .accessibilityIdentifier("settings-save")
+                }
+            }
+        }
+        .alert(
+            "Clear Network Cache?",
+            isPresented: $showsClearConfirmation
+        ) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear Cache", role: .destructive) {
+                clearNetworkCache()
+            }
+        } message: {
+            Text(
+                "This removes saved network activity and delivery history, "
+                    + "including anything still waiting to send. Installed "
+                    + "napplets, permissions, settings, and your account stay."
+            )
+        }
+        #if os(macOS)
+        .frame(minWidth: 640, minHeight: 620)
+        #endif
+    }
+
+    @ViewBuilder
+    private var availabilitySection: some View {
+        if case let .unavailable(reason) = snapshot.profileStatus {
+            Section {
+                Label(reason, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        if let actionError {
+            Section {
+                Label(actionError, systemImage: "exclamationmark.circle")
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("settings-error")
+            }
+        }
+    }
+
+    private var connectionsSection: some View {
+        Section {
+            WorkbenchRelayLaneEditor(
+                title: "Everyday relays",
+                detail: "Keep your napplets connected and in sync.",
+                identifierPrefix: "app",
+                relays: $draft.appRelays
+            )
+            WorkbenchRelayLaneEditor(
+                title: "Search relays",
+                detail: "Help find napplets and people.",
+                identifierPrefix: "indexer",
+                relays: $draft.indexerRelays
+            )
+        } header: {
+            Text("Connections")
+        } footer: {
+            Text("Only secure wss:// addresses are accepted.")
+        }
+        .disabled(snapshot.preferences == nil || isBusy)
+    }
+
+    private var permissionsSection: some View {
+        Section {
+            Picker(
+                "When a new napplet asks",
+                selection: $draft.permissionDefault
+            ) {
+                ForEach(WorkbenchPermissionDefault.allCases) { choice in
+                    Text(choice.title).tag(choice)
+                }
+            }
+            Text(draft.permissionDefault.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } header: {
+            Text("Permission choices")
+        } footer: {
+            Text(
+                "This is the choice selected on the review screen. "
+                    + "You always approve before a napplet opens."
+            )
+        }
+        .disabled(snapshot.preferences == nil || isBusy)
+    }
+
+    private var storageSection: some View {
+        Section {
+            storageRow(
+                "Network cache",
+                bytes: snapshot.storage?.networkBytes
+            )
+            storageRow(
+                "Napplets and settings",
+                bytes: snapshot.storage?.appBytes
+            )
+            storageRow(
+                snapshot.storage?.isEstimate == true
+                    ? "Total (at least)"
+                    : "Total",
+                bytes: snapshot.storage?.totalBytes
+            )
+            Button(role: .destructive) {
+                showsClearConfirmation = true
+            } label: {
+                if isClearing {
+                    Label("Clearing…", systemImage: "hourglass")
+                } else {
+                    Label("Clear Network Cache…", systemImage: "trash")
+                }
+            }
+            .disabled(snapshot.storage == nil || isBusy)
+            .accessibilityIdentifier("settings-clear-network-cache")
+        } header: {
+            Text("Storage")
+        } footer: {
+            Text(
+                "Clearing the network cache keeps napplets, preferences, "
+                    + "permissions, and accounts."
+            )
+        }
+    }
+
+    private var moreSection: some View {
+        Section("More") {
+            ForEach(
+                [
+                    WorkbenchSettingsDestination.account,
+                    .installedLibrary,
+                    .activity,
+                ],
+                id: \.self
+            ) { destination in
+                Button {
+                    openDestination(destination)
+                    dismiss()
+                } label: {
                     Label {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(snapshot.profileStatus.title)
-                                .font(.headline)
-                            Text(snapshot.profileStatus.detail)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(destination.title)
+                            Text(destination.detail)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: snapshot.profileStatus.systemImage)
+                        Image(systemName: destination.systemImage)
                     }
                 }
-
-                Section("Manage") {
-                    ForEach(
-                        [
-                            WorkbenchSettingsDestination.account,
-                            .installedLibrary,
-                            .activity,
-                        ],
-                        id: \.self
-                    ) { destination in
-                        Button {
-                            openDestination(destination)
-                            dismiss()
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: destination.systemImage)
-                                    .frame(width: 22)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(destination.title)
-                                    Text(destination.detail)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier(
-                            destination.accessibilityIdentifier
-                        )
-                    }
-                }
-
-                Section("Data ownership") {
-                    ownershipRow(
-                        title: "Runtime component data",
-                        systemImage: "shippingbox.and.arrow.backward",
-                        detail:
-                            "Installed builds, exact-build grants, component storage, workspaces, and bounded activity facts."
-                    )
-                    ownershipRow(
-                        title: "NMP canonical data",
-                        systemImage: "network",
-                        detail:
-                            "Nostr events, relay evidence, routing, pending writes, and durable receipts remain owned by NMP."
-                    )
-                    ownershipRow(
-                        title: "Account vault",
-                        systemImage: "key",
-                        detail:
-                            "Signing capability material and the selected account are stored separately from both data stores."
-                    )
-                }
-
-                Section("Reset") {
-                    Label {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Destructive reset is not exposed")
-                                .font(.headline)
-                            Text(
-                                "A safe reset must first close every runtime session and the NMP engine, then let the user choose runtime component data, NMP canonical data, and account-vault material separately."
-                            )
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "externaldrive.badge.exclamationmark")
-                    }
-                }
-            }
-            .formStyle(.grouped)
-            .navigationTitle("Settings")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(
+                    destination.accessibilityIdentifier
+                )
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 620, minHeight: 560)
-        #endif
     }
 
-    private func ownershipRow(
-        title: String,
-        systemImage: String,
-        detail: String
+    private var isBusy: Bool {
+        isSaving || isClearing
+    }
+
+    private var normalizedDraft: WorkbenchProfilePreferences? {
+        try? draft.normalized()
+    }
+
+    private var canSave: Bool {
+        guard
+            !isBusy,
+            let original = snapshot.preferences,
+            let normalizedDraft
+        else {
+            return false
+        }
+        return normalizedDraft != original
+    }
+
+    private func storageRow(
+        _ title: String,
+        bytes: UInt64?
     ) -> some View {
-        Label {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        HStack {
+            Text(title)
+            Spacer()
+            Text(bytes.map(Self.formattedBytes) ?? "Unavailable")
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+    }
+
+    private static func formattedBytes(_ bytes: UInt64) -> String {
+        ByteCountFormatter.string(
+            fromByteCount: Int64(clamping: bytes),
+            countStyle: .file
+        )
+    }
+
+    private func save() {
+        guard let normalizedDraft else {
+            actionError = (try? draft.normalized()) == nil
+                ? "Check that each relay is a unique secure wss:// address."
+                : nil
+            return
+        }
+        isSaving = true
+        actionError = nil
+        Task { @MainActor in
+            do {
+                try await performAction(
+                    .savePreferences(normalizedDraft)
+                )
+                dismiss()
+            } catch {
+                actionError = error.localizedDescription
+                isSaving = false
             }
-        } icon: {
-            Image(systemName: systemImage)
+        }
+    }
+
+    private func clearNetworkCache() {
+        isClearing = true
+        actionError = nil
+        Task { @MainActor in
+            do {
+                try await performAction(.clearNetworkCache)
+                dismiss()
+            } catch {
+                actionError = error.localizedDescription
+                isClearing = false
+            }
         }
     }
 }

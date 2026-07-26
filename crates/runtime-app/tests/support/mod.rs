@@ -31,7 +31,9 @@ use nmp_native_runtime_core::{
     BoundedJson, Capability, CapabilityRequest, CapabilityRequirement, GrantDecision, GrantLimits,
     Principal, ResourceLimits, Sensitivity, SessionId,
 };
-use nmp_native_runtime_store::{InstalledBuild, RuntimeStore, StoreLimits};
+use nmp_native_runtime_store::{
+    InstalledBuild, PermissionDefaultPreference, RuntimeStore, StoreLimits,
+};
 use nmp_native_surface::BindingLimits;
 use nmp_native_test_harness::FakeHostDataPlane;
 use parking_lot::Mutex;
@@ -352,6 +354,7 @@ pub fn open_app_with_shell_source_and_limits(
         store,
         data_plane,
         clock: Arc::new(TestClock::new(1_000)),
+        permission_default: PermissionDefaultPreference::AskEveryTime,
         shell_provider: shell_provider.clone(),
         providers: vec![provider],
     })

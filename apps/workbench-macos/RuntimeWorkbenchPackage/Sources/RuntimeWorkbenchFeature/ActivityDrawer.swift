@@ -92,7 +92,10 @@ public struct ActivityDrawer: View {
     }
 
     private var title: String {
-        nappletTitle.map { "\($0) Activity" } ?? "Activity"
+        // Keeps main's plain fallback and adds the napplet's name when the
+        // caller knows it: "Good Morning Activity" answers "whose?" without
+        // the reader having to check which window they came from.
+        nappletTitle.map { "\($0) Activity" } ?? "Recent Activity"
     }
 
     private var header: some View {
