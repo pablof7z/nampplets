@@ -45,6 +45,11 @@ public struct ActivityDrawer: View {
 
                 facts
             }
+            // On the content, not on the outermost modified `NavigationStack`.
+            // An identifier there produced no queryable element at all, so
+            // `runtime-activity-drawer` could not be found even by an
+            // any-type descendant query.
+            .accessibilityIdentifier("runtime-activity-drawer")
             .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -88,7 +93,6 @@ public struct ActivityDrawer: View {
         .onDisappear {
             model.stop()
         }
-        .accessibilityIdentifier("runtime-activity-drawer")
     }
 
     private var title: String {

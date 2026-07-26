@@ -59,26 +59,26 @@ extension RuntimeWorkbenchUITests {
         )
         activity.click()
 
-        let drawer = app.descendants(matching: .any)["runtime-activity-drawer"]
-        XCTAssertTrue(
-            drawer.waitForExistence(timeout: 10),
-            "Activity must present its admitted source, not the fallback"
-        )
-        XCTAssertFalse(app.staticTexts["Nothing to show yet"].exists)
-
-        // The scope is still fully projected -- one deliberate move away,
-        // which is the whole shape of ADR 0008. Asserting it here proves the
-        // evidence was relocated rather than dropped.
-        let evidence = drawer.descendants(matching: .any)[
+        // Discriminated by the evidence disclosure rather than by a container
+        // identifier. The disclosure exists only in the admitted drawer -- the
+        // truthful fallback has no scope to offer -- so its presence proves
+        // both that Activity was admitted and that the exact build was
+        // relocated rather than dropped, which is the whole shape of ADR 0008.
+        // Matched by label because an identifier on an enclosing view
+        // propagates over its children in SwiftUI, which is what broke the
+        // previous version of this assertion.
+        let evidence = app.descendants(matching: .any)[
             "Which build this is"
         ].firstMatch
         XCTAssertTrue(
             evidence.waitForExistence(timeout: 10),
-            "The drawer must offer its exact build as evidence"
+            "Activity must present its admitted source, not the fallback"
         )
+        XCTAssertFalse(app.staticTexts["Nothing to show yet"].exists)
+
         evidence.click()
 
-        let projectedDTag = drawer.staticTexts["good-morning"]
+        let projectedDTag = app.staticTexts["good-morning"]
         XCTAssertTrue(
             projectedDTag.waitForExistence(timeout: 10),
             "Opening the evidence must show the admitted exact build verbatim"

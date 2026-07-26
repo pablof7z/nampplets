@@ -75,7 +75,11 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         // Queried by identifier, not label: the visible wording is product
         // copy and is expected to change, while the identifier is the stable
         // contract (the same rule `workspace-actions` already follows).
-        let reopenReview = app.buttons["review-installed-permissions"]
+        // `descendants(matching: .any)`, like every other identifier query in
+        // this suite: the rendered element is not reliably typed as a button.
+        let reopenReview = app.descendants(matching: .any)[
+            "review-installed-permissions"
+        ]
         XCTAssertTrue(
             reopenReview.waitForExistence(timeout: 10),
             "Installation must place a recoverable permission action on the canvas"

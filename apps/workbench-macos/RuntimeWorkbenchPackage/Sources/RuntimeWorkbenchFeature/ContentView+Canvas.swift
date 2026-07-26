@@ -61,7 +61,12 @@ extension ContentView {
                 }
                 .accessibilityIdentifier("review-installed-permissions")
             }
-            .accessibilityIdentifier("installed-napplet-awaiting-permission")
+            // No identifier on the container. SwiftUI propagates an
+            // `accessibilityIdentifier` down its subtree, so one here
+            // overwrote the button's and made `review-installed-permissions`
+            // unfindable -- which is why this used to be queried by its
+            // visible label. Nothing queries the container, so the button
+            // keeps the identifier and the label stays free to change.
         } else if let identity = window.exactBuild {
             ContentUnavailableView {
                 Label("Not open", systemImage: "app.dashed")
