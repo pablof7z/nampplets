@@ -52,8 +52,17 @@ impl RuntimeController {
         // The manifest-declared schema has to exist before the napplet's first
         // `config.get`; a napplet that reads its settings on boot otherwise
         // waits forever on a `no-schema` reply it never asked for.
-        if let (Some(provider), Some(schema)) =
-            (&self.config_provider, declared_config_schema(&artifact))
+        let declared_schema = match declared_config_schema(&artifact) {
+            Ok(schema) => schema,
+            Err(error) => {
+                // A malformed declaration is not "no declaration": record
+                // why config.subscribe will keep answering no-schema, then
+                // proceed exactly as if none had been declared.
+                self.record_refusal("config-schema-malformed", error);
+                None
+            }
+        };
+        if let (Some(provider), Some(schema)) = (&self.config_provider, declared_schema)
             && let Err(error) = provider.register_manifest_schema(&principal, &schema, None)
         {
             self.record_refusal("config-schema-refused", error.to_string());

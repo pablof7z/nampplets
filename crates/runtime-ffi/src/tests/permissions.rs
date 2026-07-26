@@ -274,3 +274,54 @@ fn outbox_grant_survives_default_profile_restart() {
         "the trusted shell must receive the same Rust-negotiated domain set"
     );
 }
+
+#[test]
+fn malformed_declared_config_schema_is_a_recorded_refusal_not_silence() {
+    // Before this fix, `declared_config_schema` collapsed a JSON parse
+    // failure into the same `None` a napplet that declared no schema at all
+    // produces. `config.subscribe` then answers `no-schema` forever, and
+    // nothing anywhere said why. The launch must still proceed -- failing
+    // open is fine -- but the reason must be recorded.
+    let temp = TempDir::new().unwrap();
+    let content: &[u8] = br#"<head><meta name="napplet-config-schema" content="{not valid json"></head><body></body>"#;
+    let (event, author, digest) =
+        signed_manifest_event("malformed-config-schema-test", content, Vec::new());
+    let coordinate = ArtifactCoordinate::Named {
+        author,
+        d_tag: "malformed-config-schema-test".to_owned(),
+    };
+    let controller = RuntimeController::open(
+        RuntimeConfig {
+            runtime_store_path: temp.path().join("runtime.sqlite3").display().to_string(),
+            nmp_store_path: None,
+            artifact_cache_path: temp.path().join("artifacts").display().to_string(),
+            ..RuntimeConfig::default()
+        },
+        Box::new(FixtureSource(BTreeMap::from([(digest, content.to_vec())]))),
+    )
+    .unwrap();
+    let artifact = controller
+        .verify_artifact(event, coordinate)
+        .artifact
+        .expect("locally signed fixture with no `requires` tags verifies");
+
+    controller.install(Arc::clone(&artifact));
+    controller.launch(artifact, RuntimeExecutionProfile::Legacy);
+
+    let snapshot = controller.snapshot_value();
+    assert_eq!(
+        snapshot.sessions.len(),
+        1,
+        "a malformed config schema must not block the launch itself"
+    );
+    let refusal = snapshot
+        .boundary_refusals
+        .iter()
+        .find(|refusal| refusal.code == "config-schema-malformed")
+        .expect("the malformed declaration must be a recorded boundary refusal");
+    assert!(
+        refusal.detail.contains("napplet-config-schema"),
+        "the refusal detail should name what was malformed: {}",
+        refusal.detail
+    );
+}

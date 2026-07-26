@@ -63,10 +63,23 @@ pub(crate) fn installation_capability_requests(
 /// Napplets read their settings through `config.subscribe`, which answers
 /// `no-schema` until some schema is registered, and the published SDK never
 /// registers the manifest one itself.
-pub(super) fn declared_config_schema(artifact: &VerifiedArtifact) -> Option<serde_json::Value> {
-    let document = verified_index_document(artifact).ok()??;
-    let schema = nmp_native_artifact::embedded_config_schema(&document)?;
-    serde_json::from_str(&schema).ok()
+///
+/// A parse failure here must not be indistinguishable from "this napplet
+/// declared no schema" — the caller reports `Err` as a boundary refusal, not
+/// as a quiet `None`, so `config.subscribe` answering `no-schema` forever has
+/// a recorded reason.
+pub(super) fn declared_config_schema(
+    artifact: &VerifiedArtifact,
+) -> Result<Option<serde_json::Value>, String> {
+    let Some(document) = verified_index_document(artifact)? else {
+        return Ok(None);
+    };
+    let Some(schema) = nmp_native_artifact::embedded_config_schema(&document) else {
+        return Ok(None);
+    };
+    serde_json::from_str(&schema)
+        .map(Some)
+        .map_err(|error| format!("napplet-config-schema is not valid JSON: {error}"))
 }
 
 /// Reads the verified entry document, or `None` when the artifact has no
