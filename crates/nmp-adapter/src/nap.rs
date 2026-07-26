@@ -1788,22 +1788,21 @@ fn drain_subscription(
         if cancellation.is_cancelled() {
             return;
         }
-        let rows = frame
+        let selection = frame
             .window
-            .map(|window| select_rows(window.rows, filters, limits.maximum_events).rows)
-            .unwrap_or_default();
-        for row in rows {
+            .map(|window| select_rows(window.rows, filters, limits.maximum_events))
+            .unwrap_or(RowSelection {
+                rows: Vec::new(),
+                bound_reached: false,
+            });
+        let bound_reached = selection.bound_reached;
+        for row in selection.rows {
             let event_id = row.event.id.to_string();
             if seen.contains(&event_id) {
                 continue;
             }
             if seen.len() >= limits.maximum_seen_event_ids {
-                let mut fields = Map::new();
-                fields.insert("subId".to_owned(), Value::String(sub_id.to_owned()));
-                fields.insert(
-                    "reason".to_owned(),
-                    Value::String("subscription event-id bound reached".to_owned()),
-                );
+                let fields = closed_notice_fields(sub_id, "subscription event-id bound reached");
                 let _ = outbound.push(domain.closed_type(), fields, Some(sub_id));
                 return;
             }
@@ -1815,6 +1814,15 @@ fn drain_subscription(
                 return;
             }
         }
+        // `select_rows` silently truncating a frame's matching rows against
+        // the host `maximum_events` ceiling must not read as "the napplet
+        // received everything that matched" — the seen-event-id bound
+        // reports itself the same way, so this host ceiling does too.
+        if bound_reached {
+            let fields = closed_notice_fields(sub_id, "subscription row bound reached");
+            let _ = outbound.push(domain.closed_type(), fields, Some(sub_id));
+            return;
+        }
         if domain == NapDomain::Relay && !eose_sent && !projection_incomplete(&frame.evidence) {
             let mut fields = Map::new();
             fields.insert("subId".to_owned(), Value::String(sub_id.to_owned()));
@@ -1825,14 +1833,21 @@ fn drain_subscription(
         }
     }
     if !cancellation.is_cancelled() {
-        let mut fields = Map::new();
-        fields.insert("subId".to_owned(), Value::String(sub_id.to_owned()));
-        fields.insert(
-            "reason".to_owned(),
-            Value::String("NMP observation closed".to_owned()),
-        );
+        let fields = closed_notice_fields(sub_id, "NMP observation closed");
         let _ = outbound.push(domain.closed_type(), fields, Some(sub_id));
     }
+}
+
+/// Builds the `subId`/`reason` fields shared by every way `drain_subscription`
+/// can end or truncate a subscription: the seen-event-id bound, the host
+/// row bound, and a genuine upstream close. Kept as one function so every
+/// closed notice has the same shape and so the row-bound path (fixed here)
+/// can be checked in isolation from the live-engine drain loop.
+fn closed_notice_fields(sub_id: &str, reason: &str) -> Map<String, Value> {
+    let mut fields = Map::new();
+    fields.insert("subId".to_owned(), Value::String(sub_id.to_owned()));
+    fields.insert("reason".to_owned(), Value::String(reason.to_owned()));
+    fields
 }
 
 fn remove_finished_subscription(
@@ -2286,10 +2301,12 @@ mod tests {
     }
 
     fn nap_rig_with_config(config: EngineConfig) -> NapRig {
+        nap_rig_with(config, NapNostrProviderLimits::default())
+    }
+
+    fn nap_rig_with(config: EngineConfig, limits: NapNostrProviderLimits) -> NapRig {
         let plane = Arc::new(NmpDataPlane::open(config, 8).unwrap());
-        let providers =
-            NapNostrProviderSet::new(Arc::clone(&plane), NapNostrProviderLimits::default())
-                .unwrap();
+        let providers = NapNostrProviderSet::new(Arc::clone(&plane), limits).unwrap();
         let resources = Arc::new(ResourceTracker::new(ResourceLimits::default()).unwrap());
         let grants =
             Arc::new(GrantLedger::new(GrantLimits::default(), Arc::clone(&resources)).unwrap());
@@ -2573,6 +2590,31 @@ mod tests {
 
         assert_eq!(selection.rows.len(), 2);
         assert!(!selection.bound_reached);
+    }
+
+    #[test]
+    fn drain_subscription_reports_the_host_row_bound_through_the_same_notice_shape_as_every_other_close()
+     {
+        // `select_rows`'s `bound_reached` (proven by
+        // `select_rows_reports_the_host_bound_that_dropped_matching_rows`
+        // above) used to be silently discarded by `drain_subscription`,
+        // which kept only `.rows`. It must surface as a closed notice with
+        // exactly the shape every other subscription-ending reason uses.
+        let truncated = closed_notice_fields("sub-truncation-1", "subscription row bound reached");
+        assert_eq!(truncated["subId"], "sub-truncation-1");
+        assert_eq!(truncated["reason"], "subscription row bound reached");
+
+        let seen_id_bound = closed_notice_fields("sub-1", "subscription event-id bound reached");
+        let upstream_close = closed_notice_fields("sub-1", "NMP observation closed");
+        assert_eq!(
+            truncated.keys().collect::<BTreeSet<_>>(),
+            seen_id_bound.keys().collect::<BTreeSet<_>>(),
+            "the host row bound must report through the same field shape as the seen-id bound"
+        );
+        assert_eq!(
+            seen_id_bound.keys().collect::<BTreeSet<_>>(),
+            upstream_close.keys().collect::<BTreeSet<_>>()
+        );
     }
 
     #[test]
