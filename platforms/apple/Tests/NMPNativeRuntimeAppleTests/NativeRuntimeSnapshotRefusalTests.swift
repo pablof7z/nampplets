@@ -31,6 +31,18 @@ final class NativeRuntimeSnapshotRefusalTests: XCTestCase {
             updates.appendActivity
         )
         let catalog = try profile.observeCatalog(updates.appendCatalog)
+        let session = RustRuntimeNappletSession(
+            profile: profile,
+            sessionID: 42,
+            maximumReadBytes: 1_024
+        )
+        let eventBytes = LockedSnapshotRefusalEventBytes()
+        session.setResponseSink(eventBytes.record)
+        profile.lock.lock()
+        profile.sessions[session.sessionID] = NativeRuntimeProfile.WeakSession(
+            session
+        )
+        profile.lock.unlock()
         defer {
             library.cancel()
             pending.cancel()
@@ -55,7 +67,15 @@ final class NativeRuntimeSnapshotRefusalTests: XCTestCase {
                     refusal: refusal
                 ),
                 catalog: nextCatalog,
-                events: [],
+                events: [
+                    RuntimeEvent(
+                        sequence: 1,
+                        kind: "provider-push",
+                        detail: "independent event delivery",
+                        sessionId: session.sessionID,
+                        responseJson: #"{"type":"event-independent"}"#
+                    )
+                ],
                 oldestAvailableEvent: 0,
                 newestAvailableEvent: 0,
                 eventCursorWasStale: false,
@@ -69,6 +89,10 @@ final class NativeRuntimeSnapshotRefusalTests: XCTestCase {
         XCTAssertEqual(captured.activityCount, 1)
         XCTAssertEqual(captured.library.count, 2)
         XCTAssertEqual(captured.catalog.count, 2)
+        XCTAssertEqual(
+            eventBytes.value,
+            Data(#"{"type":"event-independent"}"#.utf8)
+        )
 
         guard case let .next(
             projection,
@@ -95,6 +119,23 @@ final class NativeRuntimeSnapshotRefusalTests: XCTestCase {
         }
         XCTAssertEqual(catalogSnapshot, nextCatalog)
         XCTAssertEqual(catalogPredecessor, nextCatalog.revision - 1)
+    }
+}
+
+private final class LockedSnapshotRefusalEventBytes: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: Data?
+
+    var value: Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
+    }
+
+    func record(_ bytes: Data) {
+        lock.lock()
+        storage = bytes
+        lock.unlock()
     }
 }
 

@@ -122,13 +122,6 @@ fn observer_receives_the_refusal_in_the_frame_for_the_malformed_update() {
         }
     };
     expect_workspace_refusal(refused_frame.snapshot, "broken-observer");
-    assert!(
-        refused_frame
-            .events
-            .iter()
-            .any(|event| event.kind == "workspace-saved"),
-        "event delivery must remain independent of snapshot refusal"
-    );
     observation.stop();
 }
 
