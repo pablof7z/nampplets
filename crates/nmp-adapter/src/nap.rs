@@ -40,7 +40,6 @@ use super::NmpDataPlane;
 pub const OUTBOX_DOMAIN: &str = "outbox";
 pub const RELAY_DOMAIN: &str = "relay";
 const PINNED_NAP_PROTOCOL: &str = "napplet-web@0.28.0";
-const RECEIPT_EVENT_LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NapNostrProviderLimits {
@@ -58,6 +57,11 @@ pub struct NapNostrProviderLimits {
     pub maximum_subscription_id_bytes: usize,
     pub default_query_timeout_millis: u64,
     pub maximum_query_timeout_millis: u64,
+    /// How long a publish receipt waits for the just-published event to
+    /// become readable back out of the NMP cache before treating the read
+    /// as unresolved. A cache read that does not resolve within this window
+    /// is *not* evidence the publish failed — see `CachedEventLookup`.
+    pub receipt_event_lookup_timeout_millis: u64,
 }
 
 impl Default for NapNostrProviderLimits {
@@ -77,6 +81,7 @@ impl Default for NapNostrProviderLimits {
             maximum_subscription_id_bytes: 256,
             default_query_timeout_millis: 2_000,
             maximum_query_timeout_millis: 10_000,
+            receipt_event_lookup_timeout_millis: 2_000,
         }
     }
 }
@@ -586,6 +591,9 @@ impl NapNostrProvider {
             outbound,
             engine: Arc::clone(&self.plane.engine),
             maximum_response_bytes: self.limits.maximum_response_bytes,
+            receipt_event_lookup_timeout: Duration::from_millis(
+                self.limits.receipt_event_lookup_timeout_millis,
+            ),
         });
         Ok(ProviderCall::proposed_write(
             None,
@@ -928,7 +936,8 @@ fn validate_limits(limits: NapNostrProviderLimits) -> Result<(), ProviderError> 
     .into_iter()
     .all(|value| value > 0)
         && limits.default_query_timeout_millis > 0
-        && limits.default_query_timeout_millis <= limits.maximum_query_timeout_millis;
+        && limits.default_query_timeout_millis <= limits.maximum_query_timeout_millis
+        && limits.receipt_event_lookup_timeout_millis > 0;
     if finite {
         Ok(())
     } else {
@@ -2023,6 +2032,7 @@ struct NapPublishCompletion {
     outbound: ProviderPushSender,
     engine: Arc<Engine>,
     maximum_response_bytes: usize,
+    receipt_event_lookup_timeout: Duration,
 }
 
 impl fmt::Debug for NapPublishCompletion {
@@ -2043,6 +2053,7 @@ impl ProviderWriteCompletion for NapPublishCompletion {
             outbound: self.outbound,
             engine: self.engine,
             maximum_response_bytes: self.maximum_response_bytes,
+            receipt_event_lookup_timeout: self.receipt_event_lookup_timeout,
             delivered: AtomicBool::new(false),
         })
     }
@@ -2059,6 +2070,7 @@ struct NapPublishReceiptSink {
     outbound: ProviderPushSender,
     engine: Arc<Engine>,
     maximum_response_bytes: usize,
+    receipt_event_lookup_timeout: Duration,
     delivered: AtomicBool,
 }
 
@@ -2132,14 +2144,31 @@ impl ReceiptEventSink for NapPublishReceiptSink {
         });
         if let Some(event_id) = &event_id {
             response["eventId"] = Value::String(event_id.clone());
-            if let Some(event) = cached_event_by_id(&self.engine, event_id) {
-                response["event"] = serde_json::to_value(event).unwrap_or(Value::Null);
-            } else if self.domain == NapDomain::Relay && ok {
-                ok = false;
-                response["ok"] = Value::Bool(false);
-                response["error"] = Value::String(
-                    "signed event was not readable from NMP canonical state".to_owned(),
-                );
+            match cached_event_by_id(&self.engine, event_id, self.receipt_event_lookup_timeout) {
+                CachedEventLookup::Found(event) => {
+                    response["event"] = serde_json::to_value(event).unwrap_or(Value::Null);
+                }
+                CachedEventLookup::NotFound if self.domain == NapDomain::Relay && ok => {
+                    // The cache read completed and genuinely returned no
+                    // matching row: this is a confirmed absence, not a
+                    // transport hiccup, so the publish is reported as
+                    // failed.
+                    ok = false;
+                    response["ok"] = Value::Bool(false);
+                    response["error"] = Value::String(
+                        "signed event was not readable from NMP canonical state".to_owned(),
+                    );
+                }
+                CachedEventLookup::Unavailable if self.domain == NapDomain::Relay && ok => {
+                    // The relay acknowledged the write; the cache read
+                    // simply did not resolve in time (or the observation
+                    // could not be established). That is not evidence the
+                    // publish failed, so `ok` stays true and the caller is
+                    // told the read was inconclusive rather than being
+                    // handed a fabricated failure.
+                    response["eventCacheReadTimedOut"] = Value::Bool(true);
+                }
+                CachedEventLookup::NotFound | CachedEventLookup::Unavailable => {}
             }
         }
         if !ok && response.get("error").is_none() {
@@ -2179,7 +2208,21 @@ impl ReceiptEventSink for NapPublishReceiptSink {
     }
 }
 
-fn cached_event_by_id(engine: &Engine, event_id: &str) -> Option<nmp::Event> {
+/// Outcome of a best-effort cache read for a just-published event.
+///
+/// `NotFound` and `Unavailable` are deliberately distinct: only `NotFound`
+/// is a confirmed answer ("the cache was queried and the event genuinely
+/// is not there"). `Unavailable` covers every case where the read did not
+/// resolve — observation setup failure, timeout, or a disconnected channel
+/// — and callers must not treat it as proof of anything, let alone as
+/// evidence that a successful publish failed.
+enum CachedEventLookup {
+    Found(Box<nmp::Event>),
+    NotFound,
+    Unavailable,
+}
+
+fn cached_event_by_id(engine: &Engine, event_id: &str, timeout: Duration) -> CachedEventLookup {
     let mut demand = Demand::from_filter(Filter {
         ids: Some(Binding::Literal(BTreeSet::from([event_id.to_owned()]))),
         // The finite window below is the sole row bound. The pinned NMP
@@ -2190,23 +2233,27 @@ fn cached_event_by_id(engine: &Engine, event_id: &str) -> Option<nmp::Event> {
     demand.cache = CacheMode::Agnostic;
     demand.freshness = Freshness::CacheOnly;
     let one = NonZeroUsize::new(1).expect("one is non-zero");
-    let subscription = engine
-        .observe(
-            LiveQuery(demand),
-            Some(Window::Expandable {
-                initial: one,
-                max: one,
-            }),
-        )
-        .ok()?;
-    subscription
-        .recv_timeout(RECEIPT_EVENT_LOOKUP_TIMEOUT)
-        .ok()?
-        .window?
-        .rows
-        .into_iter()
-        .next()
-        .map(|row| row.event)
+    let subscription = match engine.observe(
+        LiveQuery(demand),
+        Some(Window::Expandable {
+            initial: one,
+            max: one,
+        }),
+    ) {
+        Ok(subscription) => subscription,
+        Err(_) => return CachedEventLookup::Unavailable,
+    };
+    let frame = match subscription.recv_timeout(timeout) {
+        Ok(frame) => frame,
+        Err(_) => return CachedEventLookup::Unavailable,
+    };
+    let Some(window) = frame.window else {
+        return CachedEventLookup::Unavailable;
+    };
+    match window.rows.into_iter().next() {
+        Some(row) => CachedEventLookup::Found(Box::new(row.event)),
+        None => CachedEventLookup::NotFound,
+    }
 }
 
 fn resolve_result(
@@ -2408,8 +2455,18 @@ mod tests {
         let event = public_note();
         seed_canonical_event(&plane, &event);
 
-        let resolved = cached_event_by_id(&plane.engine, &event.id.to_string())
-            .expect("a signed receipt event must remain readable from canonical NMP state");
+        let resolved = match cached_event_by_id(
+            &plane.engine,
+            &event.id.to_string(),
+            Duration::from_millis(
+                NapNostrProviderLimits::default().receipt_event_lookup_timeout_millis,
+            ),
+        ) {
+            CachedEventLookup::Found(event) => event,
+            CachedEventLookup::NotFound | CachedEventLookup::Unavailable => {
+                panic!("a signed receipt event must remain readable from canonical NMP state")
+            }
+        };
         assert_eq!(resolved.id, event.id);
 
         plane.close();
@@ -2723,6 +2780,9 @@ mod tests {
             outbound,
             engine: Arc::clone(&rig.plane.engine),
             maximum_response_bytes: NapNostrProviderLimits::default().maximum_response_bytes,
+            receipt_event_lookup_timeout: Duration::from_millis(
+                NapNostrProviderLimits::default().receipt_event_lookup_timeout_millis,
+            ),
             delivered: AtomicBool::new(false),
         };
         sink.push_latest(ReceiptSnapshot {
@@ -2928,6 +2988,9 @@ mod tests {
             outbound,
             engine: Arc::clone(&rig.plane.engine),
             maximum_response_bytes: NapNostrProviderLimits::default().maximum_response_bytes,
+            receipt_event_lookup_timeout: Duration::from_millis(
+                NapNostrProviderLimits::default().receipt_event_lookup_timeout_millis,
+            ),
             delivered: AtomicBool::new(false),
         };
         sink.push_latest(ReceiptSnapshot {
@@ -2961,6 +3024,147 @@ mod tests {
 
         rig.registry.close_session(rig.context.id);
         rig.plane.close();
+    }
+
+    #[tokio::test]
+    async fn relay_publish_ack_reports_failure_only_on_a_confirmed_cache_miss() {
+        let mut rig = nap_rig();
+        // Deliberately not seeded: the cache read completes and genuinely
+        // finds nothing, which is the one case that must still be reported
+        // as a publish failure.
+        let event = public_note();
+        let outbound = rig
+            .relay
+            .state
+            .lock()
+            .sessions
+            .get(&rig.context.id)
+            .unwrap()
+            .outbound
+            .clone();
+        let sink = NapPublishReceiptSink {
+            domain: NapDomain::Relay,
+            id: Arc::from("relay-publish-missing"),
+            outbound,
+            engine: Arc::clone(&rig.plane.engine),
+            maximum_response_bytes: NapNostrProviderLimits::default().maximum_response_bytes,
+            receipt_event_lookup_timeout: Duration::from_millis(
+                NapNostrProviderLimits::default().receipt_event_lookup_timeout_millis,
+            ),
+            delivered: AtomicBool::new(false),
+        };
+        sink.push_latest(ReceiptSnapshot {
+            receipt_id: WriteReceiptId(Arc::from("receipt-relay-missing")),
+            state: BoundedJson::from_value(
+                &json!({
+                    "state": "delivered",
+                    "eventId": event.id.to_string(),
+                    "relays": {
+                        "wss://acked.example": {"state": "acked"}
+                    }
+                }),
+                16 * 1024,
+            )
+            .unwrap(),
+        })
+        .unwrap();
+
+        let batch = tokio::time::timeout(Duration::from_secs(1), rig.observer.changed(1))
+            .await
+            .expect("relay receipt projection must remain bounded")
+            .unwrap();
+        let value = batch.pushes[0].envelope.decode().unwrap();
+        assert_eq!(value["ok"], false);
+        assert_eq!(
+            value["error"],
+            "signed event was not readable from NMP canonical state"
+        );
+        assert!(value.get("eventCacheReadTimedOut").is_none());
+
+        rig.registry.close_session(rig.context.id);
+        rig.plane.close();
+    }
+
+    #[test]
+    fn cached_event_lookup_reports_unavailable_rather_than_a_confirmed_miss_when_the_read_cannot_happen()
+     {
+        let plane = NmpDataPlane::open(EngineConfig::default(), 2).unwrap();
+        let event = public_note();
+        // Shut the engine down first so the observation cannot be
+        // established. This must surface as `Unavailable`, not as
+        // `NotFound` — the read never happened, so it is not evidence the
+        // event is absent.
+        plane.close();
+
+        let outcome = cached_event_by_id(
+            &plane.engine,
+            &event.id.to_string(),
+            Duration::from_millis(
+                NapNostrProviderLimits::default().receipt_event_lookup_timeout_millis,
+            ),
+        );
+        assert!(
+            matches!(outcome, CachedEventLookup::Unavailable),
+            "a read that never happened must not be reported as a confirmed cache miss"
+        );
+    }
+
+    #[tokio::test]
+    async fn relay_publish_ack_stays_ok_when_the_cache_read_is_unavailable() {
+        let mut rig = nap_rig();
+        let event = public_note();
+        let outbound = rig
+            .relay
+            .state
+            .lock()
+            .sessions
+            .get(&rig.context.id)
+            .unwrap()
+            .outbound
+            .clone();
+        // Close the plane before the receipt sink runs its cache read so
+        // `cached_event_by_id` observes `Unavailable` deterministically,
+        // without depending on real network/scheduling timing.
+        rig.plane.close();
+        let sink = NapPublishReceiptSink {
+            domain: NapDomain::Relay,
+            id: Arc::from("relay-publish-unavailable-cache"),
+            outbound,
+            engine: Arc::clone(&rig.plane.engine),
+            maximum_response_bytes: NapNostrProviderLimits::default().maximum_response_bytes,
+            receipt_event_lookup_timeout: Duration::from_millis(
+                NapNostrProviderLimits::default().receipt_event_lookup_timeout_millis,
+            ),
+            delivered: AtomicBool::new(false),
+        };
+        sink.push_latest(ReceiptSnapshot {
+            receipt_id: WriteReceiptId(Arc::from("receipt-relay-unavailable-cache")),
+            state: BoundedJson::from_value(
+                &json!({
+                    "state": "delivered",
+                    "eventId": event.id.to_string(),
+                    "relays": {
+                        "wss://acked.example": {"state": "acked"}
+                    }
+                }),
+                16 * 1024,
+            )
+            .unwrap(),
+        })
+        .unwrap();
+
+        let batch = tokio::time::timeout(Duration::from_secs(1), rig.observer.changed(1))
+            .await
+            .expect("relay receipt projection must remain bounded")
+            .unwrap();
+        let value = batch.pushes[0].envelope.decode().unwrap();
+        // The relay acknowledged the write; a cache read that could not
+        // even be established must never be reported as a publish failure.
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["eventCacheReadTimedOut"], true);
+        assert!(value.get("error").is_none());
+
+        rig.registry.close_session(rig.context.id);
     }
 
     #[tokio::test]
