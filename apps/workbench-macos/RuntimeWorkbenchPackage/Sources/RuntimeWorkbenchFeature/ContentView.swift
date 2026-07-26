@@ -63,11 +63,9 @@ public struct ContentView: View {
     @State var isAccountSheetPresented = false
     @State var isCatalogSheetPresented = false
     @State var isLibrarySheetPresented = false
-    @State var isActivitySheetPresented = false
     @State var isPermissionSheetPresented = false
     @State var isSettingsSheetPresented = false
-    @State var activitySource: RuntimeWorkbenchActivitySource?
-    @State var activitySheetError: String?
+    @State var activitySheetPresentation: ActivitySheetPresentation?
     @State var permissionManager: (any PermissionReviewManaging)?
     @State var permissionSheetError: String?
     @State var settingsSnapshot: WorkbenchSettingsSnapshot?
@@ -164,12 +162,8 @@ public struct ContentView: View {
                 }
             )
         }
-        .sheet(isPresented: $isActivitySheetPresented) {
-            ActivitySheetHost(
-                source: activitySource,
-                scope: selectedActivityScope,
-                error: activitySheetError
-            )
+        .sheet(item: $activitySheetPresentation) { presentation in
+            ActivitySheetHost(presentation: presentation)
         }
         .sheet(isPresented: $isPermissionSheetPresented) {
             PermissionSheetHost(

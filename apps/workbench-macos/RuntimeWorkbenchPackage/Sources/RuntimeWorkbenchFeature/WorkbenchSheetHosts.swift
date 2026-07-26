@@ -1,30 +1,48 @@
 import SwiftUI
 
+struct ActivitySheetPresentation: Identifiable {
+    enum Content {
+        case admitted(
+            source: RuntimeWorkbenchActivitySource,
+            scope: ActivityExactBuildScope
+        )
+        case unavailable(reason: String)
+    }
+
+    let id = UUID()
+    let content: Content
+
+    static func admitted(
+        source: RuntimeWorkbenchActivitySource,
+        scope: ActivityExactBuildScope
+    ) -> Self {
+        Self(content: .admitted(source: source, scope: scope))
+    }
+
+    static func unavailable(reason: String) -> Self {
+        Self(content: .unavailable(reason: reason))
+    }
+}
+
 /// Presents the exact-build activity drawer, or a truthful unavailable
 /// fallback when no activity source or scope was admitted.
 struct ActivitySheetHost: View {
-    let source: RuntimeWorkbenchActivitySource?
-    let scope: ActivityExactBuildScope?
-    let error: String?
+    let presentation: ActivitySheetPresentation
 
+    @ViewBuilder
     var body: some View {
-        if
-            let source,
-            let scope
-        {
+        switch presentation.content {
+        case let .admitted(source, scope):
             ActivityDrawer(
                 source: source,
                 scope: scope
             )
-        } else {
+        case let .unavailable(reason):
             NavigationStack {
                 ContentUnavailableView(
                     "Activity unavailable",
                     systemImage: "waveform.path.ecg.rectangle",
-                    description: Text(
-                        error
-                            ?? "The exact-build activity source was not admitted."
-                    )
+                    description: Text(reason)
                 )
                 .navigationTitle("Runtime Activity")
                 #if os(macOS)

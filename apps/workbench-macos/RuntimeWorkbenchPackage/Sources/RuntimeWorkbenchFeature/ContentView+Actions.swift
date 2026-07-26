@@ -4,29 +4,33 @@ import SwiftUI
 extension ContentView {
     @MainActor
     func openActivityDrawer() {
-        activitySheetError = nil
         guard let profile else {
-            activitySheetError =
-                bootstrapError ?? "The application runtime profile is unavailable."
-            isActivitySheetPresented = true
+            activitySheetPresentation = .unavailable(
+                reason: bootstrapError
+                    ?? "The application runtime profile is unavailable."
+            )
             return
         }
         guard let scope = selectedActivityScope else {
-            activitySheetError =
-                "Select an exact-build napplet window to view its activity."
-            isActivitySheetPresented = true
+            activitySheetPresentation = .unavailable(
+                reason: "Select an exact-build napplet window to view its activity."
+            )
             return
         }
-        activitySource = nil
         do {
-            activitySource = try RuntimeWorkbenchActivitySource(
+            let source = try RuntimeWorkbenchActivitySource(
                 profile: profile,
                 scope: scope
             )
+            activitySheetPresentation = .admitted(
+                source: source,
+                scope: scope
+            )
         } catch {
-            activitySheetError = error.localizedDescription
+            activitySheetPresentation = .unavailable(
+                reason: error.localizedDescription
+            )
         }
-        isActivitySheetPresented = true
     }
 
     @MainActor
