@@ -3,7 +3,10 @@
 //! The plain integration test and Cucumber runner both drive this exact rig:
 //! bounded corpus loading, real artifact verification, public FFI controller
 //! calls, and the Rust-owned snapshot projection.
-#![allow(dead_code)]
+// This rig is shared by every runtime-ffi test target, so each one sees the
+// whole fixture and uses only its own slice of it. Unused items and re-exports
+// here are expected, not drift.
+#![allow(dead_code, unused_imports)]
 
 mod receipt;
 

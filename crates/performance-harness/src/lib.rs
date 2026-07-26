@@ -251,6 +251,7 @@ fn mismatch_codes(left: &EvidenceIdentity, right: &EvidenceIdentity) -> Vec<Stri
     ];
     pairs
         .into_iter()
-        .filter_map(|(different, code)| different.then(|| code.to_owned()))
+        .filter(|&(different, _)| different)
+        .map(|(_, code)| code.to_owned())
         .collect()
 }
