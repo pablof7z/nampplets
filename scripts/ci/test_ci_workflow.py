@@ -70,5 +70,56 @@ class CiWorkflowEventTopologyTests(unittest.TestCase):
         )
 
 
+class CiWorkflowConcurrencyTests(unittest.TestCase):
+    """A merge to main must never cancel an earlier merge's verification.
+
+    Keying the concurrency group by `github.ref` put every push to main in one
+    group, so each merge cancelled the one before it. A burst of merges then
+    left main with no completed run at all -- the branch looked verified
+    because each PR had been green *before* merging, while the only run that
+    sees those branches combined never finished. That is the failure this
+    guards: a gate that reports success while measuring nothing.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.concurrency = parse_concurrency_block(WORKFLOW_PATH.read_text())
+
+    def test_group_distinguishes_individual_pushes(self) -> None:
+        group = self.concurrency["group"]
+        self.assertIn("github.sha", group)
+        self.assertNotIn(
+            "github.ref",
+            group,
+            "keying by ref collapses every push to main into one group",
+        )
+
+    def test_pushes_do_not_cancel_each_other(self) -> None:
+        self.assertEqual(
+            self.concurrency["cancel-in-progress"],
+            "${{ github.event_name == 'pull_request' }}",
+        )
+
+
+def parse_concurrency_block(source: str) -> dict[str, str]:
+    """Return the top-level concurrency mapping's immediate key/value pairs."""
+    lines = source.splitlines()
+    starts = [index for index, line in enumerate(lines) if line.rstrip() == "concurrency:"]
+    if len(starts) != 1:
+        raise ValueError("workflow must contain exactly one top-level concurrency block")
+
+    block: dict[str, str] = {}
+    for line in lines[starts[0] + 1 :]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line.startswith("  "):
+            break
+        match = EVENT_KEY.fullmatch(line.rstrip())
+        if not match or match.group(2) is None:
+            raise ValueError(f"malformed concurrency line: {line!r}")
+        block[match.group(1)] = match.group(2)
+    return block
+
+
 if __name__ == "__main__":
     unittest.main()

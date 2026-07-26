@@ -10,9 +10,16 @@ on:
 permissions:
   contents: read
 
+# Keyed by PR number on pull_request and by commit SHA on push. Keying `push`
+# by `github.ref` made every merge to main cancel the previous merge's run, so
+# a burst of merges left main with no completed verification at all -- only the
+# last one survived, and even it died if another merge followed. Post-merge is
+# the only run that sees branches combined, which is exactly where independently
+# green PRs conflict. Per-SHA groups mean main runs never cancel each other;
+# PRs still cancel their own superseded runs.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_HTTP_TIMEOUT: "30"
