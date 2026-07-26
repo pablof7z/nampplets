@@ -85,19 +85,38 @@ extension NativeRuntimeProfile {
 
         let artifact = installed.artifact
         let coordinate = installed.permissionCoordinate
-        let priorSessions = Set(controller.snapshot().sessions.map(\.id))
+        let priorProjection = pullSnapshotProjection()
+        let priorSnapshot: RuntimeSnapshot
+        switch priorProjection {
+        case let .snapshot(snapshot):
+            priorSnapshot = snapshot
+        case let .refused(_, _, refusal):
+            throw RuntimeNappletOpenError.launchRefused(
+                detail: "\(refusal.code): \(refusal.detail)"
+            )
+        }
+        let priorSessions = Set(priorSnapshot.sessions.map(\.id))
         controller.launch(artifact: artifact, profile: .legacy)
 
-        guard let launched = controller.snapshot().sessions.first(where: {
+        let launchedProjection = pullSnapshotProjection()
+        let launchedSnapshot: RuntimeSnapshot
+        switch launchedProjection {
+        case let .snapshot(snapshot):
+            launchedSnapshot = snapshot
+        case let .refused(_, _, refusal):
+            throw RuntimeNappletOpenError.launchRefused(
+                detail: "\(refusal.code): \(refusal.detail)"
+            )
+        }
+        guard let launched = launchedSnapshot.sessions.first(where: {
             !priorSessions.contains($0.id)
                 && $0.author == coordinate.manifestAuthor
                 && $0.dTag == coordinate.dTag
                 && $0.aggregateHash == coordinate.aggregateHash
                 && $0.state == "running"
         }) else {
-            let snapshot = controller.snapshot()
-            let detail = snapshot.recentErrors.last?.detail
-                ?? snapshot.boundaryRefusals.last?.detail
+            let detail = launchedSnapshot.recentErrors.last?.detail
+                ?? launchedSnapshot.boundaryRefusals.last?.detail
                 ?? "No new running session was created"
             throw RuntimeNappletOpenError.launchRefused(detail: detail)
         }

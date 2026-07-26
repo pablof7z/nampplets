@@ -764,7 +764,7 @@ public protocol RuntimeControllerProtocol: AnyObject, Sendable {
      */
     func setLibraryFilter(query: String)
 
-    func snapshot()  -> RuntimeSnapshot
+    func snapshot()  -> RuntimeSnapshotProjection
 
     func stop(sessionId: UInt64)
 
@@ -1340,8 +1340,8 @@ open func setLibraryFilter(query: String)  {try! rustCall() {
 }
 }
 
-open func snapshot() -> RuntimeSnapshot  {
-    return try!  FfiConverterTypeRuntimeSnapshot_lift(try! rustCall() {
+open func snapshot() -> RuntimeSnapshotProjection  {
+    return try!  FfiConverterTypeRuntimeSnapshotProjection_lift(try! rustCall() {
     uniffi_nmp_native_runtime_ffi_fn_method_runtimecontroller_snapshot(self.uniffiClonePointer(),$0
     )
 })
@@ -5156,7 +5156,7 @@ public func FfiConverterTypeRuntimeInstalledLibrarySnapshot_lower(_ value: Runti
 
 
 public struct RuntimeObservationFrame {
-    public var snapshot: RuntimeSnapshot
+    public var snapshot: RuntimeSnapshotProjection
     public var catalog: RuntimeCatalogFeedSnapshot
     public var events: [RuntimeEvent]
     public var oldestAvailableEvent: UInt64
@@ -5166,7 +5166,7 @@ public struct RuntimeObservationFrame {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(snapshot: RuntimeSnapshot, catalog: RuntimeCatalogFeedSnapshot, events: [RuntimeEvent], oldestAvailableEvent: UInt64, newestAvailableEvent: UInt64, eventCursorWasStale: Bool, lostBeforeBatch: UInt64) {
+    public init(snapshot: RuntimeSnapshotProjection, catalog: RuntimeCatalogFeedSnapshot, events: [RuntimeEvent], oldestAvailableEvent: UInt64, newestAvailableEvent: UInt64, eventCursorWasStale: Bool, lostBeforeBatch: UInt64) {
         self.snapshot = snapshot
         self.catalog = catalog
         self.events = events
@@ -5228,7 +5228,7 @@ public struct FfiConverterTypeRuntimeObservationFrame: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RuntimeObservationFrame {
         return
             try RuntimeObservationFrame(
-                snapshot: FfiConverterTypeRuntimeSnapshot.read(from: &buf),
+                snapshot: FfiConverterTypeRuntimeSnapshotProjection.read(from: &buf),
                 catalog: FfiConverterTypeRuntimeCatalogFeedSnapshot.read(from: &buf),
                 events: FfiConverterSequenceTypeRuntimeEvent.read(from: &buf),
                 oldestAvailableEvent: FfiConverterUInt64.read(from: &buf),
@@ -5239,7 +5239,7 @@ public struct FfiConverterTypeRuntimeObservationFrame: FfiConverterRustBuffer {
     }
 
     public static func write(_ value: RuntimeObservationFrame, into buf: inout [UInt8]) {
-        FfiConverterTypeRuntimeSnapshot.write(value.snapshot, into: &buf)
+        FfiConverterTypeRuntimeSnapshotProjection.write(value.snapshot, into: &buf)
         FfiConverterTypeRuntimeCatalogFeedSnapshot.write(value.catalog, into: &buf)
         FfiConverterSequenceTypeRuntimeEvent.write(value.events, into: &buf)
         FfiConverterUInt64.write(value.oldestAvailableEvent, into: &buf)
@@ -10218,6 +10218,91 @@ extension RuntimeSensitivity: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Fail-closed result of projecting one internally consistent runtime cut.
+ *
+ * A malformed candidate never crosses the FFI boundary. The refusal carries
+ * the same revision and lifecycle state so native consumers can advance their
+ * control-plane bookkeeping without deriving any view from invalid rows.
+ */
+
+public enum RuntimeSnapshotProjection {
+
+    case snapshot(snapshot: RuntimeSnapshot
+    )
+    case refused(revision: UInt64, closed: Bool, refusal: RuntimeRefusal
+    )
+}
+
+
+#if compiler(>=6)
+extension RuntimeSnapshotProjection: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRuntimeSnapshotProjection: FfiConverterRustBuffer {
+    typealias SwiftType = RuntimeSnapshotProjection
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RuntimeSnapshotProjection {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .snapshot(snapshot: try FfiConverterTypeRuntimeSnapshot.read(from: &buf)
+        )
+
+        case 2: return .refused(revision: try FfiConverterUInt64.read(from: &buf), closed: try FfiConverterBool.read(from: &buf), refusal: try FfiConverterTypeRuntimeRefusal.read(from: &buf)
+        )
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RuntimeSnapshotProjection, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case let .snapshot(snapshot):
+            writeInt(&buf, Int32(1))
+            FfiConverterTypeRuntimeSnapshot.write(snapshot, into: &buf)
+
+
+        case let .refused(revision,closed,refusal):
+            writeInt(&buf, Int32(2))
+            FfiConverterUInt64.write(revision, into: &buf)
+            FfiConverterBool.write(closed, into: &buf)
+            FfiConverterTypeRuntimeRefusal.write(refusal, into: &buf)
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuntimeSnapshotProjection_lift(_ buf: RustBuffer) throws -> RuntimeSnapshotProjection {
+    return try FfiConverterTypeRuntimeSnapshotProjection.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuntimeSnapshotProjection_lower(_ value: RuntimeSnapshotProjection) -> RustBuffer {
+    return FfiConverterTypeRuntimeSnapshotProjection.lower(value)
+}
+
+
+extension RuntimeSnapshotProjection: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum RuntimeWorkspaceAxis {
 
@@ -12585,7 +12670,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_set_library_filter() != 29506) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_snapshot() != 42166) {
+    if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_snapshot() != 46653) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_nmp_native_runtime_ffi_checksum_method_runtimecontroller_stop() != 36932) {

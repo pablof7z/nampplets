@@ -112,7 +112,7 @@ final class RuntimeNappletSessionArtifactTests: RuntimeNappletSessionTestCase {
         )
         XCTAssertEqual(installed.permissionCoordinate.manifestAuthor, author)
         XCTAssertEqual(installed.permissionCoordinate.dTag, "good-morning")
-        XCTAssertTrue(profile.snapshotForTesting.sessions.isEmpty)
+        XCTAssertTrue(try profile.snapshotForTesting.sessions.isEmpty)
         let reacquired: NativeRuntimeInstalledArtifact
         switch profile.reacquireInstalledArtifact(
             installed.permissionCoordinate
@@ -132,7 +132,7 @@ final class RuntimeNappletSessionArtifactTests: RuntimeNappletSessionTestCase {
             reacquired = installation.installedArtifact
         }
         XCTAssertTrue(
-            profile.snapshotForTesting.sessions.isEmpty,
+            try profile.snapshotForTesting.sessions.isEmpty,
             "reacquisition must never launch"
         )
 
@@ -153,7 +153,7 @@ final class RuntimeNappletSessionArtifactTests: RuntimeNappletSessionTestCase {
                 return XCTFail("Expected Rust launch refusal, got \(error)")
             }
         }
-        XCTAssertTrue(profile.snapshotForTesting.sessions.isEmpty)
+        XCTAssertTrue(try profile.snapshotForTesting.sessions.isEmpty)
 
         let update = profile.applyPermissionDecisions(
             NativeRuntimePermissionDecisionBatch(
@@ -172,7 +172,7 @@ final class RuntimeNappletSessionArtifactTests: RuntimeNappletSessionTestCase {
         XCTAssertTrue(update.review?.launchPermitted == true)
         XCTAssertNil(update.refusal)
         XCTAssertTrue(
-            profile.snapshotForTesting.sessions.isEmpty,
+            try profile.snapshotForTesting.sessions.isEmpty,
             "applying permissions must never launch"
         )
 

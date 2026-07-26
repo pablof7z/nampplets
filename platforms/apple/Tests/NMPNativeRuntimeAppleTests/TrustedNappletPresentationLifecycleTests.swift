@@ -48,7 +48,7 @@ final class TrustedNappletPresentationLifecycleTests:
         coordinator.stop(webView)
 
         XCTAssertEqual(
-            profile.snapshotForTesting.sessions.first(where: {
+            try profile.snapshotForTesting.sessions.first(where: {
                 $0.id == runtime.sessionID
             })?.state,
             "running"

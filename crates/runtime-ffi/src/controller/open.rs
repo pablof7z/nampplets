@@ -325,6 +325,7 @@ pub(super) fn open_runtime_controller(
         config_provider,
         artifacts: Mutex::new(BTreeMap::new()),
         boundary_refusals: Mutex::new(BoundedFacts::with_capacity(config.maximum_boundary_events)),
+        projection_fault_latch: Mutex::new(Default::default()),
         maximum_boundary_events: config.maximum_boundary_events,
         signal,
         observers: Arc::new(AtomicUsize::new(0)),

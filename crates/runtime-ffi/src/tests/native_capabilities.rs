@@ -5,7 +5,7 @@ fn native_capabilities_are_absent_unless_supplied() {
     let temp = TempDir::new().unwrap();
     let controller = controller(&temp);
     let (_, session) = install_and_launch(&controller, &["theme", "config"]);
-    let snapshot = controller.snapshot();
+    let snapshot = controller.snapshot_value();
     let domains = &snapshot
         .sessions
         .iter()
@@ -22,7 +22,7 @@ fn native_theme_and_settings_cross_the_exact_build_boundary() {
     let requests = Arc::new(Mutex::new(Vec::new()));
     let controller = controller_with_native_capabilities(&temp, Arc::clone(&requests));
     let (_, session) = install_and_launch(&controller, &["theme", "config"]);
-    let domains = &controller.snapshot().sessions[0].domains;
+    let domains = &controller.snapshot_value().sessions[0].domains;
     assert!(domains.iter().any(|domain| domain == "theme"));
     assert!(domains.iter().any(|domain| domain == "config"));
 
@@ -188,7 +188,7 @@ fn native_inc_action_backpressure_is_an_exact_provider_refusal() {
         .unwrap(),
     );
     let error = controller
-        .snapshot()
+        .snapshot_value()
         .recent_errors
         .into_iter()
         .last()

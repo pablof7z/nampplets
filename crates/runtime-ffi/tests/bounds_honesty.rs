@@ -7,7 +7,8 @@
 
 use nmp_native_runtime_ffi::{
     ArtifactFetchRequest, ArtifactFetchResponse, ArtifactSource, NativeAppearanceSnapshot,
-    RuntimeConfig, RuntimeController, RuntimeExactBuildCoordinate,
+    RuntimeConfig, RuntimeController, RuntimeExactBuildCoordinate, RuntimeSnapshot,
+    RuntimeSnapshotProjection,
 };
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -46,6 +47,20 @@ fn invalid_coordinate() -> RuntimeExactBuildCoordinate {
     }
 }
 
+fn snapshot(controller: &RuntimeController) -> RuntimeSnapshot {
+    match controller.snapshot() {
+        RuntimeSnapshotProjection::Snapshot { snapshot } => snapshot,
+        RuntimeSnapshotProjection::Refused {
+            revision,
+            closed,
+            refusal,
+        } => panic!(
+            "runtime snapshot revision {revision} (closed={closed}) was refused: {}: {}",
+            refusal.code, refusal.detail
+        ),
+    }
+}
+
 /// Drives one refusal through each of the three recorders, so the round is
 /// three refusals wide and covers every call site that used to drop silently.
 fn refusal_round(controller: &Arc<RuntimeController>) {
@@ -70,7 +85,7 @@ fn an_unfilled_refusal_ring_is_a_complete_answer() {
     let controller = controller(&temp, 256);
     refusal_round(&controller);
 
-    let snapshot = controller.snapshot();
+    let snapshot = snapshot(&controller);
     assert_eq!(snapshot.boundary_refusals.len(), 3);
     assert_eq!(snapshot.dropped_boundary_refusals, 0);
     controller.close();
@@ -87,7 +102,7 @@ fn refusal_overflow_reports_the_exact_dropped_count() {
         refusal_round(&controller);
     }
 
-    let snapshot = controller.snapshot();
+    let snapshot = snapshot(&controller);
     assert_eq!(snapshot.boundary_refusals.len() as u64, CAP);
     assert_eq!(snapshot.dropped_boundary_refusals, ROUNDS * 3 - CAP);
     // The retained tail is the newest round, in recording order.
@@ -112,7 +127,7 @@ fn refusal_overflow_reports_the_exact_dropped_count() {
 fn the_snapshot_carries_the_app_side_dropped_counts_across_the_boundary() {
     let temp = TempDir::new().unwrap();
     let controller = controller(&temp, 256);
-    let snapshot = controller.snapshot();
+    let snapshot = snapshot(&controller);
     assert_eq!(snapshot.dropped_activity, 0);
     assert_eq!(snapshot.dropped_errors, 0);
     assert_eq!(snapshot.dropped_boundary_refusals, 0);

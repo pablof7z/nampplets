@@ -9,6 +9,7 @@ mod permissions;
 mod preferences;
 mod providers;
 mod session;
+mod snapshot;
 mod support;
 mod workspace;
 
@@ -41,6 +42,12 @@ use crate::{
     support::now_millis,
 };
 
+#[derive(Debug, Default)]
+struct ProjectionFaultLatch {
+    keys: BTreeSet<(String, String)>,
+    overflow_reported: bool,
+}
+
 #[derive(uniffi::Object)]
 pub struct RuntimeController {
     pub(crate) app: Arc<RuntimeApp>,
@@ -62,6 +69,7 @@ pub struct RuntimeController {
     config_provider: Option<Arc<ConfigProvider>>,
     pub(crate) artifacts: Mutex<BTreeMap<Principal, Arc<VerifiedArtifactHandle>>>,
     boundary_refusals: Mutex<BoundedFacts<RuntimeRefusal>>,
+    projection_fault_latch: Mutex<ProjectionFaultLatch>,
     maximum_boundary_events: usize,
     signal: watch::Sender<u64>,
     observers: Arc<AtomicUsize>,

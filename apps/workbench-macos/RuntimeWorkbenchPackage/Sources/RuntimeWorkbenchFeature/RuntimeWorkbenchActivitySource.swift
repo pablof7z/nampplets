@@ -24,6 +24,7 @@ public enum RuntimeWorkbenchActivitySourceRefusal:
 {
     case subscriberCapacity(maximum: Int)
     case scopeMismatch
+    case snapshotRefused(code: String, detail: String)
 
     public var errorDescription: String? {
         switch self {
@@ -31,6 +32,8 @@ public enum RuntimeWorkbenchActivitySourceRefusal:
             "The Workbench activity subscriber limit of \(maximum) was reached."
         case .scopeMismatch:
             "This activity source is bound to a different exact build."
+        case let .snapshotRefused(code, detail):
+            "Runtime activity projection was refused (\(code)): \(detail)"
         }
     }
 }
@@ -72,7 +75,7 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
             aggregateHash: scope.aggregateHash
         )
         self.nativeScope = nativeScope
-        projection = profile.native.activityProjection(for: nativeScope)
+        projection = try profile.native.activityProjection(for: nativeScope)
         let mailbox = RuntimeActivityUpdateMailbox()
         self.mailbox = mailbox
         mailbox.bind { [weak self] update in
@@ -135,9 +138,17 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
                 scope: requestedScope
             )
         }
-        let latest = profile.native.activityProjection(for: nativeScope)
-        projection = latest
-        return Self.snapshot(from: latest, for: requestedScope)
+        do {
+            let latest = try profile.native.activityProjection(for: nativeScope)
+            projection = latest
+            return Self.snapshot(from: latest, for: requestedScope)
+        } catch let NativeRuntimeSnapshotProjectionError.refused(refusal) {
+            latestAdmissionRefusal = .snapshotRefused(
+                code: refusal.code,
+                detail: refusal.detail
+            )
+            return Self.snapshot(from: projection, for: requestedScope)
+        }
     }
 
     private func receive(_ update: NativeRuntimeActivityUpdate) {

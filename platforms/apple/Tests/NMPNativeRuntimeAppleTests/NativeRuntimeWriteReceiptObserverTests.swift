@@ -43,7 +43,7 @@ final class NativeRuntimeWriteReceiptObserverTests: RuntimeNappletSessionTestCas
         }
         XCTAssertTrue(receiptInitial.receipts.isEmpty)
 
-        var snapshot = profile.snapshotForTesting
+        var snapshot = try profile.snapshotForTesting
         snapshot.revision += 1
         snapshot.receipts = [
             RuntimeReceiptSnapshot(
@@ -54,7 +54,7 @@ final class NativeRuntimeWriteReceiptObserverTests: RuntimeNappletSessionTestCas
         ]
         profile.update(
             frame: RuntimeObservationFrame(
-                snapshot: snapshot,
+                snapshot: .snapshot(snapshot: snapshot),
                 catalog: profile.catalogSnapshotForTesting,
                 events: [],
                 oldestAvailableEvent: 0,

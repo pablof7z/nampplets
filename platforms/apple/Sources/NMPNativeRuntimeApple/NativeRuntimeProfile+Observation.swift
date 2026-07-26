@@ -6,9 +6,11 @@ import NMPNativeRuntime
 extension NativeRuntimeProfile {
     /// Returns the latest bounded set of Rust-retained provider writes.
     public func pendingWriteProjection()
-        -> NativeRuntimePendingWriteProjection
+        throws -> NativeRuntimePendingWriteProjection
     {
-        NativeRuntimePendingWriteProjection(controller.snapshot())
+        NativeRuntimePendingWriteProjection(
+            try validatedSnapshot()
+        )
     }
 
     /// Observes the profile-owned pending-write replacement stream. The
@@ -17,6 +19,7 @@ extension NativeRuntimeProfile {
     public func observePendingWrites(
         _ receive: @escaping @Sendable (NativeRuntimePendingWriteUpdate) -> Void
     ) throws -> NativeRuntimePendingWriteObservation {
+        let snapshot = try validatedSnapshot()
         lock.lock()
         guard !isClosed else {
             lock.unlock()
@@ -32,7 +35,7 @@ extension NativeRuntimeProfile {
         }
         let identifier = UUID()
         let authoritative = NativeRuntimePendingWriteProjection(
-            controller.snapshot()
+            snapshot
         )
         pendingWriteObservers[identifier] = PendingWriteObserverEntry(
             receive: receive,
@@ -54,6 +57,7 @@ extension NativeRuntimeProfile {
     public func observeReceipts(
         _ receive: @escaping @Sendable (NativeRuntimeReceiptUpdate) -> Void
     ) throws -> NativeRuntimeReceiptObservation {
+        let snapshot = try validatedSnapshot()
         lock.lock()
         guard !isClosed else {
             lock.unlock()
@@ -67,7 +71,9 @@ extension NativeRuntimeProfile {
             )
         }
         let identifier = UUID()
-        let authoritative = NativeRuntimeReceiptProjection(controller.snapshot())
+        let authoritative = NativeRuntimeReceiptProjection(
+            snapshot
+        )
         receiptObservers[identifier] = ReceiptObserverEntry(
             receive: receive,
             lastDeliveredRevision: authoritative.revision
@@ -87,14 +93,19 @@ extension NativeRuntimeProfile {
     public func installedLibraryProjection()
         -> NativeRuntimeLibraryProjection
     {
-        NativeRuntimeLibraryProjection(controller.snapshot())
+        NativeRuntimeLibraryProjection(
+            pullSnapshotProjection()
+        )
     }
 
     /// Returns the latest complete, bounded runtime activity replacement.
     public func activityProjection(
         for scope: NativeRuntimeActivityScope
-    ) -> NativeRuntimeActivityProjection {
-        NativeRuntimeActivityProjection(controller.snapshot(), scope: scope)
+    ) throws -> NativeRuntimeActivityProjection {
+        NativeRuntimeActivityProjection(
+            try validatedSnapshot(),
+            scope: scope
+        )
     }
 
     /// Returns the last NMP relay and wire-subscription read-out.
@@ -181,6 +192,7 @@ extension NativeRuntimeProfile {
         scope: NativeRuntimeActivityScope,
         _ receive: @escaping @Sendable (NativeRuntimeActivityUpdate) -> Void
     ) throws -> NativeRuntimeActivityObservation {
+        let snapshot = try validatedSnapshot()
         lock.lock()
         guard !isClosed else {
             lock.unlock()
@@ -208,7 +220,7 @@ extension NativeRuntimeProfile {
         receive(
             .authoritative(
                 NativeRuntimeActivityProjection(
-                    controller.snapshot(),
+                    snapshot,
                     scope: scope
                 )
             )
@@ -221,6 +233,7 @@ extension NativeRuntimeProfile {
     public func observeInstalledLibrary(
         _ receive: @escaping @Sendable (NativeRuntimeLibraryUpdate) -> Void
     ) throws -> NativeRuntimeLibraryObservation {
+        let pull = pullSnapshotProjection()
         lock.lock()
         guard !isClosed else {
             lock.unlock()
@@ -236,7 +249,7 @@ extension NativeRuntimeProfile {
         }
         let identifier = UUID()
         let authoritative = NativeRuntimeLibraryProjection(
-            controller.snapshot()
+            pull
         )
         libraryObservers[identifier] = LibraryObserverEntry(
             receive: receive,

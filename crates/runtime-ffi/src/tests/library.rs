@@ -16,9 +16,15 @@ fn installed_library_projects_filter_lifecycle_workspace_and_uninstall() {
         .expect("fixture verifies");
     let coordinate = exact_coordinate(&artifact);
 
-    assert_eq!(controller.snapshot().installed_library.total_installed, 0);
+    assert_eq!(
+        controller
+            .snapshot_value()
+            .installed_library
+            .total_installed,
+        0
+    );
     controller.install(Arc::clone(&artifact));
-    let installed = controller.snapshot().installed_library;
+    let installed = controller.snapshot_value().installed_library;
     assert_eq!(installed.query, "");
     assert_eq!(installed.total_installed, 1);
     assert_eq!(installed.builds.len(), 1);
@@ -32,12 +38,15 @@ fn installed_library_projects_filter_lifecycle_workspace_and_uninstall() {
     assert!(serde_json::from_str::<Value>(&installed.builds[0].manifest_metadata_json).is_ok());
 
     controller.set_library_filter("no-match".to_owned());
-    let filtered = controller.snapshot().installed_library;
+    let filtered = controller.snapshot_value().installed_library;
     assert_eq!(filtered.query, "no-match");
     assert_eq!(filtered.total_installed, 1);
     assert!(filtered.builds.is_empty());
     controller.set_library_filter("GOOD-MORNING".to_owned());
-    assert_eq!(controller.snapshot().installed_library.builds.len(), 1);
+    assert_eq!(
+        controller.snapshot_value().installed_library.builds.len(),
+        1
+    );
 
     assert!(
         controller
@@ -46,13 +55,13 @@ fn installed_library_projects_filter_lifecycle_workspace_and_uninstall() {
     );
     controller.assign_build_to_workspace("library".to_owned(), coordinate.clone());
     assert_eq!(
-        controller.snapshot().installed_library.builds[0].assigned_workspace_ids,
+        controller.snapshot_value().installed_library.builds[0].assigned_workspace_ids,
         ["library"]
     );
 
     controller.launch(Arc::clone(&artifact), RuntimeExecutionProfile::Legacy);
     assert!(
-        controller.snapshot().sessions.is_empty(),
+        controller.snapshot_value().sessions.is_empty(),
         "the pinned required profile must refuse before execution"
     );
     for domain in ["identity", "inc", "outbox"] {
@@ -64,21 +73,21 @@ fn installed_library_projects_filter_lifecycle_workspace_and_uninstall() {
         );
     }
     controller.launch(Arc::clone(&artifact), RuntimeExecutionProfile::Legacy);
-    let session = controller.snapshot().installed_library.builds[0].active_session_ids[0];
+    let session = controller.snapshot_value().installed_library.builds[0].active_session_ids[0];
     controller.suspend(session);
-    assert_eq!(controller.snapshot().sessions[0].state, "suspended");
+    assert_eq!(controller.snapshot_value().sessions[0].state, "suspended");
     controller.resume(session);
-    assert_eq!(controller.snapshot().sessions[0].state, "running");
+    assert_eq!(controller.snapshot_value().sessions[0].state, "running");
 
     controller.clear_build_from_workspace("library".to_owned(), coordinate.clone());
     assert!(
-        controller.snapshot().installed_library.builds[0]
+        controller.snapshot_value().installed_library.builds[0]
             .assigned_workspace_ids
             .is_empty()
     );
 
     controller.uninstall_build(coordinate.clone());
-    let uninstalled = controller.snapshot();
+    let uninstalled = controller.snapshot_value();
     assert_eq!(uninstalled.installed_library.total_installed, 0);
     assert!(uninstalled.installed_library.builds.is_empty());
     assert!(uninstalled.sessions.is_empty());
@@ -160,7 +169,7 @@ fn persisted_install_without_a_live_handle_fails_closed_after_restart() {
     let reopened = controller(&temp);
     let result = reopened.reacquire_installed_artifact(coordinate);
     assert_eq!(
-        reopened.snapshot().installed_library.builds[0].availability,
+        reopened.snapshot_value().installed_library.builds[0].availability,
         RuntimeInstalledBuildAvailability::MetadataOnly
     );
     assert!(result.artifact.is_none());
@@ -222,7 +231,7 @@ fn installed_library_restores_metadata_only_and_refuses_invalid_inputs() {
     drop(runtime);
 
     let reopened = controller(&temp);
-    let restored = reopened.snapshot().installed_library;
+    let restored = reopened.snapshot_value().installed_library;
     assert_eq!(restored.total_installed, 1);
     assert_eq!(restored.builds.len(), 1);
     assert_eq!(
@@ -236,7 +245,7 @@ fn installed_library_restores_metadata_only_and_refuses_invalid_inputs() {
         d_tag: "good-morning".to_owned(),
         aggregate_hash: restored.builds[0].coordinate.aggregate_hash.clone(),
     });
-    let snapshot = reopened.snapshot();
+    let snapshot = reopened.snapshot_value();
     assert_eq!(snapshot.installed_library.total_installed, 1);
     assert_eq!(
         snapshot.boundary_refusals.last().unwrap().code,
@@ -245,12 +254,17 @@ fn installed_library_restores_metadata_only_and_refuses_invalid_inputs() {
 
     reopened.assign_build_to_workspace("\n".to_owned(), restored.builds[0].coordinate.clone());
     assert_eq!(
-        reopened.snapshot().boundary_refusals.last().unwrap().code,
+        reopened
+            .snapshot_value()
+            .boundary_refusals
+            .last()
+            .unwrap()
+            .code,
         "invalid-workspace-assignment"
     );
 
     reopened.set_library_filter("x".repeat(AppLimits::default().maximum_library_query_bytes + 1));
-    let refused = reopened.snapshot();
+    let refused = reopened.snapshot_value();
     assert_eq!(refused.installed_library.query, "");
     assert_eq!(refused.recent_errors.last().unwrap().code, "capacity");
 }

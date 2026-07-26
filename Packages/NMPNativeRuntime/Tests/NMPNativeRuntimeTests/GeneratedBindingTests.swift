@@ -26,10 +26,11 @@ final class GeneratedBindingTests: XCTestCase {
             config: config(root: root),
             artifactSource: RefusingArtifactSource()
         )
-        XCTAssertEqual(controller.snapshot().revision, 0)
-        XCTAssertFalse(controller.snapshot().closed)
+        let opened = try requireSnapshot(controller.snapshot())
+        XCTAssertEqual(opened.revision, 0)
+        XCTAssertFalse(opened.closed)
         controller.close()
-        XCTAssertTrue(controller.snapshot().closed)
+        XCTAssertTrue(try requireSnapshot(controller.snapshot()).closed)
     }
 
     func testSignedArtifactInstallLaunchAndVerifiedReadCrossActualFFI() throws {
@@ -110,7 +111,9 @@ final class GeneratedBindingTests: XCTestCase {
             profile: .legacy
         )
 
-        let session = try XCTUnwrap(controller.snapshot().sessions.first)
+        let session = try XCTUnwrap(
+            requireSnapshot(controller.snapshot()).sessions.first
+        )
         let responses = ResponseRuntimeObserver()
         let observation = try XCTUnwrap(
             controller.observe(observer: responses).observation

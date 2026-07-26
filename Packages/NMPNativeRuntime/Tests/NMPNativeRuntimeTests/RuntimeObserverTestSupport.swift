@@ -12,8 +12,17 @@ final class RecordingRuntimeObserver: RuntimeObserver, @unchecked Sendable {
     }
 
     func update(frame: RuntimeObservationFrame) {
+        let deliveredRevision: UInt64?
+        switch frame.snapshot {
+        case let .snapshot(snapshot):
+            deliveredRevision = snapshot.revision
+        case let .refused(revision, _, _):
+            deliveredRevision = revision
+        @unknown default:
+            deliveredRevision = nil
+        }
         condition.lock()
-        revision = frame.snapshot.revision
+        revision = deliveredRevision
         condition.broadcast()
         condition.unlock()
     }

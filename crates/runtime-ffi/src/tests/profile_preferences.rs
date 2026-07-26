@@ -89,7 +89,7 @@ fn storage_snapshot_is_bounded_and_nmp_reset_closes_before_deleting() {
     assert!(reset.reset, "{:?}", reset.refusal);
     assert!(reset.refusal.is_none());
     assert!(!cache_path.exists());
-    assert!(controller.snapshot().closed);
+    assert!(controller.snapshot_value().closed);
 
     drop(controller);
     let reopened = persistent_controller(&temp);

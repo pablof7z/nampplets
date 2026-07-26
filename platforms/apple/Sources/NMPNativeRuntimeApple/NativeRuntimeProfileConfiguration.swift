@@ -11,6 +11,7 @@ public enum RuntimeNappletOpenError: Error, LocalizedError, Equatable {
     case installedArtifactProfileMismatch
     case launchRefused(detail: String)
     case observerRefused(code: String, detail: String)
+    case snapshotRefused(code: String, detail: String)
     case invalidAccountPersistence
 
     public var errorDescription: String? {
@@ -29,6 +30,8 @@ public enum RuntimeNappletOpenError: Error, LocalizedError, Equatable {
             "The native runtime refused to launch the artifact: \(detail)"
         case let .observerRefused(code, detail):
             "Runtime observation was refused (\(code)): \(detail)"
+        case let .snapshotRefused(code, detail):
+            "Runtime snapshot projection was refused (\(code)): \(detail)"
         case .invalidAccountPersistence:
             "The native account persistence configuration is invalid."
         }

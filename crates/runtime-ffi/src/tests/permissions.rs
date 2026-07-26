@@ -49,7 +49,7 @@ fn pinned_good_morning_installs_rust_owned_permission_profile() {
 
     controller.launch(artifact, RuntimeExecutionProfile::Legacy);
     assert!(
-        controller.snapshot().sessions.is_empty(),
+        controller.snapshot_value().sessions.is_empty(),
         "required compatibility capabilities are enforced before execution"
     );
 }
@@ -205,7 +205,7 @@ fn good_morning_outbox_grant_survives_default_profile_restart() {
     assert!(review.launch_permitted);
 
     reopened.launch(artifact, RuntimeExecutionProfile::Legacy);
-    let session = reopened.snapshot().sessions[0].clone();
+    let session = reopened.snapshot_value().sessions[0].clone();
     assert_eq!(
         session.domains,
         ["identity", "inc", "outbox", "shell"],

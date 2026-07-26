@@ -30,7 +30,7 @@ fn signed_artifact_crosses_only_as_sealed_handle_and_exact_reads() {
         );
     }
     controller.launch(artifact, RuntimeExecutionProfile::Legacy);
-    let runtime_snapshot = controller.snapshot();
+    let runtime_snapshot = controller.snapshot_value();
     assert_eq!(
         runtime_snapshot.sessions[0].domains,
         ["identity", "inc", "outbox", "shell"]
@@ -87,7 +87,7 @@ fn signed_artifact_crosses_only_as_sealed_handle_and_exact_reads() {
         VerifiedRead::Refused { .. }
     ));
     controller.close();
-    assert!(controller.snapshot().closed);
+    assert!(controller.snapshot_value().closed);
     assert!(fs::metadata(temp.path().join("runtime.sqlite3")).is_ok());
 }
 

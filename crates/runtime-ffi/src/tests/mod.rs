@@ -8,6 +8,8 @@ mod library;
 mod native_capabilities;
 mod permissions;
 mod profile_preferences;
+mod snapshot_delivery;
+mod snapshot_integrity;
 mod workspace;
 
 use std::{collections::BTreeMap, fs, sync::Arc};
@@ -27,6 +29,26 @@ use crate::{
     workspace::workspace_record_from_ffi,
     *,
 };
+
+trait RuntimeControllerSnapshotTestExt {
+    fn snapshot_value(&self) -> RuntimeSnapshot;
+}
+
+impl RuntimeControllerSnapshotTestExt for RuntimeController {
+    fn snapshot_value(&self) -> RuntimeSnapshot {
+        match self.snapshot() {
+            RuntimeSnapshotProjection::Snapshot { snapshot } => snapshot,
+            RuntimeSnapshotProjection::Refused {
+                revision,
+                closed,
+                refusal,
+            } => panic!(
+                "runtime snapshot revision {revision} (closed={closed}) was refused: {}: {}",
+                refusal.code, refusal.detail
+            ),
+        }
+    }
+}
 
 const EVENT: &[u8] =
     include_bytes!("../../../../conformance/napplet-corpus/published/good-morning/event.json");
@@ -281,7 +303,7 @@ fn install_and_launch(
         );
     }
     controller.launch(Arc::clone(&artifact), RuntimeExecutionProfile::Legacy);
-    let session = controller.snapshot().sessions[0].id;
+    let session = controller.snapshot_value().sessions[0].id;
     controller.mapped_envelope(session, br#"{"type":"shell.ready"}"#.to_vec());
     (artifact, session)
 }

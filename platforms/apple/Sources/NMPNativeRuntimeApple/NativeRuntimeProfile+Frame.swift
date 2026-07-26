@@ -17,10 +17,35 @@ extension NativeRuntimeProfile {
         let previousCatalogRevision = lastCatalogSnapshot.revision
         let previousPendingWriteRevision = lastPendingWriteRevision
         let previousReceiptRevision = lastReceiptRevision
-        lastActivityRevision = max(lastActivityRevision, frame.snapshot.revision)
-        lastLibraryRevision = max(lastLibraryRevision, frame.snapshot.revision)
-        lastPendingWriteRevision = max(lastPendingWriteRevision, frame.snapshot.revision)
-        lastReceiptRevision = max(lastReceiptRevision, frame.snapshot.revision)
+        let snapshotProjection = NativeRuntimeSnapshotProjection(
+            frame.snapshot,
+            unknownRevision: lastAcceptedSnapshot.revision,
+            unknownProfileClosed: lastAcceptedSnapshot.closed
+        )
+        let snapshot: RuntimeSnapshot?
+        switch snapshotProjection {
+        case let .snapshot(accepted):
+            snapshot = accepted
+            lastAcceptedSnapshot = accepted
+            lastActivityRevision = max(
+                lastActivityRevision,
+                accepted.revision
+            )
+            lastPendingWriteRevision = max(
+                lastPendingWriteRevision,
+                accepted.revision
+            )
+            lastReceiptRevision = max(
+                lastReceiptRevision,
+                accepted.revision
+            )
+        case .refused:
+            snapshot = nil
+        }
+        lastLibraryRevision = max(
+            lastLibraryRevision,
+            snapshotProjection.revision
+        )
         if frame.catalog.revision >= previousCatalogRevision {
             lastCatalogSnapshot = frame.catalog
         }
@@ -37,10 +62,10 @@ extension NativeRuntimeProfile {
         var receiptDeliveries: [
             (receive: ReceiptReceiver, update: NativeRuntimeReceiptUpdate)
         ] = []
-        if frame.snapshot.revision > previousLibraryRevision
+        if snapshotProjection.revision > previousLibraryRevision
             || frame.eventCursorWasStale
         {
-            let projection = NativeRuntimeLibraryProjection(frame.snapshot)
+            let projection = NativeRuntimeLibraryProjection(snapshotProjection)
             let update = NativeRuntimeLibraryUpdate.next(
                 projection,
                 predecessorRevision: previousLibraryRevision,
@@ -100,10 +125,11 @@ extension NativeRuntimeProfile {
                 catalogObservers[identifier] = observer
             }
         }
-        if frame.snapshot.revision > previousPendingWriteRevision
+        if let snapshot,
+           snapshot.revision > previousPendingWriteRevision
             || frame.eventCursorWasStale
         {
-            let projection = NativeRuntimePendingWriteProjection(frame.snapshot)
+            let projection = NativeRuntimePendingWriteProjection(snapshot)
             let update = NativeRuntimePendingWriteUpdate.next(
                 projection,
                 predecessorRevision: previousPendingWriteRevision,
@@ -137,10 +163,11 @@ extension NativeRuntimeProfile {
                 pendingWriteObservers[identifier] = observer
             }
         }
-        if frame.snapshot.revision > previousReceiptRevision
+        if let snapshot,
+           snapshot.revision > previousReceiptRevision
             || frame.eventCursorWasStale
         {
-            let projection = NativeRuntimeReceiptProjection(frame.snapshot)
+            let projection = NativeRuntimeReceiptProjection(snapshot)
             let update = NativeRuntimeReceiptUpdate.next(
                 projection,
                 predecessorRevision: previousReceiptRevision,
@@ -170,20 +197,27 @@ extension NativeRuntimeProfile {
             }
         }
         lock.unlock()
-        settingsExecutor.retainRunningSessions(
-            Set(frame.snapshot.sessions.filter { $0.state == "running" }.map(\.id))
-        )
+        if let snapshot {
+            settingsExecutor.retainRunningSessions(
+                Set(
+                    snapshot.sessions
+                        .filter { $0.state == "running" }
+                        .map(\.id)
+                )
+            )
+        }
         for session in activeSessions {
             session.deliver(frame: frame)
         }
-        if frame.snapshot.revision > previousActivityRevision
+        if let snapshot,
+           snapshot.revision > previousActivityRevision
             || frame.eventCursorWasStale
         {
             for observer in activityObservers {
                 observer.receive(
                     .next(
                         NativeRuntimeActivityProjection(
-                            frame.snapshot,
+                            snapshot,
                             scope: observer.scope
                         ),
                         predecessorRevision: previousActivityRevision,

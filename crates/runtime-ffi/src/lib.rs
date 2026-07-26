@@ -16,6 +16,7 @@ mod native_capabilities;
 mod permission_types;
 mod profile_preferences;
 mod projection;
+mod snapshot_integrity;
 mod snapshot_types;
 mod support;
 mod types;
@@ -66,8 +67,9 @@ pub use snapshot_types::{
     RuntimeExactBuildCoordinate, RuntimeInstalledBuildAvailability, RuntimeInstalledBuildSnapshot,
     RuntimeInstalledLibrarySnapshot, RuntimeObservation, RuntimeObservationFrame, RuntimeObserver,
     RuntimePendingWriteSnapshot, RuntimeReceiptSnapshot, RuntimeSessionSnapshot, RuntimeSnapshot,
-    RuntimeWorkspaceAxis, RuntimeWorkspaceDefinition, RuntimeWorkspaceRenderer,
-    RuntimeWorkspaceRestore, RuntimeWorkspaceRole, RuntimeWorkspaceSlot, RuntimeWorkspaceUpdate,
+    RuntimeSnapshotProjection, RuntimeWorkspaceAxis, RuntimeWorkspaceDefinition,
+    RuntimeWorkspaceRenderer, RuntimeWorkspaceRestore, RuntimeWorkspaceRole, RuntimeWorkspaceSlot,
+    RuntimeWorkspaceUpdate,
 };
 pub use types::{
     ArtifactCoordinate, ArtifactExecutionMode, ArtifactVerification, NativeConfigCommit,
