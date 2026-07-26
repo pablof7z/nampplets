@@ -219,6 +219,17 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
         // gap: the runtime classifies each detail, and the
         // `ActivityDetailField` conversion below only carries the decision
         // across.
+        //
+        // One consequence worth naming, because it looks like an omission and
+        // is not. Each record carries `droppedDetailCount` — details the
+        // runtime truncated at `MAXIMUM_ACTIVITY_DETAILS` — and it reaches
+        // `NativeRuntimeActivityRecord` correctly. It stops here because it
+        // describes a single fact and there are no facts to hang it on.
+        // Folding it into `omittedFactCount` would be wrong: that counts whole
+        // records this app cannot render, not details missing from a record it
+        // can. When typed facts arrive and `facts` stops being empty,
+        // `ActivityFact` needs its own `droppedDetailCount` and the row states
+        // it.
         return ActivitySnapshot(
             scope: scope,
             revision: projection.revision,

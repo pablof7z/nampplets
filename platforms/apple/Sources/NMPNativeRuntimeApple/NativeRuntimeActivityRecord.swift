@@ -50,6 +50,19 @@ public struct NativeRuntimeActivityRecord: Sendable {
     /// Details the runtime produced, each already classified by the runtime.
     public let details: [NativeRuntimeActivityDetail]
     /// Details the runtime dropped to stay within its own per-fact bound.
+    ///
+    /// Carried faithfully to here and no further, and the reason is a blocked
+    /// dependency rather than an oversight. It belongs on the fact row it
+    /// describes, and the Workbench has no fact rows:
+    /// `RuntimeWorkbenchActivitySource.snapshot(from:for:)` returns
+    /// `facts: []` unconditionally, because the FFI has no typed activity
+    /// severity or kind for Swift to render one from. `ActivitySnapshot`
+    /// reports the whole set as `omittedFactCount` instead.
+    ///
+    /// The single unblock condition is Rust supplying typed facts, at which
+    /// point `ActivityFact` needs a `droppedDetailCount` of its own and the
+    /// row states it. Until then there is nowhere to put this that would not
+    /// be attaching a per-fact number to something that is not a fact.
     public let droppedDetailCount: UInt32
 
     init(_ record: RuntimeActivitySnapshot) {
