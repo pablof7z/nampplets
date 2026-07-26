@@ -80,11 +80,21 @@ extension RuntimeWorkbenchUITests {
         )
 
         // AppKit exposes this SwiftUI DisclosureGroup as one labeled
-        // DisclosureTriangle. A pointer click on its label does not toggle it
-        // reliably, so focus it and use the standard disclosure keyboard
-        // action before querying its children.
-        evidence.click()
-        evidence.typeKey(.rightArrow, modifierFlags: [])
+        // DisclosureTriangle whose frame spans the whole header row -- CI
+        // measured {{186, 219.5}, {137.5, 15}}. A plain `.click()` therefore
+        // lands in the middle of the *text*, which does not toggle the group,
+        // and the previous `typeKey(.rightArrow)` could not rescue it: arrow
+        // keys only reach a non-text control when Full Keyboard Access is on,
+        // and it is off on a clean runner. Both events were synthesized and
+        // the element's `value` stayed 0.
+        //
+        // Clicking the triangle glyph itself needs no keyboard focus and no
+        // system setting. It sits at the leading edge of that row, so this
+        // offsets from the left rather than guessing a normalized fraction of
+        // a width that can change with the label.
+        evidence.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
+            .withOffset(CGVector(dx: 7, dy: 0))
+            .click()
         let expanded = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == 1"),
             object: evidence
