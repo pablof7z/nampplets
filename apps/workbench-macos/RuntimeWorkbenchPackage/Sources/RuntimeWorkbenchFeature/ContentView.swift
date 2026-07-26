@@ -265,7 +265,22 @@ public struct ContentView: View {
             profile?.native.setIntentActivationHandler(nil)
         }
         #if os(macOS)
-        .frame(minWidth: 1_050, minHeight: 660)
+        // This is the root cause of the Dock overlap, and it is a hard floor,
+        // not a preference: SwiftUI promotes a root view's `minWidth`/
+        // `minHeight` to the *window's* minimum size. 1050 is wider than a
+        // 1024pt display and 660 + 52pt of chrome is 712 -- precisely the
+        // unshrinkable 1050x712 window measured in CI. No amount of
+        // `setFrame` can beat a minimum size, which is why the first fix
+        // changed nothing.
+        //
+        // `WorkbenchContentSizing` keeps the same intent as an ideal size and
+        // lowers the floor to something a small display can actually satisfy.
+        .frame(
+            minWidth: WorkbenchContentSizing.minimumWidth,
+            idealWidth: WorkbenchContentSizing.idealWidth,
+            minHeight: WorkbenchContentSizing.minimumHeight,
+            idealHeight: WorkbenchContentSizing.idealHeight
+        )
         #endif
     }
 

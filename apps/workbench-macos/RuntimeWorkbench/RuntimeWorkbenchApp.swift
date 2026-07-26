@@ -8,6 +8,23 @@ final class RuntimeWorkbenchAppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.activateWorkbenchWindow()
         }
+        // A one-shot at launch is the wrong hook: SwiftUI applies
+        // `.defaultSize` on its own schedule, so a frame set here is sized over
+        // afterwards. Re-asserting on key and on resize also covers the Dock
+        // appearing or the display changing while the app is running.
+        for name: NSNotification.Name in [
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didResizeNotification,
+        ] {
+            NotificationCenter.default.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { [weak self] note in
+                guard let window = note.object as? NSWindow else { return }
+                self?.fitToVisibleScreen(window)
+            }
+        }
     }
 
     private func activateWorkbenchWindow() {
@@ -23,18 +40,37 @@ final class RuntimeWorkbenchAppDelegate: NSObject, NSApplicationDelegate {
     /// ideal size. See `WorkbenchWindowFitting` for why this is a correctness
     /// fix and not a cosmetic one.
     private func fitToVisibleScreen(_ window: NSWindow) {
+        // Sheets are windows too and will raise these notifications. Their
+        // height is bounded by `PermissionReviewSheetGeometry`; moving one by
+        // hand only fights AppKit's own sheet placement.
+        guard !window.isSheet else { return }
         guard let visibleFrame = (window.screen ?? NSScreen.main)?.visibleFrame
         else {
             return
         }
-        guard !WorkbenchWindowFitting.fits(window.frame, in: visibleFrame)
-        else {
+        let current = window.frame
+        let fitted = WorkbenchWindowFitting.fitted(current, into: visibleFrame)
+        // Observability, so the next CI run distinguishes "never ran" from "ran
+        // and was overridden" instead of leaving it to be inferred from an
+        // unchanged button frame. The previous attempt could not tell the two
+        // apart and cost a full cycle to learn nothing.
+        func describe(_ rect: NSRect) -> String {
+            "{{\(rect.minX), \(rect.minY)}, {\(rect.width), \(rect.height)}}"
+        }
+        NSLog(
+            "workbench-window-fit: visible=%@ current=%@ fitted=%@ applied=%@",
+            describe(visibleFrame),
+            describe(current),
+            describe(fitted),
+            WorkbenchWindowFitting.fits(current, in: visibleFrame)
+                ? "no-already-fits" : "yes"
+        )
+        // Terminates: once the window fits, this returns before setting a frame,
+        // so the resize notification it raises does not recur.
+        guard !WorkbenchWindowFitting.fits(current, in: visibleFrame) else {
             return
         }
-        window.setFrame(
-            WorkbenchWindowFitting.fitted(window.frame, into: visibleFrame),
-            display: true
-        )
+        window.setFrame(fitted, display: true)
     }
 }
 
@@ -62,8 +98,15 @@ struct RuntimeWorkbenchApp: App {
                 } else if let runtimeError {
                     ContentView(bootstrapError: runtimeError)
                 } else {
+                    // These were `minWidth`/`minHeight`, which SwiftUI turns
+                    // into the *window's* minimum size. 1050pt is wider than a
+                    // 1024pt display, so the window could not be shrunk to fit
+                    // and AppKit produced exactly the 1050x712 seen in CI
+                    // (660 content + 52 chrome). A loading placeholder must
+                    // express a preference, not a floor the window cannot honour.
                     ProgressView("Opening runtime…")
-                        .frame(minWidth: 1_050, minHeight: 660)
+                        .frame(idealWidth: 1_050, idealHeight: 660)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .preferredColorScheme(appearance.colorScheme)

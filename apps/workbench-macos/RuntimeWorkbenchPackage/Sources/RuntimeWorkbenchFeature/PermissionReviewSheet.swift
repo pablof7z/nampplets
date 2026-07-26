@@ -94,6 +94,12 @@ public struct PermissionReviewSheet: View {
         .background(NappletInk.paperRaised)
         #if os(macOS)
         .frame(minWidth: 580, idealWidth: 640, minHeight: 520, idealHeight: 700)
+        // A sheet is its own window and AppKit sizes it against the screen, not
+        // against the parent's content area, so on a short display its footer --
+        // and with it "Not Now" -- lands under the Dock. See
+        // `WorkbenchWindowFitting.maxSheetHeight`. The scroll view above absorbs
+        // whatever height this gives back, and the 520 floor is never crossed.
+        .frame(maxHeight: PermissionReviewSheetGeometry.maxHeight)
         #endif
         .interactiveDismissDisabled(model.isSubmitting)
     }
