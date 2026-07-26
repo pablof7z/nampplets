@@ -52,6 +52,9 @@ final class RuntimeWorkbenchUITests: XCTestCase {
         app.launchEnvironment["NMP_WORKBENCH_UI_TEST_SCENARIO"] =
             "good-morning-permission-launch"
         isolateStorage(of: app)
+        // The Workbench bundles no napplet, so this test supplies the one it
+        // reviews and launches, from the pinned conformance corpus.
+        try seedGoodMorning(into: app)
         app.launch()
         app.activate()
 

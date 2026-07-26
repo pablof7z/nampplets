@@ -20,6 +20,10 @@ extension RuntimeWorkbenchUITests {
         app.launchEnvironment["NMP_WORKBENCH_UI_TEST_SCENARIO"] =
             "good-morning-permission-launch"
         isolateStorage(of: app)
+        // The Workbench bundles no napplet. Activity is scoped to a build, so
+        // this test supplies the build it expects Activity to be admitted on,
+        // from the pinned conformance corpus.
+        let seededDTag = try seedGoodMorning(into: app)
         app.launch()
         app.activate()
 
@@ -82,7 +86,7 @@ extension RuntimeWorkbenchUITests {
         )
 
         let projectedDTag = app.staticTexts.matching(
-            NSPredicate(format: "value == %@", "good-morning")
+            NSPredicate(format: "value == %@", seededDTag)
         ).firstMatch
         XCTAssertTrue(
             projectedDTag.waitForExistence(timeout: 10),

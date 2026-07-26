@@ -25,7 +25,22 @@ extension ContentView {
         if await restorePersistedCanvasWindows() {
             return
         }
-        activity = .readyToAdd
+        do {
+            guard let seed = try UITestNappletSeed.fromLaunchEnvironment()
+            else {
+                // The canvas starts empty. The Workbench bundles no napplet
+                // and auto-opens none; everything reaches the canvas through
+                // the catalog or the installed library.
+                activity = .readyToAdd
+                return
+            }
+            let installed = try await Task.detached {
+                try seed.install(profile: profile)
+            }.value
+            try prepareInstalledArtifact(installed, identity: seed.identity)
+        } catch {
+            activity = .failed(detail: error.localizedDescription)
+        }
     }
 
     @MainActor
