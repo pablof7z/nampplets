@@ -244,12 +244,64 @@ jobs:
       - name: Run trusted-shell tests with a per-test deadline
         run: node --test --test-timeout=10000 "web/trusted-shell/tests/*.test.js"
 
+  # Generated-artifact drift is its own required check, deliberately separate
+  # from the job below. A stale NMPNativeRuntime.swift fails here and only here;
+  # it must never be able to abort a run before Swift is compiled, because that
+  # is how a Swift syntax error once reached main behind a five-second checksum
+  # mismatch with every Swift step reported as "skipped".
+  bindings:
+    name: UniFFI Swift bindings
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Verify the pinned Rust and Apple toolchains
+        run: |
+          rustup show active-toolchain | grep '^1.89.0-'
+          rustc --version | grep '^rustc 1.89.0 '
+          test "$(xcodebuild -version | head -n 1)" = "Xcode $(cat .xcode-version)"
+
+      - name: Install the host Apple Rust standard library
+        run: rustup target add aarch64-apple-darwin
+
+      - name: Test the native package build contract
+        run: scripts/tests/test-build-runtime-swift-xcframework.sh
+
+      - name: Prove the committed Swift binding matches the Rust FFI
+        run: >-
+          scripts/build-runtime-swift-xcframework.sh
+          --arm64-only
+          --no-ios
+          --check-bindings
+
+      - name: Prove generated source and binary tracking policy
+        run: |
+          git diff --exit-code -- Packages/NMPNativeRuntime/Sources/NMPNativeRuntime/NMPNativeRuntime.swift
+          git check-ignore -q Packages/NMPNativeRuntime/NMPNativeRuntime.xcframework/Info.plist
+          if git ls-files --error-unmatch Packages/NMPNativeRuntime/NMPNativeRuntime.xcframework >/dev/null 2>&1; then
+            echo "generated XCFramework must not be committed" >&2
+            exit 1
+          fi
+
+  # This job compiles and tests Swift against freshly generated bindings, so a
+  # compile error is reported as a compile error even when the committed
+  # bindings have drifted. It intentionally has no "needs" on the job above.
+  #
   # 45 minutes was never binding: for most of this job's life it died at a
   # build gate inside ten. Once the Swift targets compiled again it reached the
   # test steps for the first time and ran out of budget mid-way through
   # `Test the Workbench feature package` -- steps 1-10 alone take ~28 minutes
   # and that step another ~20, with the shared-scheme step still behind it.
   # A timeout only constrains a pipeline that gets far enough to feel it.
+  # The `!cancelled()` guards below widen the worst case further: a failing run
+  # now executes every Swift step instead of stopping at the first, which is
+  # the point, and it is the slowest steps that used to be skipped.
   apple:
     name: Apple package and shared scheme
     runs-on: macos-15
@@ -278,22 +330,24 @@ jobs:
           aarch64-apple-ios-sim
           x86_64-apple-ios
 
-      - name: Test the native package build contract
-        run: scripts/tests/test-build-runtime-swift-xcframework.sh
+      - name: Generate fresh Swift bindings and the universal XCFramework
+        run: scripts/build-runtime-swift-xcframework.sh --universal
 
-      - name: Generate checked Swift bindings and the universal XCFramework
-        run: scripts/build-runtime-swift-xcframework.sh --universal --check-bindings
-
-      - name: Prove generated source and binary tracking policy
+      - name: Report committed-binding drift without gating the Swift steps
         run: |
-          git diff --exit-code -- Packages/NMPNativeRuntime/Sources/NMPNativeRuntime/NMPNativeRuntime.swift
-          git check-ignore -q Packages/NMPNativeRuntime/NMPNativeRuntime.xcframework/Info.plist
-          if git ls-files --error-unmatch Packages/NMPNativeRuntime/NMPNativeRuntime.xcframework >/dev/null 2>&1; then
-            echo "generated XCFramework must not be committed" >&2
-            exit 1
+          binding=Packages/NMPNativeRuntime/Sources/NMPNativeRuntime/NMPNativeRuntime.swift
+          if git diff --quiet -- "$binding"; then
+            echo "committed Swift binding matches the generated output"
+            exit 0
           fi
+          git diff --stat -- "$binding"
+          message="Swift here is built and tested against freshly generated"
+          message="$message bindings; the UniFFI Swift bindings job is the"
+          message="$message required check that fails on this drift."
+          echo "::warning title=Committed UniFFI binding is stale::$message"
 
       - name: Build the iOS reference shell for a generic simulator
+        if: ${{ !cancelled() }}
         run: >-
           xcodebuild build
           -workspace apps/workbench-ios/RuntimeWorkbenchiOS.xcworkspace
@@ -303,15 +357,19 @@ jobs:
           CODE_SIGNING_ALLOWED=NO
 
       - name: Test the generated Swift binding package
+        if: ${{ !cancelled() }}
         run: scripts/tests/test-generated-binding-parallel-repeat.sh
 
       - name: Test the Apple host package
+        if: ${{ !cancelled() }}
         run: swift test --package-path platforms/apple --parallel
 
       - name: Test the Workbench feature package
+        if: ${{ !cancelled() }}
         run: swift test --package-path apps/workbench-macos/RuntimeWorkbenchPackage --parallel
 
       - name: Build and test the shared RuntimeWorkbench scheme
+        if: ${{ !cancelled() }}
         run: >-
           xcodebuild test
           -workspace apps/workbench-macos/RuntimeWorkbench.xcworkspace

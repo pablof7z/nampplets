@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Static contract tests for the required CI workflow event topology."""
+"""Static contract tests for the required CI workflow topology.
+
+Two independent contracts are enforced here. The first is the event topology.
+The second is the job topology that keeps generated-artifact drift and a broken
+source tree independently visible: the UniFFI bindings check must be its own
+job, and the Swift build and test steps must run whatever that check does.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +17,18 @@ import unittest
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml"
 EVENT_KEY = re.compile(r"^  ([A-Za-z_][A-Za-z0-9_-]*):(?:\s*(.*))?$")
+JOB_KEY = re.compile(r"^  ([A-Za-z_][A-Za-z0-9_-]*):$")
+STEP_NAME = re.compile(r"^      - name: (.+)$")
+BINDINGS_JOB = "bindings"
+APPLE_JOB = "apple"
+SWIFT_STEPS = {
+    "Build the iOS reference shell for a generic simulator",
+    "Test the generated Swift binding package",
+    "Test the Apple host package",
+    "Test the Workbench feature package",
+    "Build and test the shared RuntimeWorkbench scheme",
+}
+UNCONDITIONAL_STEP = "if: ${{ !cancelled() }}"
 
 
 def parse_top_level_events(source: str) -> dict[str, list[str]]:
@@ -48,6 +66,60 @@ def parse_top_level_events(source: str) -> dict[str, list[str]]:
         events[current_event].append(line[4:].rstrip())
 
     return events
+
+
+def parse_jobs(source: str) -> dict[str, str]:
+    """Return each job identifier mapped to its raw body text."""
+    lines = source.splitlines()
+    job_indexes = [index for index, line in enumerate(lines) if line.rstrip() == "jobs:"]
+    if len(job_indexes) != 1:
+        raise ValueError("workflow must contain exactly one top-level jobs block")
+
+    jobs: dict[str, list[str]] = {}
+    current_job: str | None = None
+    for line in lines[job_indexes[0] + 1 :]:
+        if line.strip() and not line.startswith(" "):
+            break
+        if line.lstrip().startswith("#"):
+            continue
+
+        match = JOB_KEY.fullmatch(line.rstrip())
+        if match:
+            current_job = match.group(1)
+            if current_job in jobs:
+                raise ValueError(f"duplicate workflow job: {current_job}")
+            jobs[current_job] = []
+            continue
+
+        if current_job is not None:
+            jobs[current_job].append(line)
+
+    return {job: "\n".join(body) for job, body in jobs.items()}
+
+
+def parse_steps(job_body: str) -> dict[str, str]:
+    """Return each step name in a job mapped to its raw body text."""
+    steps: dict[str, list[str]] = {}
+    current_step: str | None = None
+    for line in job_body.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+
+        match = STEP_NAME.fullmatch(line.rstrip())
+        if match:
+            current_step = match.group(1)
+            if current_step in steps:
+                raise ValueError(f"duplicate step name: {current_step}")
+            steps[current_step] = []
+            continue
+
+        if line.strip() and not line.startswith("      "):
+            current_step = None
+            continue
+        if current_step is not None:
+            steps[current_step].append(line)
+
+    return {step: "\n".join(body) for step, body in steps.items()}
 
 
 class CiWorkflowEventTopologyTests(unittest.TestCase):
@@ -119,6 +191,51 @@ def parse_concurrency_block(source: str) -> dict[str, str]:
             raise ValueError(f"malformed concurrency line: {line!r}")
         block[match.group(1)] = match.group(2)
     return block
+
+
+class CiWorkflowJobTopologyTests(unittest.TestCase):
+    """A stale generated file must never hide a broken source tree."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.source = WORKFLOW_PATH.read_text()
+        cls.jobs = parse_jobs(cls.source)
+
+    def test_the_bindings_check_lives_in_its_own_job(self) -> None:
+        checking_jobs = [
+            job for job, body in self.jobs.items() if "--check-bindings" in body
+        ]
+        self.assertEqual(checking_jobs, [BINDINGS_JOB])
+        self.assertIn("name: UniFFI Swift bindings", self.jobs[BINDINGS_JOB])
+        self.assertIn(
+            "name: Apple package and shared scheme",
+            self.jobs[APPLE_JOB],
+        )
+
+    def test_swift_steps_never_wait_on_the_bindings_check(self) -> None:
+        for job in (BINDINGS_JOB, APPLE_JOB):
+            declared = [
+                line
+                for line in self.jobs[job].splitlines()
+                if line.startswith("    needs:")
+            ]
+            self.assertEqual(declared, [], job)
+
+    def test_swift_steps_compile_against_freshly_generated_bindings(self) -> None:
+        apple = self.jobs[APPLE_JOB]
+        self.assertIn(
+            "run: scripts/build-runtime-swift-xcframework.sh --universal\n",
+            apple,
+        )
+        steps = parse_steps(apple)
+        for step in SWIFT_STEPS:
+            self.assertIn(step, steps)
+
+    def test_every_swift_step_reports_on_the_same_run(self) -> None:
+        steps = parse_steps(self.jobs[APPLE_JOB])
+        for name in SWIFT_STEPS:
+            self.assertIn(UNCONDITIONAL_STEP, steps[name], name)
+
 
 
 if __name__ == "__main__":
