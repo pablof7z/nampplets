@@ -42,6 +42,11 @@ import Testing
 /// The runtime's own words survive. Relocating evidence is the rule; deleting
 /// it is not, and a person who wants to know exactly what failed must still
 /// be able to find out.
+/// `@MainActor` because constructing the view and reading its stored issue
+/// touches main-actor-isolated state. My local build accepted it and CI did
+/// not -- CI is right, and this is the third time today its concurrency
+/// checking has been stricter than mine.
+@MainActor
 @Test func theRuntimesOwnWordsAreKeptForTheEvidenceTier() {
     let issue = CatalogIssue(
         title: "Coordinate is invalid",
