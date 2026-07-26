@@ -49,6 +49,23 @@ func permissionRevision(_ digit: Character) -> String {
     String(repeating: digit, count: 64)
 }
 
+/// The same review at a different revision: what Rust hands back with a
+/// `StaleReview` refusal, where effective policy moved under an open review.
+/// A validation refusal returns the review at its *unchanged* revision.
+func permissionReview(
+    _ review: PermissionReview,
+    atRevision digit: Character
+) -> PermissionReview {
+    PermissionReview(
+        principal: review.principal,
+        revision: permissionRevision(digit),
+        publisherDisplayName: review.publisherDisplayName,
+        nappletTitle: review.nappletTitle,
+        capabilities: review.capabilities,
+        isReadOnly: review.isReadOnly
+    )!
+}
+
 func validOptions(
     unavailable: Set<PermissionRequestedDecision> = []
 ) -> [PermissionDecisionOption] {

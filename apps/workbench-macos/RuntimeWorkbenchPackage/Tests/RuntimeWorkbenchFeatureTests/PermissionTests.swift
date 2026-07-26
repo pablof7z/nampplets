@@ -137,6 +137,42 @@ import Testing
 }
 
 @MainActor
+@Test func aStaleReviewRefusalDiscardsChoicesMadeAgainstTheOldRevision()
+    async
+{
+    let initial = permissionSnapshot()
+    let manager = RecordingPermissionManager(snapshot: initial)
+    // Rust ships the *current* review with a stale-review refusal, so it comes
+    // back at a revision the submitted batch never saw.
+    manager.response = PermissionReviewSnapshot(
+        review: permissionReview(initial.review, atRevision: "9"),
+        submissionState: .refused(
+            PermissionReviewIssue(
+                title: "Permission review changed",
+                message: "permission review revision is stale"
+            )!
+        )
+    )
+    let model = PermissionReviewSheetModel(manager: manager)
+
+    model.select(.allowExactBuild, for: model.review.capabilities[0])
+    await model.confirm()
+
+    // These choices were made against a review that no longer exists, so they
+    // are discarded rather than re-offered. This is the other half of
+    // `dependencyRefusalIsRenderedFromManagerOwnedErrorState`, where the review
+    // did not move and the pending choices are kept so the user can correct one
+    // domain and retry.
+    #expect(model.review.revision == String(repeating: "9", count: 64))
+    #expect(model.changedDomains.isEmpty)
+    #expect(!model.canConfirm)
+    #expect(
+        model.selection(for: model.review.capabilities[0])
+            == model.review.capabilities[0].requestedDecision
+    )
+}
+
+@MainActor
 @Test func invalidPlatformDecisionIsRefusedBeforeSubmission() async {
     let initial = unavailablePermissionSnapshot()
     let manager = RecordingPermissionManager(snapshot: initial)
