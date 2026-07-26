@@ -123,14 +123,30 @@ struct NappletField: Identifiable {
 
 /// Label/value rows for the technical tier. Monospaced and selectable, because
 /// the only reason to show these is so that someone can compare or copy them.
+///
+/// This renders **nothing** outside `.technical`, which makes the disclosure
+/// tier load-bearing rather than decorative. Every value that reaches this
+/// view is by definition the kind of thing ADR 0008 keeps off the plain path
+/// -- a hash, a key, a coordinate, a revision -- so a grid that finds itself
+/// in a `.plain` subtree has been misplaced, and failing closed is the only
+/// safe reading. Placing it inside `NappletEvidence` raises the tier
+/// automatically; that is the intended way to use it.
 struct NappletFieldGrid: View {
     let fields: [NappletField]
+
+    @Environment(\.nappletDisclosure) private var disclosure
 
     init(fields: [NappletField]) {
         self.fields = fields
     }
 
     var body: some View {
+        if disclosure.isTechnical {
+            grid
+        }
+    }
+
+    private var grid: some View {
         Grid(
             alignment: .leadingFirstTextBaseline,
             horizontalSpacing: NappletMetrics.comfortable,
