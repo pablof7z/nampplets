@@ -15,53 +15,84 @@ struct CatalogInstallReviewSheet: View {
     let onConfirm: () -> Void
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: NappletMetrics.roomy) {
-                    NappletHeading(title: review.title, subtitle: byline)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(review.title)
+                        .font(NappletType.display)
+                        .nappletDisplayFace()
+                        .foregroundStyle(NappletInk.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(byline)
+                        .font(NappletType.lede)
+                        .foregroundStyle(NappletInk.inkSecondary)
+                        .padding(.top, NappletMetrics.tight)
 
                     NappletNotice(verdict: verdict)
-
-                    capabilities
-
-                    reassurance
+                        .padding(.top, NappletMetrics.roomy)
 
                     if let issue {
                         NappletNotice(
                             verdict: .caution("\(issue.title). \(issue.message)")
                         )
+                        .padding(.top, NappletMetrics.snug)
                     }
+
+                    capabilities
+                        .padding(.top, NappletMetrics.spacious)
+
+                    reassurance
+                        .padding(.top, NappletMetrics.roomy)
 
                     NappletEvidence {
                         CatalogInstallEvidence(review: review)
                     }
+                    .font(NappletType.caption)
+                    .padding(.top, NappletMetrics.roomy)
                 }
-                .padding(NappletMetrics.roomy)
+                .frame(maxWidth: NappletMetrics.measure, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, NappletMetrics.generous)
+                .padding(.top, NappletMetrics.generous)
+                .padding(.bottom, NappletMetrics.spacious)
             }
-            .navigationTitle("Add Napplet")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
-                        .keyboardShortcut(.cancelAction)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(
-                        isInstalling ? "Adding…" : "Add Napplet",
-                        action: onConfirm
-                    )
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!review.canInstall || isInstalling)
-                    .accessibilityIdentifier("catalog-install-exact-build")
-                    .accessibilityHint(
-                        "Adds this napplet. It cannot do anything until you open it."
-                    )
-                }
-            }
+
+            actions
         }
+        .background(NappletInk.paperRaised)
         #if os(macOS)
-        .frame(minWidth: 520, idealWidth: 580, minHeight: 480, idealHeight: 620)
+        .frame(minWidth: 560, idealWidth: 620, minHeight: 480, idealHeight: 660)
         #endif
         .interactiveDismissDisabled(isInstalling)
+    }
+
+    /// The accent appears here and nowhere else on this screen.
+    private var actions: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(NappletInk.rule)
+                .frame(height: 1)
+            HStack(spacing: NappletMetrics.snug) {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button(
+                    isInstalling ? "Adding…" : "Add Napplet",
+                    action: onConfirm
+                )
+                .buttonStyle(.borderedProminent)
+                .tint(NappletInk.accent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!review.canInstall || isInstalling)
+                .accessibilityIdentifier("catalog-install-exact-build")
+                .accessibilityHint(
+                    "Adds this napplet. It cannot do anything until you open it."
+                )
+            }
+            .padding(.horizontal, NappletMetrics.generous)
+            .padding(.vertical, NappletMetrics.comfortable)
+        }
     }
 
     private var byline: String {
@@ -77,35 +108,49 @@ struct CatalogInstallReviewSheet: View {
     }
 
     /// The one thing a person is actually deciding about.
+    /// The napplet's claim about itself, so it is set as a card. The group
+    /// headings live on the page outside it: heading-card-heading-card nesting
+    /// is the grouped-Form look this redesign exists to escape.
     @ViewBuilder
     private var capabilities: some View {
         if review.requiredDomains.isEmpty, review.optionalDomains.isEmpty {
-            NappletCard {
-                Label(
-                    "This napplet doesn't ask for access to anything.",
-                    systemImage: "checkmark"
-                )
-                .font(.callout)
+            VStack(alignment: .leading, spacing: NappletMetrics.snug) {
+                Text("What it will ask for")
+                    .font(NappletType.heading)
+                    .foregroundStyle(NappletInk.ink)
+                Text("Nothing. This napplet doesn't ask for access to anything.")
+                    .font(NappletType.secondary)
+                    .foregroundStyle(NappletInk.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         } else {
-            NappletCard {
-                VStack(alignment: .leading, spacing: NappletMetrics.comfortable) {
-                    Text("What it will ask for")
-                        .font(.headline)
+            VStack(alignment: .leading, spacing: NappletMetrics.snug) {
+                Text("What it will ask for")
+                    .font(NappletType.heading)
+                    .foregroundStyle(NappletInk.ink)
 
+                VStack(alignment: .leading, spacing: NappletMetrics.comfortable) {
                     if !review.requiredDomains.isEmpty {
                         capabilityList(review.requiredDomains)
                     }
-
                     if !review.optionalDomains.isEmpty {
-                        VStack(alignment: .leading, spacing: NappletMetrics.tight) {
+                        VStack(alignment: .leading, spacing: NappletMetrics.snug) {
                             Text("Only if you say yes")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(.secondary)
+                                .font(NappletType.caption)
+                                .foregroundStyle(NappletInk.inkSecondary)
                             capabilityList(review.optionalDomains)
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(NappletMetrics.comfortable)
+                .background(
+                    NappletInk.fillQuiet,
+                    in: RoundedRectangle(
+                        cornerRadius: NappletMetrics.cardCorner,
+                        style: .continuous
+                    )
+                )
             }
         }
     }
@@ -116,12 +161,13 @@ struct CatalogInstallReviewSheet: View {
                 let phrase = NappletVocabulary.phrase(forDomain: domain)
                 Label {
                     Text(phrase.sentence)
+                        .foregroundStyle(NappletInk.ink)
                         .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: phrase.symbol)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(NappletInk.inkSecondary)
                 }
-                .font(.callout)
+                .font(NappletType.secondary)
                 .accessibilityElement(children: .combine)
             }
         }
@@ -132,8 +178,8 @@ struct CatalogInstallReviewSheet: View {
             "You choose what it can do the first time you open it. "
                 + "Adding it now gives it access to nothing."
         )
-        .font(.callout)
-        .foregroundStyle(.secondary)
+        .font(NappletType.secondary)
+        .foregroundStyle(NappletInk.inkSecondary)
         .fixedSize(horizontal: false, vertical: true)
     }
 

@@ -61,11 +61,14 @@ struct NappletNotice: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .font(.callout)
+            .font(NappletType.secondary)
             .padding(NappletMetrics.snug)
             .background(
-                tint.opacity(0.09),
-                in: RoundedRectangle(cornerRadius: NappletMetrics.cardCorner)
+                NappletInk.ground(for: verdict),
+                in: RoundedRectangle(
+                    cornerRadius: NappletMetrics.cardCorner,
+                    style: .continuous
+                )
             )
             .accessibilityElement(children: .combine)
         }
@@ -75,11 +78,7 @@ struct NappletNotice: View {
     /// correctly with colour removed, which is why `caution` and `blocked`
     /// differ in glyph and wording and not only in hue.
     private var tint: Color {
-        switch verdict {
-        case .settled: .clear
-        case .caution: .orange
-        case .blocked: .red
-        }
+        NappletInk.tint(for: verdict)
     }
 }
 

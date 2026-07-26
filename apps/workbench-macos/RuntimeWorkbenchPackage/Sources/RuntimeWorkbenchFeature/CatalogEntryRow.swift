@@ -1,60 +1,81 @@
 import SwiftUI
 
-/// One napplet in the browse list.
+/// One napplet on the Discover page.
 ///
-/// A person scanning this list is deciding what to look at, not auditing a
-/// build. The address, the compatibility vocabulary and the publisher's key
-/// belong to the review sheet's evidence, not here.
-/// See `docs/adr/0008-verdicts-on-the-path.md`.
+/// A card marks content the app did not write, and a napplet's name and words
+/// are the napplet's. The title is set at artwork scale and given artwork's
+/// position, because the name is the only honest recognition handle this
+/// product has: there is no icon, no screenshot, no rating and no count.
+///
+/// Generated identity marks -- identicons, gradient-from-hash, a monogram
+/// square -- are deliberately absent. A hash-derived mark is a visual
+/// fingerprint a person cannot verify but will learn to trust, and humans
+/// compare shapes approximately, so near-collisions look alike. That is a
+/// verdict the app would assert without being able to stand behind it: the
+/// picture-shaped twin of a five-star average.
+///
+/// See `docs/design/napplet-browser-visual.md` §7.1.
 struct CatalogEntryRow: View {
     let entry: CatalogEntry
+    var isPressed = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: NappletMetrics.snug) {
-            VStack(alignment: .leading, spacing: NappletMetrics.hairline) {
+        VStack(alignment: .leading, spacing: NappletMetrics.tight) {
+            HStack(alignment: .firstTextBaseline, spacing: NappletMetrics.snug) {
                 Text(entry.title)
-                    .font(.headline)
-
-                Text(entry.summary)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .font(NappletType.title)
+                    .foregroundStyle(NappletInk.ink)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if let publisherLine {
-                    Text(publisherLine)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                Spacer(minLength: NappletMetrics.snug)
+
+                // Stated in words, in ordinary ink. A row that flagged every
+                // napplet as "Compatible" told the reader nothing; a row that
+                // speaks only when something is off is worth reading, and it
+                // does not need a colour to be believed.
+                if let problem {
+                    Text(problem)
+                        .font(NappletType.caption)
+                        .foregroundStyle(NappletInk.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.trailing)
                 }
             }
 
-            Spacer(minLength: NappletMetrics.snug)
-
-            if let problem {
-                Text(problem)
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+            if !entry.summary.isEmpty {
+                Text(entry.summary)
+                    .font(NappletType.secondary)
+                    .foregroundStyle(NappletInk.inkSecondary)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 140, alignment: .trailing)
-                    .multilineTextAlignment(.trailing)
             }
 
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
+            if let publisherLine {
+                Text(publisherLine)
+                    .font(NappletType.caption)
+                    .foregroundStyle(NappletInk.inkSecondary)
+                    .lineLimit(1)
+                    .padding(.top, NappletMetrics.hairline)
+            }
         }
-        .padding(.vertical, NappletMetrics.tight)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(NappletMetrics.comfortable)
+        .background(
+            isPressed ? NappletInk.fillSelected : NappletInk.fillQuiet,
+            in: RoundedRectangle(
+                cornerRadius: NappletMetrics.cardCorner,
+                style: .continuous
+            )
+        )
         .contentShape(Rectangle())
     }
 
     /// Absence renders as absence.
     ///
-    /// Naming every unnamed publisher put the identical non-fact on every row
-    /// -- which is the same mistake as a green seal on every screen, made by
-    /// me, one screen later. The install review still states it, because there
-    /// it bears on a decision. Here it would only be noise that crowds out the
-    /// rows where a publisher *is* named.
+    /// Naming every unnamed publisher put the identical non-fact on every row,
+    /// which is the same mistake as a seal on every screen. The install review
+    /// still states it, because there it bears on a decision.
     private var publisherLine: String? {
         guard
             !NappletIdentityPresentation.publisherIsUnnamed(
@@ -70,9 +91,6 @@ struct CatalogEntryRow: View {
         )
     }
 
-    /// Silence when there is nothing wrong. A row that flags every napplet as
-    /// "Compatible" or "Review required" has told the reader nothing; a row
-    /// that speaks only when something is off is worth reading.
     private var problem: String? {
         switch entry.compatibility {
         case .compatible, .unreviewed:

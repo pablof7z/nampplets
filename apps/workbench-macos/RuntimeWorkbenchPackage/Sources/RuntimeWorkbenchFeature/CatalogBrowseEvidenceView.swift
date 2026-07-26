@@ -13,24 +13,16 @@ struct CatalogBrowseEvidenceView: View {
     let hasMore: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Divider()
-            HStack(spacing: NappletMetrics.tight) {
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(isPartial ? .orange : .secondary)
+        HStack(spacing: NappletMetrics.comfortable) {
+            Text(summary)
+                .font(NappletType.caption)
+                .foregroundStyle(NappletInk.inkSecondary)
 
-                Spacer()
-
-                NappletEvidence(label: "Where these came from") {
-                    evidenceDetail
-                }
-                .font(.caption)
+            NappletEvidence(label: "Where these came from") {
+                evidenceDetail
             }
-            .padding(.horizontal, NappletMetrics.comfortable)
-            .padding(.vertical, NappletMetrics.tight)
+            .font(NappletType.caption)
         }
-        .background(.bar)
         .accessibilityIdentifier("catalog-feed-evidence")
         .accessibilityLabel(summary)
     }
