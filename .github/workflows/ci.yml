@@ -230,7 +230,7 @@ jobs:
           cache: ""
 
       - name: Run trusted-shell tests with a per-test deadline
-        run: node --test --test-timeout=10000 web/trusted-shell/tests/trusted-shell.test.js
+        run: node --test --test-timeout=10000 "web/trusted-shell/tests/*.test.js"
 
   apple:
     name: Apple package and shared scheme

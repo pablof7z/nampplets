@@ -21,7 +21,7 @@ pub use manifest::{
     ArtifactMode, ArtifactSourcePolicy, BlobFetchRequest, BlobFetchResponse, ManifestBlobSource,
     ManifestCoordinate, ManifestError, ManifestEventLimits, ManifestEventVerifier,
     SignedArtifactResolver, VerifiedArtifactHandle, VerifiedArtifactIndex,
-    VerifiedArtifactIndexEntry, VerifiedManifest,
+    VerifiedArtifactIndexEntry, VerifiedManifest, embedded_config_schema, embedded_requirements,
 };
 pub use resolver::{ArtifactResolver, CachedArtifact};
 

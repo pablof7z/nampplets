@@ -1725,12 +1725,12 @@
     });
     napplet.config = Object.freeze(config);
   }
-  Object.defineProperty(window, "napplet", {
-    configurable: false,
-    enumerable: true,
-    writable: false,
-    value: Object.freeze(napplet)
-  });
+  // Replaceable on purpose: authority is the envelope and the native grant,
+  // not this object, which a napplet could bypass by posting envelopes
+  // itself. Napplets bundling the published SDK assign their own client here
+  // at load, where a locked property throws in strict mode and kills them.
+  Object.defineProperty(window, "napplet",
+    { configurable: true, enumerable: true, writable: true, value: Object.freeze(napplet) });
   parent.postMessage({ type: "shell.ready" }, "*");
 })();`;
   }

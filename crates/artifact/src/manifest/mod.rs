@@ -5,6 +5,7 @@ use serde::Serialize;
 use crate::Sha256Digest;
 
 mod blob;
+mod embedded;
 mod error;
 mod index;
 mod policy;
@@ -16,6 +17,7 @@ mod verifier;
 mod tests;
 
 pub use blob::{BlobFetchRequest, BlobFetchResponse, ManifestBlobSource};
+pub use embedded::{embedded_config_schema, embedded_requirements};
 pub use error::ManifestError;
 pub use index::{VerifiedArtifactHandle, VerifiedArtifactIndex, VerifiedArtifactIndexEntry};
 pub use policy::ArtifactSourcePolicy;

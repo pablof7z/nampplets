@@ -1,5 +1,6 @@
 //! Private controller helpers: capability derivation and bounded refusals.
 
+use nmp_native_artifact::{INDEX_PATH, embedded_requirements};
 use nmp_native_runtime_core::{Capability, CapabilityRequest, CapabilityRequirement, Principal};
 use nmp_native_runtime_store::InstalledBuild;
 
@@ -20,6 +21,12 @@ use crate::{
 /// build receives the required/optional profile already pinned by the native
 /// runtime compatibility corpus. Native callers cannot select this profile or
 /// supply capability names.
+///
+/// Builds published with neither signed tags nor a pinned profile fall back to
+/// the `napplet-requires` declaration inside the verified entry document. Those
+/// bytes are pinned by the signed path digest and aggregate, so the declaration
+/// is as authenticated as a tag; without it such a build would launch with an
+/// empty inventory and no domain to review.
 pub(super) fn installation_capability_requests(
     artifact: &VerifiedArtifact,
 ) -> Result<Vec<CapabilityRequest>, String> {
@@ -48,6 +55,8 @@ pub(super) fn installation_capability_requests(
                 requirement: *requirement,
             });
         }
+    } else if requests.is_empty() {
+        requests = declared_capability_requests(artifact)?;
     }
     if requests.len() > MAXIMUM_PERMISSION_DECISIONS {
         return Err(format!(
@@ -57,6 +66,57 @@ pub(super) fn installation_capability_requests(
         ));
     }
     Ok(requests)
+}
+
+/// Reads the `napplet-config-schema` declaration out of the verified entry
+/// document so the config provider can install it before untrusted code runs.
+/// Napplets read their settings through `config.subscribe`, which answers
+/// `no-schema` until some schema is registered, and the published SDK never
+/// registers the manifest one itself.
+pub(super) fn declared_config_schema(artifact: &VerifiedArtifact) -> Option<serde_json::Value> {
+    let document = verified_index_document(artifact).ok()??;
+    let schema = nmp_native_artifact::embedded_config_schema(&document)?;
+    serde_json::from_str(&schema).ok()
+}
+
+/// Reads the `napplet-requires` declaration out of the verified entry document.
+/// Absent or unreadable bytes yield an empty inventory rather than a refusal:
+/// launch already reports the domains it could not inject.
+fn declared_capability_requests(
+    artifact: &VerifiedArtifact,
+) -> Result<Vec<CapabilityRequest>, String> {
+    let Some(document) = verified_index_document(artifact)? else {
+        return Ok(Vec::new());
+    };
+    embedded_requirements(&document)
+        .into_iter()
+        .map(|domain| {
+            Capability::new(domain)
+                .map(|capability| CapabilityRequest {
+                    capability,
+                    requirement: CapabilityRequirement::Required,
+                })
+                .map_err(|error| error.to_string())
+        })
+        .collect()
+}
+
+/// Reads the verified entry document, or `None` when the artifact has no
+/// `/index.html` entry to read.
+fn verified_index_document(artifact: &VerifiedArtifact) -> Result<Option<Vec<u8>>, String> {
+    let Some(entry) = artifact
+        .handle
+        .index()
+        .entries()
+        .find(|entry| entry.path() == INDEX_PATH)
+    else {
+        return Ok(None);
+    };
+    artifact
+        .handle
+        .read_verified(INDEX_PATH, entry.bytes())
+        .map(Some)
+        .map_err(|error| error.to_string())
 }
 
 pub(super) fn installed_manifest_event_id(build: &InstalledBuild) -> Result<String, String> {

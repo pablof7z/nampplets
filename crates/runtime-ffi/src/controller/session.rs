@@ -5,7 +5,10 @@ use std::{collections::BTreeSet, sync::Arc};
 use nmp_native_runtime_app::{PlatformCommand, ProviderOperationId};
 use nmp_native_runtime_core::{CapabilityRequirement, SessionId};
 
-use super::{RuntimeController, support::installation_capability_requests};
+use super::{
+    RuntimeController,
+    support::{declared_config_schema, installation_capability_requests},
+};
 use crate::{
     RuntimeExecutionProfile, VerifiedArtifact, VerifiedRead,
     projection::map_profile,
@@ -45,6 +48,15 @@ impl RuntimeController {
             if request.requirement == CapabilityRequirement::Required {
                 domains.insert(request.capability);
             }
+        }
+        // The manifest-declared schema has to exist before the napplet's first
+        // `config.get`; a napplet that reads its settings on boot otherwise
+        // waits forever on a `no-schema` reply it never asked for.
+        if let (Some(provider), Some(schema)) =
+            (&self.config_provider, declared_config_schema(&artifact))
+            && let Err(error) = provider.register_manifest_schema(&principal, &schema, None)
+        {
+            self.record_refusal("config-schema-refused", error.to_string());
         }
         self.app.dispatch(PlatformCommand::Launch {
             principal,
