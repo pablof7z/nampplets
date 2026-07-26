@@ -24,6 +24,7 @@ public enum RuntimeWorkbenchActivitySourceRefusal:
 {
     case subscriberCapacity(maximum: Int)
     case scopeMismatch
+    case snapshotRefused(code: String, detail: String)
 
     public var errorDescription: String? {
         switch self {
@@ -31,6 +32,8 @@ public enum RuntimeWorkbenchActivitySourceRefusal:
             "The Workbench activity subscriber limit of \(maximum) was reached."
         case .scopeMismatch:
             "This activity source is bound to a different exact build."
+        case let .snapshotRefused(code, detail):
+            "Runtime activity projection was refused (\(code)): \(detail)"
         }
     }
 }
@@ -72,7 +75,7 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
             aggregateHash: scope.aggregateHash
         )
         self.nativeScope = nativeScope
-        projection = profile.native.activityProjection(for: nativeScope)
+        projection = try profile.native.activityProjection(for: nativeScope)
         let mailbox = RuntimeActivityUpdateMailbox()
         self.mailbox = mailbox
         mailbox.bind { [weak self] update in
@@ -127,23 +130,32 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
 
     public func refresh(
         scope requestedScope: ActivityExactBuildScope
-    ) -> ActivitySnapshot {
+    ) throws -> ActivitySnapshot {
         guard requestedScope == scope else {
-            latestAdmissionRefusal = .scopeMismatch
-            return Self.emptySnapshot(
-                revision: projection.revision,
-                scope: requestedScope
-            )
+            let refusal = RuntimeWorkbenchActivitySourceRefusal.scopeMismatch
+            latestAdmissionRefusal = refusal
+            throw refusal
         }
-        let latest = profile.native.activityProjection(for: nativeScope)
-        projection = latest
-        return Self.snapshot(from: latest, for: requestedScope)
+        do {
+            let latest = try profile.native.activityProjection(for: nativeScope)
+            projection = latest
+            latestAdmissionRefusal = nil
+            return Self.snapshot(from: latest, for: requestedScope)
+        } catch let NativeRuntimeSnapshotProjectionError.refused(refusal) {
+            let projected = RuntimeWorkbenchActivitySourceRefusal.snapshotRefused(
+                code: refusal.code,
+                detail: refusal.detail
+            )
+            latestAdmissionRefusal = projected
+            throw projected
+        }
     }
 
     private func receive(_ update: NativeRuntimeActivityUpdate) {
         switch update {
         case let .authoritative(nextProjection):
             projection = nextProjection
+            latestAdmissionRefusal = nil
             for subscriber in subscribers.values {
                 subscriber.receive(
                     .authoritative(
@@ -161,6 +173,7 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
             eventCursorWasStale
         ):
             projection = nextProjection
+            latestAdmissionRefusal = nil
             let deliveredPredecessor = eventCursorWasStale
                 ? predecessorRevision ^ 1
                 : predecessorRevision
@@ -228,123 +241,5 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
             facts: [],
             omittedFactCount: 0
         )!
-    }
-}
-
-@MainActor
-private final class RuntimeWorkbenchActivitySubscription:
-    ActivitySubscription
-{
-    private var cancellation: (@MainActor @Sendable () -> Void)?
-
-    init(cancellation: @escaping @MainActor @Sendable () -> Void) {
-        self.cancellation = cancellation
-    }
-
-    func cancel() {
-        let cancellation = cancellation
-        self.cancellation = nil
-        cancellation?()
-    }
-
-    deinit {
-        let cancellation = cancellation
-        DispatchQueue.main.async {
-            MainActor.assumeIsolated {
-                cancellation?()
-            }
-        }
-    }
-}
-
-/// One-slot replacement mailbox. At most one main-queue work item is pending;
-/// newer runtime updates replace the pending value and retain predecessor
-/// evidence so the presentation can make a delivery gap visible.
-private final class RuntimeActivityUpdateMailbox: @unchecked Sendable {
-    typealias Handler =
-        @MainActor @Sendable (NativeRuntimeActivityUpdate) -> Void
-
-    private let lock = NSLock()
-    private var handler: Handler?
-    private var pending: NativeRuntimeActivityUpdate?
-    private var isScheduled = false
-    private var isClosed = false
-
-    @MainActor
-    func bind(_ handler: @escaping Handler) {
-        lock.lock()
-        guard !isClosed else {
-            lock.unlock()
-            return
-        }
-        self.handler = handler
-        let shouldSchedule = pending != nil && !isScheduled
-        if shouldSchedule {
-            isScheduled = true
-        }
-        lock.unlock()
-        if shouldSchedule {
-            scheduleDrain()
-        }
-    }
-
-    func offer(_ update: NativeRuntimeActivityUpdate) {
-        lock.lock()
-        guard !isClosed else {
-            lock.unlock()
-            return
-        }
-        pending = update
-        let shouldSchedule = handler != nil && !isScheduled
-        if shouldSchedule {
-            isScheduled = true
-        }
-        lock.unlock()
-        if shouldSchedule {
-            scheduleDrain()
-        }
-    }
-
-    func close() {
-        lock.lock()
-        isClosed = true
-        pending = nil
-        handler = nil
-        lock.unlock()
-    }
-
-    private func scheduleDrain() {
-        DispatchQueue.main.async { [weak self] in
-            self?.drainOnMainQueue()
-        }
-    }
-
-    private func drainOnMainQueue() {
-        lock.lock()
-        guard !isClosed, let update = pending, let handler else {
-            isScheduled = false
-            lock.unlock()
-            return
-        }
-        pending = nil
-        lock.unlock()
-
-        MainActor.assumeIsolated {
-            handler(update)
-        }
-
-        lock.lock()
-        let shouldSchedule = !isClosed && pending != nil && self.handler != nil
-        if !shouldSchedule {
-            isScheduled = false
-        }
-        lock.unlock()
-        if shouldSchedule {
-            scheduleDrain()
-        }
-    }
-
-    deinit {
-        close()
     }
 }

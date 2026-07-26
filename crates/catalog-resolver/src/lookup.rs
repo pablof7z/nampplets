@@ -4,7 +4,7 @@ use nmp_native_artifact::ManifestCoordinate;
 use parking_lot::{Condvar, Mutex};
 use thiserror::Error;
 
-use crate::{CancellationToken, ResolveError};
+use crate::{CancellationToken, ResolveError, cancellation::CancellationWake};
 
 #[derive(Clone, Debug)]
 pub struct ManifestLookupRequest {
@@ -139,6 +139,14 @@ enum LookupCompletionResult {
     Closed,
 }
 
+impl CancellationWake for LookupCompletionState {
+    fn wake(&self) {
+        // Synchronize notification with the predicate check and atomic park.
+        let _result = self.result.lock();
+        self.ready.notify_all();
+    }
+}
+
 impl ManifestLookupCompletion {
     pub(crate) fn pending() -> Self {
         Self {
@@ -171,7 +179,8 @@ impl ManifestLookupCompletion {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<ManifestLookupResponse, ResolveError> {
-        let _registration = cancellation.register(Arc::clone(&self.state.ready))?;
+        let wakeup: Arc<dyn CancellationWake> = self.state.clone();
+        let _registration = cancellation.register(wakeup)?;
         let mut state = self.state.result.lock();
         loop {
             if cancellation.is_cancelled() {

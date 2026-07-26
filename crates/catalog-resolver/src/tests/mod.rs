@@ -1,6 +1,7 @@
 //! Test fixtures shared across the catalog-resolver test suite, split by
 //! concern: [`resolution`] (core resolve/offline/redirect/cancel behavior),
-//! [`review`] (review lifecycle and blocking-cancellation behavior), and
+//! [`review`] (review lifecycle and blocked HTTPS cancellation),
+//! [`cancellation`] (blocked lookup cancellation lifecycle), and
 //! [`acquisition`] (raw Rust HTTPS port behavior).
 
 use std::{
@@ -27,6 +28,7 @@ use crate::{
 };
 
 mod acquisition;
+mod cancellation;
 mod resolution;
 mod review;
 

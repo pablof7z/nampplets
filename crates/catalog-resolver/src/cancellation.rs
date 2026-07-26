@@ -1,12 +1,13 @@
 use std::{
     collections::BTreeMap,
+    fmt,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
-use parking_lot::{Condvar, Mutex};
+use parking_lot::Mutex;
 
 use crate::ResolveError;
 
@@ -33,12 +34,11 @@ impl Default for CancellationToken {
 struct CancellationState {
     cancelled: AtomicBool,
     next_registration: AtomicU64,
-    wakeups: Mutex<BTreeMap<u64, Arc<CancellationWake>>>,
+    wakeups: Mutex<BTreeMap<u64, Arc<dyn CancellationWake>>>,
 }
 
-#[derive(Debug)]
-struct CancellationWake {
-    ready: Arc<Condvar>,
+pub(crate) trait CancellationWake: fmt::Debug + Send + Sync {
+    fn wake(&self);
 }
 
 #[derive(Debug)]
@@ -57,7 +57,7 @@ impl CancellationToken {
             std::mem::take(&mut *registered)
         };
         for wakeup in wakeups.into_values() {
-            wakeup.ready.notify_all();
+            wakeup.wake();
         }
     }
 
@@ -67,12 +67,12 @@ impl CancellationToken {
 
     pub(crate) fn register(
         &self,
-        ready: Arc<Condvar>,
+        wakeup: Arc<dyn CancellationWake>,
     ) -> Result<CancellationRegistration, ResolveError> {
         let mut wakeups = self.state.wakeups.lock();
         if self.is_cancelled() {
             drop(wakeups);
-            ready.notify_all();
+            wakeup.wake();
             return Ok(CancellationRegistration {
                 state: Arc::clone(&self.state),
                 id: None,
@@ -84,7 +84,7 @@ impl CancellationToken {
             });
         }
         let id = self.state.next_registration.fetch_add(1, Ordering::Relaxed);
-        wakeups.insert(id, Arc::new(CancellationWake { ready }));
+        wakeups.insert(id, wakeup);
         Ok(CancellationRegistration {
             state: Arc::clone(&self.state),
             id: Some(id),

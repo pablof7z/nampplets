@@ -9,18 +9,18 @@ fn typed_workspace_round_trips_only_through_rust_owned_storage() {
     assert!(saved.accepted);
     assert_eq!(saved.workspace, Some(expected.clone()));
     assert_eq!(
-        runtime.snapshot().workspaces,
+        runtime.snapshot_value().workspaces,
         std::slice::from_ref(&expected)
     );
     runtime.close();
     drop(runtime);
 
     let reopened = controller(&temp);
-    assert!(reopened.snapshot().workspaces.is_empty());
+    assert!(reopened.snapshot_value().workspaces.is_empty());
     let restored = reopened.restore_workspaces();
     assert!(restored.accepted);
     assert_eq!(restored.workspaces, std::slice::from_ref(&expected));
-    assert_eq!(reopened.snapshot().workspaces, [expected]);
+    assert_eq!(reopened.snapshot_value().workspaces, [expected]);
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn workspace_validation_refuses_unknown_duplicate_and_oversized_input() {
     let refusal = controller.save_workspace(oversized).refusal.unwrap();
     assert_eq!(refusal.code, "invalid-workspace");
     assert!(refusal.detail.contains("maximum"));
-    assert!(controller.snapshot().workspaces.is_empty());
+    assert!(controller.snapshot_value().workspaces.is_empty());
 }
 
 #[test]
@@ -74,5 +74,5 @@ fn workspace_restore_is_all_or_nothing_for_corrupt_or_future_rows() {
     assert!(!restored.accepted);
     assert!(restored.workspaces.is_empty());
     assert_eq!(restored.refusal.unwrap().code, "invalid-workspace");
-    assert!(controller.snapshot().workspaces.is_empty());
+    assert!(controller.snapshot_value().workspaces.is_empty());
 }

@@ -68,12 +68,13 @@ import Testing
         )
     )
 
-    let snapshot = source.refresh(scope: unrelatedScope)
-
+    do {
+        _ = try source.refresh(scope: unrelatedScope)
+        Issue.record("A cross-build refresh returned a fabricated snapshot")
+    } catch let refusal as RuntimeWorkbenchActivitySourceRefusal {
+        #expect(refusal == .scopeMismatch)
+    }
     #expect(source.latestAdmissionRefusal == .scopeMismatch)
-    #expect(snapshot.inventory == .empty)
-    #expect(snapshot.facts.isEmpty)
-    #expect(snapshot.omittedFactCount == 0)
 
     _ = artifact
 }

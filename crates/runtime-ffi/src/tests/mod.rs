@@ -8,6 +8,9 @@ mod library;
 mod native_capabilities;
 mod permissions;
 mod profile_preferences;
+mod snapshot_delivery;
+mod snapshot_integrity;
+mod test_support;
 mod workspace;
 
 use std::{collections::BTreeMap, fs, sync::Arc};
@@ -28,29 +31,7 @@ use crate::{
     *,
 };
 
-const EVENT: &[u8] =
-    include_bytes!("../../../../conformance/napplet-corpus/published/good-morning/event.json");
-const INDEX: &[u8] =
-    include_bytes!("../../../../conformance/napplet-corpus/published/good-morning/index.html");
-const AUTHOR: &str = "266815e0c9210dfa324c6cba3573b14bee49da4209a9456f9484e5106cd408a5";
-const DIGEST: &str = "ffd35eea5c84d03cdda74c23e1bbb2c40500f503833503aa688036faa52f3808";
-
-struct FixtureSource(BTreeMap<String, Vec<u8>>);
-
-impl ArtifactSource for FixtureSource {
-    fn fetch(&self, request: ArtifactFetchRequest) -> ArtifactFetchResponse {
-        let bytes = self
-            .0
-            .get(&request.expected_sha256)
-            .cloned()
-            .unwrap_or_default();
-        ArtifactFetchResponse::Body {
-            source_url: request.candidate_urls[0].clone(),
-            http_status: 200,
-            bytes,
-        }
-    }
-}
+use test_support::*;
 
 #[derive(Debug)]
 struct FixtureAppearance;
@@ -281,7 +262,7 @@ fn install_and_launch(
         );
     }
     controller.launch(Arc::clone(&artifact), RuntimeExecutionProfile::Legacy);
-    let session = controller.snapshot().sessions[0].id;
+    let session = controller.snapshot_value().sessions[0].id;
     controller.mapped_envelope(session, br#"{"type":"shell.ready"}"#.to_vec());
     (artifact, session)
 }

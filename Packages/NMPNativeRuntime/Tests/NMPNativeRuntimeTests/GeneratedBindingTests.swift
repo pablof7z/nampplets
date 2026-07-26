@@ -26,10 +26,11 @@ final class GeneratedBindingTests: XCTestCase {
             config: config(root: root),
             artifactSource: RefusingArtifactSource()
         )
-        XCTAssertEqual(controller.snapshot().revision, 0)
-        XCTAssertFalse(controller.snapshot().closed)
+        let opened = try requireSnapshot(controller.snapshot())
+        XCTAssertEqual(opened.revision, 0)
+        XCTAssertFalse(opened.closed)
         controller.close()
-        XCTAssertTrue(controller.snapshot().closed)
+        XCTAssertTrue(try requireSnapshot(controller.snapshot()).closed)
     }
 
     func testSignedArtifactInstallLaunchAndVerifiedReadCrossActualFFI() throws {
@@ -110,7 +111,9 @@ final class GeneratedBindingTests: XCTestCase {
             profile: .legacy
         )
 
-        let session = try XCTUnwrap(controller.snapshot().sessions.first)
+        let session = try XCTUnwrap(
+            requireSnapshot(controller.snapshot()).sessions.first
+        )
         let responses = ResponseRuntimeObserver()
         let observation = try XCTUnwrap(
             controller.observe(observer: responses).observation
@@ -179,21 +182,48 @@ final class GeneratedBindingTests: XCTestCase {
             config: boundedConfig,
             artifactSource: RefusingArtifactSource()
         )
-        let delivered = expectation(description: "initial conflated frame")
-        let observer = RecordingRuntimeObserver(delivered: delivered)
+        let observer = RecordingRuntimeObserver()
 
         let start = controller.observe(observer: observer)
         let observation = try XCTUnwrap(start.observation)
         XCTAssertNil(start.refusal)
         let refused = controller.observe(
-            observer: RecordingRuntimeObserver(delivered: nil)
+            observer: RecordingRuntimeObserver()
         )
         XCTAssertNil(refused.observation)
         XCTAssertEqual(refused.refusal?.code, "observer-capacity")
-        wait(for: [delivered], timeout: 2)
+        XCTAssertTrue(observer.waitForInitialFrame(timeout: 2))
         XCTAssertEqual(observer.latestRevision, 0)
         observation.stop()
         controller.close()
+    }
+
+    func testCallbackRacingStopAndTeardownReachesSafeTerminalState() throws {
+        let root = try temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let controller = try RuntimeController.open(
+            config: config(root: root),
+            artifactSource: RefusingArtifactSource()
+        )
+        let observer = TeardownRuntimeObserver()
+        let observation = try XCTUnwrap(
+            controller.observe(observer: observer).observation
+        )
+        XCTAssertTrue(
+            observer.waitForCallbackEntry(timeout: 2),
+            observer.lastState
+        )
+
+        observer.cancel()
+        observation.stop()
+        controller.close()
+        observer.releaseCallback()
+
+        XCTAssertTrue(
+            observer.waitForTerminalState(timeout: 2),
+            observer.lastState
+        )
+        XCTAssertEqual(observer.ignoredFramesAfterCancellation, 1)
     }
 
     private func temporaryRoot() throws -> URL {
@@ -263,73 +293,5 @@ private final class FixtureArtifactSource: ArtifactSource, @unchecked Sendable {
             return .refused(reason: "fixture digest not found")
         }
         return .body(sourceUrl: sourceURL, httpStatus: 200, bytes: bytes)
-    }
-}
-
-private final class RecordingRuntimeObserver: RuntimeObserver, @unchecked Sendable {
-    private let lock = NSLock()
-    private let delivered: XCTestExpectation?
-    private var revision: UInt64?
-
-    init(delivered: XCTestExpectation?) {
-        self.delivered = delivered
-    }
-
-    var latestRevision: UInt64? {
-        lock.lock()
-        defer { lock.unlock() }
-        return revision
-    }
-
-    func update(frame: RuntimeObservationFrame) {
-        lock.lock()
-        revision = frame.snapshot.revision
-        lock.unlock()
-        delivered?.fulfill()
-    }
-}
-
-private final class ResponseRuntimeObserver: RuntimeObserver, @unchecked Sendable {
-    private let condition = NSCondition()
-    private var responses: [String] = []
-
-    func update(frame: RuntimeObservationFrame) {
-        let delivered = frame.events.compactMap(\.responseJson)
-        guard !delivered.isEmpty else { return }
-        condition.lock()
-        responses.append(contentsOf: delivered)
-        condition.broadcast()
-        condition.unlock()
-    }
-
-    func waitForResponse(
-        type: String,
-        id: String?,
-        timeout: TimeInterval
-    ) -> [String: Any]? {
-        let deadline = Date().addingTimeInterval(timeout)
-        condition.lock()
-        defer { condition.unlock() }
-        while true {
-            if let response = responses.compactMap(decode).first(where: {
-                $0["type"] as? String == type
-                    && (id == nil || $0["id"] as? String == id)
-            }) {
-                return response
-            }
-            guard condition.wait(until: deadline) else {
-                return nil
-            }
-        }
-    }
-
-    private func decode(_ raw: String) -> [String: Any]? {
-        guard
-            let data = raw.data(using: .utf8),
-            let value = try? JSONSerialization.jsonObject(with: data)
-        else {
-            return nil
-        }
-        return value as? [String: Any]
     }
 }

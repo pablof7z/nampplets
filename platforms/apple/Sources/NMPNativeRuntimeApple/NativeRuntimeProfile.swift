@@ -98,6 +98,7 @@ public final class NativeRuntimeProfile: RuntimeObserver, @unchecked Sendable {
     var lastCatalogSnapshot: NativeRuntimeCatalogFeedSnapshot
     var lastPendingWriteRevision: UInt64
     var lastReceiptRevision: UInt64
+    var lastAcceptedSnapshot: RuntimeSnapshot
     var accountPersistenceProblem:
         NativeRuntimeAccountPersistenceIssue?
     var isClosed = false
@@ -179,7 +180,7 @@ public final class NativeRuntimeProfile: RuntimeObserver, @unchecked Sendable {
         )
         appearanceSource.bind(controller: controller)
         settingsExecutor.bind(controller: controller)
-        let profile = NativeRuntimeProfile(
+        let profile = try NativeRuntimeProfile(
             controller: controller,
             source: source,
             appearanceSource: appearanceSource,
@@ -204,14 +205,18 @@ public final class NativeRuntimeProfile: RuntimeObserver, @unchecked Sendable {
         settingsExecutor: PlatformSettingsExecutor,
         incActionExecutor: MacOSIncActionExecutor,
         accountVault: (any NativeAccountVault)?
-    ) {
+    ) throws {
         self.controller = controller
         self.source = source
         self.appearanceSource = appearanceSource
         self.settingsExecutor = settingsExecutor
         self.incActionExecutor = incActionExecutor
         self.accountVault = accountVault
-        let revision = controller.snapshot().revision
+        let initialSnapshot = try Self.initialSnapshot(
+            from: controller.snapshot()
+        )
+        lastAcceptedSnapshot = initialSnapshot
+        let revision = initialSnapshot.revision
         lastActivityRevision = revision
         lastLibraryRevision = revision
         lastCatalogSnapshot = controller.catalogFeedSnapshot()
@@ -280,7 +285,9 @@ public final class NativeRuntimeProfile: RuntimeObserver, @unchecked Sendable {
     }
 
     var snapshotForTesting: RuntimeSnapshot {
-        controller.snapshot()
+        get throws {
+            try validatedSnapshot()
+        }
     }
 
     var catalogSnapshotForTesting: RuntimeCatalogFeedSnapshot {

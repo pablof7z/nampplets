@@ -60,7 +60,7 @@ final class RuntimeProfileLifecycleTests: RuntimeNappletSessionTestCase {
                 .installedArtifactProfileMismatch
             )
         }
-        XCTAssertTrue(second.snapshotForTesting.sessions.isEmpty)
+        XCTAssertTrue(try second.snapshotForTesting.sessions.isEmpty)
     }
 
     func testStoppingOneSessionDoesNotCloseSharedProfileOrSibling() throws {
@@ -106,9 +106,9 @@ final class RuntimeProfileLifecycleTests: RuntimeNappletSessionTestCase {
         XCTAssertNotEqual(firstRuntime.sessionID, secondRuntime.sessionID)
 
         firstRuntime.stop()
-        XCTAssertFalse(profile.snapshotForTesting.closed)
+        XCTAssertFalse(try profile.snapshotForTesting.closed)
         XCTAssertEqual(
-            profile.snapshotForTesting.sessions.first(where: {
+            try profile.snapshotForTesting.sessions.first(where: {
                 $0.id == secondRuntime.sessionID
             })?.state,
             "running"
@@ -168,7 +168,7 @@ final class RuntimeProfileLifecycleTests: RuntimeNappletSessionTestCase {
 
         profile.close()
 
-        XCTAssertTrue(profile.snapshotForTesting.closed)
+        XCTAssertTrue(try profile.snapshotForTesting.closed)
         XCTAssertNil(
             try runtime.readSealed(logicalPath: "/index.html")
         )

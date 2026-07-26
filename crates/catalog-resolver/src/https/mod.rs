@@ -16,7 +16,7 @@ use thiserror::Error;
 pub(crate) use address::{validate_candidate, validate_resolved_addresses};
 pub use rust_port::{RustHttpsAcquisitionConfig, RustHttpsAcquisitionPort};
 
-use crate::{CancellationToken, ResolveError};
+use crate::{CancellationToken, ResolveError, cancellation::CancellationWake};
 
 #[derive(Clone, Debug)]
 pub struct HttpsFetchRequest {
@@ -101,6 +101,14 @@ enum HttpsCompletionResult {
     Closed,
 }
 
+impl CancellationWake for HttpsCompletionState {
+    fn wake(&self) {
+        // Synchronize notification with the predicate check and atomic park.
+        let _result = self.result.lock();
+        self.ready.notify_all();
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum HttpsWaitError {
     Cancelled,
@@ -139,14 +147,13 @@ impl HttpsAcquisitionCompletion {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<HttpsFetchResponse, HttpsWaitError> {
-        let _registration = cancellation
-            .register(Arc::clone(&self.state.ready))
-            .map_err(|error| match error {
-                ResolveError::CancellationSaturated { maximum } => {
-                    HttpsWaitError::CancellationSaturated { maximum }
-                }
-                _ => HttpsWaitError::Closed,
-            })?;
+        let wakeup: Arc<dyn CancellationWake> = self.state.clone();
+        let _registration = cancellation.register(wakeup).map_err(|error| match error {
+            ResolveError::CancellationSaturated { maximum } => {
+                HttpsWaitError::CancellationSaturated { maximum }
+            }
+            _ => HttpsWaitError::Closed,
+        })?;
         let mut state = self.state.result.lock();
         loop {
             if cancellation.is_cancelled() {

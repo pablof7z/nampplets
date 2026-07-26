@@ -25,5 +25,5 @@ public protocol ActivitySource: AnyObject {
         receive: @escaping @MainActor (ActivityUpdate) -> Void
     ) -> any ActivitySubscription
 
-    func refresh(scope: ActivityExactBuildScope) -> ActivitySnapshot
+    func refresh(scope: ActivityExactBuildScope) throws -> ActivitySnapshot
 }

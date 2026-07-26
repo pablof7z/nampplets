@@ -14,38 +14,7 @@ public enum NativeRuntimeLibraryProjectionRefusal:
 {
     case countExceeded(field: String, actual: Int, maximum: Int)
     case filterTooLarge(actualUTF8Bytes: Int, maximum: Int)
-    case totalInstalledBelowVisible(
-        totalInstalled: UInt64,
-        visibleBuildCount: Int,
-    )
-    case duplicateBuild(NativeRuntimeLibraryExactBuild)
-    case duplicateGlobalSessionID(UInt64)
-    case duplicateWorkspaceID(String)
-    case duplicateBuildSessionID(
-        exactBuild: NativeRuntimeLibraryExactBuild,
-        sessionID: UInt64,
-    )
-    case missingBuildSession(
-        exactBuild: NativeRuntimeLibraryExactBuild,
-        sessionID: UInt64,
-    )
-    case mismatchedBuildSession(
-        exactBuild: NativeRuntimeLibraryExactBuild,
-        sessionID: UInt64,
-        sessionExactBuild: NativeRuntimeLibraryExactBuild,
-    )
-    case unsupportedSessionState(
-        sessionID: UInt64,
-        rawValue: String,
-    )
-    case duplicateWorkspaceAssignment(
-        exactBuild: NativeRuntimeLibraryExactBuild,
-        workspaceID: String,
-    )
-    case missingWorkspaceAssignment(
-        exactBuild: NativeRuntimeLibraryExactBuild,
-        workspaceID: String,
-    )
+    case runtime(RuntimeRefusal)
     case unsupportedBuildAvailability(
         exactBuild: NativeRuntimeLibraryExactBuild,
     )
@@ -56,30 +25,8 @@ public enum NativeRuntimeLibraryProjectionRefusal:
             "\(field) contains \(actual) items; the maximum is \(maximum)."
         case let .filterTooLarge(actual, maximum):
             "The library filter is \(actual) UTF-8 bytes; the maximum is \(maximum)."
-        case let .totalInstalledBelowVisible(total, visible):
-            "The runtime reports \(total) total installs but projects \(visible) visible builds."
-        case let .duplicateBuild(exactBuild):
-            "The exact build \(exactBuild.dTag) appears more than once."
-        case let .duplicateGlobalSessionID(sessionID):
-            "Global session \(sessionID) appears more than once."
-        case let .duplicateWorkspaceID(workspaceID):
-            "Workspace \(workspaceID) appears more than once."
-        case let .duplicateBuildSessionID(exactBuild, sessionID):
-            "Exact build \(exactBuild.dTag) references session \(sessionID) more than once."
-        case let .missingBuildSession(exactBuild, sessionID):
-            "Exact build \(exactBuild.dTag) references missing session \(sessionID)."
-        case let .mismatchedBuildSession(
-            exactBuild,
-            sessionID,
-            sessionExactBuild,
-        ):
-            "Session \(sessionID) belongs to \(sessionExactBuild.dTag), not \(exactBuild.dTag)."
-        case let .unsupportedSessionState(sessionID, rawValue):
-            "Session \(sessionID) has unsupported raw state \(rawValue)."
-        case let .duplicateWorkspaceAssignment(exactBuild, workspaceID):
-            "Exact build \(exactBuild.dTag) repeats workspace \(workspaceID)."
-        case let .missingWorkspaceAssignment(exactBuild, workspaceID):
-            "Exact build \(exactBuild.dTag) references missing workspace \(workspaceID)."
+        case let .runtime(refusal):
+            "Runtime snapshot projection was refused (\(refusal.code)): \(refusal.detail)"
         case let .unsupportedBuildAvailability(exactBuild):
             "Exact build \(exactBuild.dTag) has unsupported availability."
         }
@@ -119,6 +66,19 @@ public enum NativeRuntimeLibraryProjection:
     /// Projects only data already present in one generated Rust snapshot.
     public init(_ source: RuntimeSnapshot) {
         self = Self.project(source)
+    }
+
+    init(_ source: NativeRuntimeSnapshotProjection) {
+        switch source {
+        case let .snapshot(snapshot):
+            self = Self.project(snapshot)
+        case let .refused(revision, profileClosed, refusal):
+            self = .refused(
+                revision: revision,
+                profileClosed: profileClosed,
+                refusal: .runtime(refusal)
+            )
+        }
     }
 
     private static func project(
@@ -174,48 +134,24 @@ public enum NativeRuntimeLibraryProjection:
                 ),
             )
         }
-        guard library.totalInstalled >= UInt64(library.builds.count) else {
-            return rejected(
-                .totalInstalledBelowVisible(
-                    totalInstalled: library.totalInstalled,
-                    visibleBuildCount: library.builds.count,
-                ),
-            )
-        }
-
         var sessionsByID: [UInt64: RuntimeSessionSnapshot] = [:]
         sessionsByID.reserveCapacity(source.sessions.count)
         for session in source.sessions {
-            guard sessionsByID.updateValue(session, forKey: session.id) == nil
-            else {
-                return rejected(.duplicateGlobalSessionID(session.id))
-            }
+            sessionsByID[session.id] = session
         }
 
-        var workspaceIDs = Set<String>()
-        workspaceIDs.reserveCapacity(source.workspaces.count)
         var workspaces: [NativeRuntimeLibraryWorkspace] = []
         workspaces.reserveCapacity(source.workspaces.count)
         for workspace in source.workspaces {
-            guard workspaceIDs.insert(workspace.workspaceId).inserted else {
-                return rejected(
-                    .duplicateWorkspaceID(workspace.workspaceId),
-                )
-            }
             workspaces.append(
                 NativeRuntimeLibraryWorkspace(id: workspace.workspaceId),
             )
         }
 
-        var exactBuilds = Set<NativeRuntimeLibraryExactBuild>()
-        exactBuilds.reserveCapacity(library.builds.count)
         var builds: [NativeRuntimeLibraryBuild] = []
         builds.reserveCapacity(library.builds.count)
         for build in library.builds {
             let exactBuild = NativeRuntimeLibraryExactBuild(build.coordinate)
-            guard exactBuilds.insert(exactBuild).inserted else {
-                return rejected(.duplicateBuild(exactBuild))
-            }
             if let refusal = countRefusal(
                 build.activeSessionIds.count,
                 field: "installedLibrary.build.activeSessionIds",
@@ -234,38 +170,10 @@ public enum NativeRuntimeLibraryProjection:
                 return rejected(refusal)
             }
 
-            var seenSessionIDs = Set<UInt64>()
-            seenSessionIDs.reserveCapacity(build.activeSessionIds.count)
             var sessions: [NativeRuntimeLibrarySession] = []
             sessions.reserveCapacity(build.activeSessionIds.count)
             for sessionID in build.activeSessionIds {
-                guard seenSessionIDs.insert(sessionID).inserted else {
-                    return rejected(
-                        .duplicateBuildSessionID(
-                            exactBuild: exactBuild,
-                            sessionID: sessionID,
-                        ),
-                    )
-                }
-                guard let session = sessionsByID[sessionID] else {
-                    return rejected(
-                        .missingBuildSession(
-                            exactBuild: exactBuild,
-                            sessionID: sessionID,
-                        ),
-                    )
-                }
-                let sessionExactBuild =
-                    NativeRuntimeLibraryExactBuild(session)
-                guard sessionExactBuild == exactBuild else {
-                    return rejected(
-                        .mismatchedBuildSession(
-                            exactBuild: exactBuild,
-                            sessionID: sessionID,
-                            sessionExactBuild: sessionExactBuild,
-                        ),
-                    )
-                }
+                let session = sessionsByID[sessionID]!
                 let state: NativeRuntimeLibrarySessionState
                 switch session.state {
                 case "running":
@@ -273,11 +181,8 @@ public enum NativeRuntimeLibraryProjection:
                 case "suspended":
                     state = .suspended
                 default:
-                    return rejected(
-                        .unsupportedSessionState(
-                            sessionID: sessionID,
-                            rawValue: session.state,
-                        ),
+                    preconditionFailure(
+                        "Rust published unsupported session state \(session.state)"
                     )
                 }
                 sessions.append(
@@ -286,29 +191,6 @@ public enum NativeRuntimeLibraryProjection:
                         state: state,
                     ),
                 )
-            }
-
-            var seenWorkspaceIDs = Set<String>()
-            seenWorkspaceIDs.reserveCapacity(
-                build.assignedWorkspaceIds.count,
-            )
-            for workspaceID in build.assignedWorkspaceIds {
-                guard seenWorkspaceIDs.insert(workspaceID).inserted else {
-                    return rejected(
-                        .duplicateWorkspaceAssignment(
-                            exactBuild: exactBuild,
-                            workspaceID: workspaceID,
-                        ),
-                    )
-                }
-                guard workspaceIDs.contains(workspaceID) else {
-                    return rejected(
-                        .missingWorkspaceAssignment(
-                            exactBuild: exactBuild,
-                            workspaceID: workspaceID,
-                        ),
-                    )
-                }
             }
 
             let availability: NativeRuntimeLibraryBuildAvailability

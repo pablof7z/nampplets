@@ -197,6 +197,26 @@ pub struct RuntimeSnapshot {
     pub resource_refusal_count: u64,
 }
 
+/// Fail-closed result of projecting one internally consistent runtime cut.
+///
+/// A malformed candidate never crosses the FFI boundary. The refusal carries
+/// the same revision and lifecycle state so native consumers can advance their
+/// control-plane bookkeeping without deriving any view from invalid rows.
+#[derive(Clone, Debug, uniffi::Enum)]
+// UniFFI exports record-valued enum fields by value; boxing this variant would
+// change the supported facade instead of reducing an internal-only enum.
+#[allow(clippy::large_enum_variant)]
+pub enum RuntimeSnapshotProjection {
+    Snapshot {
+        snapshot: RuntimeSnapshot,
+    },
+    Refused {
+        revision: u64,
+        closed: bool,
+        refusal: RuntimeRefusal,
+    },
+}
+
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct RuntimeEvent {
     pub sequence: u64,
@@ -208,7 +228,7 @@ pub struct RuntimeEvent {
 
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct RuntimeObservationFrame {
-    pub snapshot: RuntimeSnapshot,
+    pub snapshot: RuntimeSnapshotProjection,
     pub catalog: RuntimeCatalogFeedSnapshot,
     pub events: Vec<RuntimeEvent>,
     pub oldest_available_event: u64,

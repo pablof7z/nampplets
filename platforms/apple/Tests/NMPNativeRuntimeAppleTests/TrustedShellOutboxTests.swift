@@ -134,8 +134,8 @@ final class TrustedShellOutboxTests: RuntimeNappletSessionTestCase {
         expectClear.set(true)
         profile.decideProviderWrite(operationID: write.id, approve: false)
         await fulfillment(of: [pendingCleared], timeout: 10)
-        XCTAssertTrue(profile.snapshotForTesting.pendingWrites.isEmpty)
-        XCTAssertTrue(profile.snapshotForTesting.receipts.isEmpty)
+        XCTAssertTrue(try profile.snapshotForTesting.pendingWrites.isEmpty)
+        XCTAssertTrue(try profile.snapshotForTesting.receipts.isEmpty)
     }
 
     @MainActor
@@ -291,7 +291,7 @@ final class TrustedShellOutboxTests: RuntimeNappletSessionTestCase {
         XCTAssertFalse(receipt.id.isEmpty)
         XCTAssertFalse(receipt.delivery.isEmpty)
         XCTAssertTrue(
-            profile.snapshotForTesting.receipts.contains {
+            try profile.snapshotForTesting.receipts.contains {
                 $0.receiptId == receipt.id
             }
         )

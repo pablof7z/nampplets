@@ -8,28 +8,17 @@ use std::{
     thread,
 };
 
-use nmp_native_runtime_app::{AppSnapshot, InstalledBuildAvailability, PlatformCommand};
+use nmp_native_runtime_app::PlatformCommand;
 
 use super::{ObserverPermit, RuntimeController};
-use crate::activity::activity_snapshot;
 use crate::{
-    ObservationStart, RuntimeBindingSnapshot, RuntimeErrorSnapshot, RuntimeExactBuildCoordinate,
-    RuntimeInstalledBuildAvailability, RuntimeInstalledBuildSnapshot,
-    RuntimeInstalledLibrarySnapshot, RuntimeObservation, RuntimeObservationFrame, RuntimeObserver,
-    RuntimePendingWriteSnapshot, RuntimeReceiptSnapshot, RuntimeRelayDiagnosticsObservationStart,
-    RuntimeRelayDiagnosticsObserver, RuntimeRelayDiagnosticsSnapshot, RuntimeSessionSnapshot,
-    RuntimeSnapshot,
-    projection::{project_event, project_profile},
-    support::bump_signal,
-    workspace::workspace_from_view,
+    ObservationStart, RuntimeObservation, RuntimeObservationFrame, RuntimeObserver,
+    RuntimeRelayDiagnosticsObservationStart, RuntimeRelayDiagnosticsObserver,
+    RuntimeRelayDiagnosticsSnapshot, projection::project_event, support::bump_signal,
 };
 
 #[uniffi::export]
 impl RuntimeController {
-    pub fn snapshot(&self) -> RuntimeSnapshot {
-        self.project_snapshot(&self.app.snapshot())
-    }
-
     /// The latest NMP-owned relay and wire-subscription read-out. It is only
     /// refreshed while an observation is open; check `observing`.
     pub fn relay_diagnostics(&self) -> RuntimeRelayDiagnosticsSnapshot {
@@ -156,153 +145,6 @@ impl RuntimeController {
             self.app.dispatch(PlatformCommand::Close);
             self.data_plane.close();
             bump_signal(&self.signal);
-        }
-    }
-}
-
-impl RuntimeController {
-    pub(super) fn project_snapshot(&self, snapshot: &AppSnapshot) -> RuntimeSnapshot {
-        let refusals = self.boundary_refusals.lock();
-        RuntimeSnapshot {
-            revision: snapshot.revision,
-            closed: snapshot.closed,
-            installed_library: RuntimeInstalledLibrarySnapshot {
-                query: snapshot.library.query.to_string(),
-                total_installed: snapshot.library.total_installed as u64,
-                builds: snapshot
-                    .library
-                    .builds
-                    .iter()
-                    .map(|view| RuntimeInstalledBuildSnapshot {
-                        coordinate: RuntimeExactBuildCoordinate {
-                            manifest_author: view.build.principal.manifest_author().to_owned(),
-                            d_tag: view.build.principal.d_tag().to_owned(),
-                            aggregate_hash: view.build.principal.aggregate_hash().to_owned(),
-                        },
-                        title: view.build.title.to_string(),
-                        manifest_metadata_json: view.build.manifest_metadata.as_str().to_owned(),
-                        availability: match view.availability {
-                            InstalledBuildAvailability::MetadataOnly => {
-                                RuntimeInstalledBuildAvailability::MetadataOnly
-                            }
-                            InstalledBuildAvailability::SealedExactBytesReady => {
-                                RuntimeInstalledBuildAvailability::SealedExactBytesReady
-                            }
-                        },
-                        active_session_ids: view
-                            .active_sessions
-                            .iter()
-                            .map(|session| session.0)
-                            .collect(),
-                        assigned_workspace_ids: snapshot
-                            .workspaces
-                            .iter()
-                            .filter(|workspace| {
-                                workspace.assigned_builds.contains(&view.build.principal)
-                            })
-                            .map(|workspace| workspace.id.to_string())
-                            .collect(),
-                    })
-                    .collect(),
-            },
-            sessions: snapshot
-                .sessions
-                .iter()
-                .map(|session| RuntimeSessionSnapshot {
-                    id: session.id.0,
-                    author: session.principal.manifest_author().to_owned(),
-                    d_tag: session.principal.d_tag().to_owned(),
-                    aggregate_hash: session.principal.aggregate_hash().to_owned(),
-                    profile: project_profile(session.profile),
-                    state: format!("{:?}", session.state).to_ascii_lowercase(),
-                    domains: snapshot
-                        .session_domains
-                        .iter()
-                        .find(|view| view.session == session.id)
-                        .map(|view| {
-                            view.domains
-                                .iter()
-                                .map(|domain| domain.as_str().to_owned())
-                                .collect()
-                        })
-                        .unwrap_or_default(),
-                })
-                .collect(),
-            bindings: snapshot
-                .bindings
-                .iter()
-                .map(|binding| RuntimeBindingSnapshot {
-                    id: binding.id.to_string(),
-                    schema: binding.schema.to_string(),
-                    logical_source_id: binding.logical_source_id.as_deref().map(str::to_owned),
-                    revision: binding.revision,
-                })
-                .collect(),
-            pending_writes: snapshot
-                .pending_writes
-                .iter()
-                .map(|pending| RuntimePendingWriteSnapshot {
-                    operation_id: pending.operation.0,
-                    approval_id: pending.approval_id.to_string(),
-                    author: pending.principal.manifest_author().to_owned(),
-                    d_tag: pending.principal.d_tag().to_owned(),
-                    aggregate_hash: pending.principal.aggregate_hash().to_owned(),
-                    session_id: pending.session.0,
-                    account: pending.account.0.to_string(),
-                    draft_json: pending.draft.as_str().to_owned(),
-                })
-                .collect(),
-            receipts: snapshot
-                .receipts
-                .iter()
-                .map(|receipt| RuntimeReceiptSnapshot {
-                    receipt_id: receipt.receipt_id.0.to_string(),
-                    delivery: format!("{:?}", receipt.delivery).to_ascii_lowercase(),
-                    latest_state_json: receipt
-                        .latest
-                        .as_ref()
-                        .map(|latest| latest.state.as_str().to_owned()),
-                })
-                .collect(),
-            workspaces: snapshot
-                .workspaces
-                .iter()
-                .filter_map(|workspace| workspace_from_view(workspace).ok())
-                .collect(),
-            recent_activity: snapshot
-                .recent_activity
-                .iter()
-                .map(activity_snapshot)
-                .collect(),
-            dropped_activity: snapshot.dropped_activity,
-            recent_errors: snapshot
-                .recent_errors
-                .iter()
-                .map(|fact| RuntimeErrorSnapshot {
-                    code: format!("{:?}", fact.code).to_ascii_lowercase(),
-                    author: fact
-                        .principal
-                        .as_ref()
-                        .map(|principal| principal.manifest_author().to_owned()),
-                    d_tag: fact
-                        .principal
-                        .as_ref()
-                        .map(|principal| principal.d_tag().to_owned()),
-                    aggregate_hash: fact
-                        .principal
-                        .as_ref()
-                        .map(|principal| principal.aggregate_hash().to_owned()),
-                    session_id: fact.session.map(|session| session.0),
-                    detail: fact.detail.to_string(),
-                    occurred_at_millis: fact.occurred_at_millis,
-                })
-                .collect(),
-            dropped_errors: snapshot.dropped_errors,
-            boundary_refusals: refusals.iter().cloned().collect(),
-            dropped_boundary_refusals: refusals.dropped(),
-            active_resources: snapshot.resources.admitted as u64,
-            resource_high_watermark: snapshot.resources.high_watermark as u64,
-            resource_refusal_count: snapshot.resources.refusal_count,
         }
     }
 }

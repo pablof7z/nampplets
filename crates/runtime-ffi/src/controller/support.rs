@@ -10,6 +10,7 @@ use crate::{
     GOOD_MORNING_D_TAG, MAXIMUM_PERMISSION_DECISIONS, RuntimeCatalogCapability,
     RuntimeCatalogConfirmation, RuntimeCatalogProvenance, RuntimeExactBuildCoordinate,
     RuntimePermissionRequirement, RuntimeProviderUpdate, RuntimeRefusal, VerifiedArtifact,
+    snapshot_integrity::MAXIMUM_REPORTED_PROJECTION_FAULTS,
     support::{bump_signal, now_millis},
 };
 
@@ -215,6 +216,43 @@ impl RuntimeController {
             delivered: 0,
             refused: 0,
             refusal: Some(refusal),
+        }
+    }
+
+    /// Retains bounded evidence for a projection refusal without making the
+    /// evidence ring part of the fail-closed delivery mechanism.
+    pub(crate) fn report_projection_fault(&self, refusal: RuntimeRefusal) {
+        enum Evidence {
+            Exact,
+            Capacity,
+            None,
+        }
+
+        let key = (refusal.code.clone(), refusal.detail.clone());
+        let evidence = {
+            let mut latch = self.projection_fault_latch.lock();
+            if latch.keys.contains(&key) {
+                Evidence::None
+            } else if latch.keys.len() < MAXIMUM_REPORTED_PROJECTION_FAULTS {
+                latch.keys.insert(key);
+                Evidence::Exact
+            } else if !latch.overflow_reported {
+                latch.overflow_reported = true;
+                Evidence::Capacity
+            } else {
+                Evidence::None
+            }
+        };
+        match evidence {
+            Evidence::Exact => self.record_boundary_refusal(refusal),
+            Evidence::Capacity => self.record_boundary_refusal(self.refusal(
+                "projection-fault-latch-capacity",
+                format!(
+                    "projection fault evidence reached its capacity of \
+                     {MAXIMUM_REPORTED_PROJECTION_FAULTS} distinct keys"
+                ),
+            )),
+            Evidence::None => {}
         }
     }
 

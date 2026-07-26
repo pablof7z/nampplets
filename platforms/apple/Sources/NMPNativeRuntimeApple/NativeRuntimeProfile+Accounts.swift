@@ -182,7 +182,7 @@ extension NativeRuntimeProfile {
         if let activePublicKey = stored.activePublicKey {
             guard let activeHandle = restoredHandles[activePublicKey] else {
                 accountPersistenceProblem = .restoreFailed
-                let revision = controller.snapshot().revision
+                let revision = pullSnapshotProjection().revision
                 lastActivityRevision = revision
                 lastLibraryRevision = revision
                 return
@@ -198,7 +198,7 @@ extension NativeRuntimeProfile {
             }
         }
         accountPersistenceProblem = restoreFailed ? .restoreFailed : nil
-        let revision = controller.snapshot().revision
+        let revision = pullSnapshotProjection().revision
         lastActivityRevision = revision
         lastLibraryRevision = revision
     }

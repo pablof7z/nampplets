@@ -106,24 +106,18 @@ final class NativeRuntimeLibraryTests: XCTestCase {
         )
     }
 
-    func testUnsupportedRawSessionStateIsAnExplicitRefusal() {
+    func testOversizedFilterRefusesWithoutTruncation() {
+        let query = String(
+            repeating: "é",
+            count: NativeRuntimeLibraryLimits.maximumFilterUTF8Bytes
+        )
         let source = snapshot(
             revision: 42,
             library: RuntimeInstalledLibrarySnapshot(
-                query: "",
-                totalInstalled: 1,
-                builds: [
-                    build(
-                        coordinate: first,
-                        title: "Good Morning",
-                        availability: .sealedExactBytesReady,
-                        sessions: [7],
-                    ),
-                ],
-            ),
-            sessions: [
-                session(id: 7, coordinate: first, state: "launching"),
-            ],
+                query: query,
+                totalInstalled: 0,
+                builds: []
+            )
         )
 
         XCTAssertEqual(
@@ -131,76 +125,11 @@ final class NativeRuntimeLibraryTests: XCTestCase {
             .refused(
                 revision: 42,
                 profileClosed: false,
-                refusal: .unsupportedSessionState(
-                    sessionID: 7,
-                    rawValue: "launching",
-                ),
-            ),
-        )
-    }
-
-    func testSessionCoordinateMismatchRefusesInsteadOfInferringOwnership() {
-        let source = snapshot(
-            revision: 43,
-            library: RuntimeInstalledLibrarySnapshot(
-                query: "",
-                totalInstalled: 1,
-                builds: [
-                    build(
-                        coordinate: first,
-                        title: "Good Morning",
-                        availability: .sealedExactBytesReady,
-                        sessions: [7],
-                    ),
-                ],
-            ),
-            sessions: [
-                session(id: 7, coordinate: second, state: "running"),
-            ],
-        )
-
-        XCTAssertEqual(
-            NativeRuntimeLibraryProjection(source),
-            .refused(
-                revision: 43,
-                profileClosed: false,
-                refusal: .mismatchedBuildSession(
-                    exactBuild: NativeRuntimeLibraryExactBuild(first),
-                    sessionID: 7,
-                    sessionExactBuild:
-                    NativeRuntimeLibraryExactBuild(second),
-                ),
-            ),
-        )
-    }
-
-    func testUnknownWorkspaceAssignmentRefusesWithoutDroppingIt() {
-        let source = snapshot(
-            revision: 44,
-            library: RuntimeInstalledLibrarySnapshot(
-                query: "",
-                totalInstalled: 1,
-                builds: [
-                    build(
-                        coordinate: first,
-                        title: "Good Morning",
-                        availability: .metadataOnly,
-                        workspaces: ["missing"],
-                    ),
-                ],
-            ),
-        )
-
-        XCTAssertEqual(
-            NativeRuntimeLibraryProjection(source),
-            .refused(
-                revision: 44,
-                profileClosed: false,
-                refusal: .missingWorkspaceAssignment(
-                    exactBuild: NativeRuntimeLibraryExactBuild(first),
-                    workspaceID: "missing",
-                ),
-            ),
+                refusal: .filterTooLarge(
+                    actualUTF8Bytes: query.utf8.count,
+                    maximum: NativeRuntimeLibraryLimits.maximumFilterUTF8Bytes
+                )
+            )
         )
     }
 

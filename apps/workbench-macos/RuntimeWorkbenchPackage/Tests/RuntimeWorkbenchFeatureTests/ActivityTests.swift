@@ -35,7 +35,7 @@ private final class FakeActivitySource: ActivitySource {
         return subscription
     }
 
-    func refresh(scope: ActivityExactBuildScope) -> ActivitySnapshot {
+    func refresh(scope: ActivityExactBuildScope) throws -> ActivitySnapshot {
         refreshedScopes.append(scope)
         return refreshed
     }

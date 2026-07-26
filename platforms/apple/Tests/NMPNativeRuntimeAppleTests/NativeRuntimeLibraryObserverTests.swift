@@ -78,7 +78,7 @@ final class NativeRuntimeLibraryObserverTests: RuntimeNappletSessionTestCase {
         )
         defer { profile.close() }
 
-        let initialSnapshot = profile.snapshotForTesting
+        let initialSnapshot = try profile.snapshotForTesting
         let authoritativeStarted = expectation(
             description: "authoritative delivery started"
         )
@@ -110,7 +110,7 @@ final class NativeRuntimeLibraryObserverTests: RuntimeNappletSessionTestCase {
         intermediate.installedLibrary.query = "intermediate"
         profile.update(
             frame: RuntimeObservationFrame(
-                snapshot: intermediate,
+                snapshot: .snapshot(snapshot: intermediate),
                 catalog: profile.catalogSnapshotForTesting,
                 events: [],
                 oldestAvailableEvent: 0,
@@ -124,7 +124,7 @@ final class NativeRuntimeLibraryObserverTests: RuntimeNappletSessionTestCase {
         latest.installedLibrary.query = "latest"
         profile.update(
             frame: RuntimeObservationFrame(
-                snapshot: latest,
+                snapshot: .snapshot(snapshot: latest),
                 catalog: profile.catalogSnapshotForTesting,
                 events: [],
                 oldestAvailableEvent: 0,
