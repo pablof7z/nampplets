@@ -13,17 +13,30 @@ extension RuntimeWorkbenchUITests {
         let permissionConfirm = app.buttons["permission-confirm"]
         XCTAssertTrue(permissionConfirm.waitForExistence(timeout: 10))
         let cancelReview = app.buttons["Cancel"].firstMatch
-        XCTAssertTrue(cancelReview.waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            cancelReview.waitForExistence(timeout: 10),
+            "The permission review must offer a cancel control"
+        )
         cancelReview.click()
         XCTAssertTrue(
             waitForNonexistence(of: permissionConfirm, timeout: 10)
         )
 
+        // Every wait in this sequence uses the suite's standard budget. A
+        // shorter one is not a meaningful optimisation: it only decides which
+        // step trips first when the machine is loaded, and these run against
+        // the shared desktop session (see #137, #147).
         let workspaceActions = app.menuButtons["Workspace Actions"]
-        XCTAssertTrue(workspaceActions.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            workspaceActions.waitForExistence(timeout: 10),
+            "The workspace actions menu must appear after the review is dismissed"
+        )
         workspaceActions.click()
         let activity = app.menuItems["Activity"]
-        XCTAssertTrue(activity.waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            activity.waitForExistence(timeout: 10),
+            "The workspace actions menu must offer the Activity item"
+        )
         activity.click()
 
         let drawer = app.descendants(matching: .any)
