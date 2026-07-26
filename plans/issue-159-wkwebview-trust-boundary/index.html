@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Real WKWebView Trust Boundary Checkpoint</title>
+    <link rel="stylesheet" href="../../assets/style.css">
+  </head>
+  <body>
+    <main class="shell">
+      <nav class="topbar">
+        <a href="../../">Planning pages</a>
+        
+      </nav>
+      <section class="hero">
+        <div class="eyebrow">Architecture plan</div>
+        <h1>Real WKWebView Trust Boundary Checkpoint</h1>
+        <p class="summary">Add the issue-owned Apple WebKit boundary test around the packaged trusted shell and its existing verified fixture. Drive a real WKWebView, wait for the mapped authored frame, and inspect the actual materialized srcdoc rather than a string-only approximation. Prove that verified bytes remain unchanged while default-deny CSP, exact artifact base, and compatibility prelude are inserted before authored scripts; that no URL becomes iframe navigation authority; that only the mapped source reaches native routing while a sibling and caller-supplied session cannot mint authority; that ambient native, Nostr, storage, and direct-network capabilities remain absent or denied; and that idempotent teardown rejects late bridge work. Keep NMP canonical ownership and the existing trusted-shell bootstrap unchanged.</p>
+        <div class="meta">
+          <span class="pill ready">Ready to implement</span>
+          <span class="pill">88 percent certainty</span>
+        </div>
+      </section>
+      <div class="grid">
+        <div>
+
+          <section class="section">
+            <h2>Boundaries</h2>
+            <pre class="mermaid">flowchart LR
+  Bytes[Sealed fixture bytes] --&gt; Host[Native trusted host]
+  Host --&gt; Shell[Trusted shell main frame]
+  Shell --&gt; Srcdoc[Opaque sandboxed srcdoc iframe]
+  Srcdoc --&gt;|mapped bounded envelope| Host
+  Alien[Sibling or stale frame] -. denied .-&gt; Host</pre>
+          </section>
+          <section class="section">
+            <h2>Very High Level</h2>
+            <p>Add the issue-owned Apple WebKit boundary test around the packaged trusted shell and its existing verified fixture. Drive a real WKWebView, wait for the mapped authored frame, and inspect the actual materialized srcdoc rather than a string-only approximation. Prove that verified bytes remain unchanged while default-deny CSP, exact artifact base, and compatibility prelude are inserted before authored scripts; that no URL becomes iframe navigation authority; that only the mapped source reaches native routing while a sibling and caller-supplied session cannot mint authority; that ambient native, Nostr, storage, and direct-network capabilities remain absent or denied; and that idempotent teardown rejects late bridge work. Keep NMP canonical ownership and the existing trusted-shell bootstrap unchanged.</p>
+          </section>
+          <section class="section">
+            <h2>Existing Rules Or ADRs</h2>
+            <ul><li>Uses the existing trusted shell and fixture rather than creating a parallel bootstrap.</li><li>Keeps verified authored bytes immutable and runtime material outside the signed aggregate.</li><li>Preserves one-way platform to runtime to NMP facade dependency and does not mutate the NMP checkout.</li><li>Adds executable Apple behavior evidence in the issue-designated owner file.</li></ul>
+          </section>
+          <section class="section">
+            <h2>Rule Tension And Tightening</h2>
+            <h3>Possible loosening</h3>
+            <ul><li>No repository rule or ADR needs loosening.</li></ul>
+            <h3>Possible tightening</h3>
+            <ul><li>A later checkpoint may promote the Apple package into the Quick and Nimble BDD table once the first real-WebKit journey has proven stable.</li></ul>
+          </section>
+          <section class="section">
+            <h2>Alternatives Considered</h2>
+            <ul><li>Extend scattered inline-canary tests only; rejected because issue 159 names a single executable owner and existing tests are evidence inputs.</li><li>Add a second WebKit shell harness; rejected because it would duplicate the production bootstrap and weaken the proof.</li><li>Use Node-only trusted-shell tests; rejected because they cannot prove WebKit content worlds, sandbox behavior, or native teardown.</li></ul>
+          </section>
+        </div>
+        <aside>
+          <section class="card">
+            <h2>TTS Version</h2>
+            <audio controls preload="metadata" src="https://blossom.primal.net/d1d0ce4e08b264ff40e159f8fbfb6de1ff427fbb49032ca30c74fbd06ab5851e.mp3"></audio>
+            <p>Audio-friendly narration generated from the planning payload.</p>
+          </section>
+          <section class="card">
+            <h2>Certainty</h2>
+            <div class="certainty ">88%</div>
+            <p>Ready to implement.</p>
+          </section>
+          <section class="card links">
+            <h2>Links</h2>
+            
+            <a href="https://blossom.primal.net/d1d0ce4e08b264ff40e159f8fbfb6de1ff427fbb49032ca30c74fbd06ab5851e.mp3">Open narration</a>
+            <a href="../../docs/plans/issue-159-wkwebview-trust-boundary/plan.md">Detailed plan file</a>
+          </section>
+        </aside>
+      </div>
+    </main>
+
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+    </script>
+  </body>
+</html>
