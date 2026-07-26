@@ -121,6 +121,10 @@ pub(crate) struct SessionEntry {
     source_window: SourceWindowId,
     push_observer: Option<ProviderPushObserver>,
     push_delivery: Option<ProviderPushDelivery>,
+    /// Required domains no provider advertises, kept for the life of the
+    /// session. Not an `Option`: every launch either has a shortfall or has an
+    /// empty one, and there is no third state where the answer is unknown.
+    pub(crate) unavailable_domains: BTreeSet<Capability>,
     ready: bool,
     last_provider_sequence: Option<u64>,
     delivered_push_count: u64,

@@ -58,6 +58,14 @@ pub struct BindingView {
 pub struct SessionDomainView {
     pub session: SessionId,
     pub domains: Vec<Capability>,
+    /// Domains this build's own signed content requires that no provider on
+    /// this runtime advertises. Non-empty means the session is running without
+    /// something it declared it needs.
+    ///
+    /// Carried as a set rather than a message. The shortfall used to exist
+    /// only as a comma-joined string inside one activity fact, which no
+    /// consumer could act on and every consumer could miss.
+    pub unavailable_domains: Vec<Capability>,
 }
 
 /// Bounded provider-to-component delivery state for one exact mapped source.

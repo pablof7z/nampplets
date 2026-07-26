@@ -121,9 +121,32 @@ fn required_capability_with_no_registered_provider_does_not_block_launch() {
         .domains;
     assert!(domains.contains(&canary()));
     assert!(!domains.contains(&missing));
-    assert!(snapshot.recent_activity.iter().any(|fact| {
-        fact.operation.as_ref() == "required-domain-unavailable"
-            && fact.outcome.as_ref() == "missing"
+    // The shortfall is now on the session itself, not only in a fact.
+    assert_eq!(
+        snapshot
+            .session_domains
+            .iter()
+            .find(|view| view.session == session.id)
+            .unwrap()
+            .unavailable_domains,
+        vec![missing.clone()]
+    );
+    // The outcome classifies what happened; the domain name is a detail. This
+    // assertion previously read `outcome == "missing"`, which passed only
+    // because the capability under test is called `missing` and the joined
+    // domain string was being used as the outcome.
+    let fact = snapshot
+        .recent_activity
+        .iter()
+        .find(|fact| fact.operation.as_ref() == "required-domain-unavailable")
+        .expect("an unavailable required domain records a fact");
+    assert_eq!(fact.outcome.as_ref(), "degraded");
+    assert!(fact.details().iter().any(|detail| {
+        matches!(
+            detail.value(),
+            nmp_native_runtime_app::ActivityDetailValue::Visible(value)
+                if value.as_ref() == missing.as_str()
+        )
     }));
 }
 

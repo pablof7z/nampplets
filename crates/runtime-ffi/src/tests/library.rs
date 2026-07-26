@@ -77,7 +77,23 @@ fn installed_library_projects_filter_lifecycle_workspace_and_uninstall() {
     controller.suspend(session);
     assert_eq!(controller.snapshot_value().sessions[0].state, "suspended");
     controller.resume(session);
-    assert_eq!(controller.snapshot_value().sessions[0].state, "running");
+    // Not "running". This fixture declares domains no provider on this runtime
+    // serves, so the session genuinely comes up without them -- it read as
+    // whole before only because the state string could not express the
+    // difference.
+    let resumed = controller.snapshot_value();
+    assert_eq!(resumed.sessions[0].state, "running-degraded");
+    assert!(
+        !resumed.sessions[0].unavailable_domains.is_empty(),
+        "a degraded session must name what it is missing"
+    );
+    assert!(
+        resumed.sessions[0]
+            .unavailable_domains
+            .iter()
+            .all(|domain| !resumed.sessions[0].domains.contains(domain)),
+        "a domain cannot be both negotiated and unavailable"
+    );
 
     controller.clear_build_from_workspace("library".to_owned(), coordinate.clone());
     assert!(

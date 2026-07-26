@@ -17,7 +17,13 @@ use crate::{RuntimeExactBuildCoordinate, RuntimeSnapshot};
 pub(crate) const MAXIMUM_REPORTED_PROJECTION_FAULTS: usize = 64;
 
 /// The lifecycle states a session may carry across the boundary.
-pub(crate) const PUBLISHED_SESSION_STATES: [&str; 2] = ["running", "suspended"];
+///
+/// `running-degraded` is `running` for a session whose build required a domain
+/// no provider on this runtime advertises. It is a separate published state on
+/// purpose: the shortfall is also on the snapshot as `unavailable_domains`, but
+/// a consumer rendering only `state` would otherwise show such a session as
+/// whole, which is what the Inspector did.
+pub(crate) const PUBLISHED_SESSION_STATES: [&str; 3] = ["running", "running-degraded", "suspended"];
 
 /// Adding a kernel lifecycle state requires an explicit boundary review.
 const _: fn(SessionState) = |state| match state {

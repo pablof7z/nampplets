@@ -54,6 +54,7 @@ impl RuntimeApp {
                 .map(|(session, entry)| SessionDomainView {
                     session: *session,
                     domains: entry.plan.domains().iter().cloned().collect(),
+                    unavailable_domains: entry.unavailable_domains.iter().cloned().collect(),
                 })
                 .collect(),
             provider_push_lanes: state

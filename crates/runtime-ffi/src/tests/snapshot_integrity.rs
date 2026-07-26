@@ -35,6 +35,7 @@ fn session(
         profile: RuntimeExecutionProfile::Legacy,
         state: state.to_owned(),
         domains: Vec::new(),
+        unavailable_domains: Vec::new(),
     }
 }
 

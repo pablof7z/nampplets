@@ -23,6 +23,13 @@ pub struct RuntimeSessionSnapshot {
     /// Exact kernel-negotiated domain set used by both native injection and
     /// the NAP-SHELL `shell.init` response.
     pub domains: Vec<String>,
+    /// Domains this build's signed content requires that no provider on this
+    /// runtime advertises. Empty means the session is running whole.
+    ///
+    /// `state` already reports `running-degraded` when this is non-empty, so a
+    /// consumer cannot show the session as healthy by ignoring this field.
+    /// This carries which domains, for a surface that wants to name them.
+    pub unavailable_domains: Vec<String>,
 }
 
 /// Exact installed-build identity. Every library action remains bound to all

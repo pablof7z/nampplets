@@ -15,6 +15,43 @@ use crate::{
     snapshot_integrity::check_snapshot_integrity, workspace::workspace_from_view,
 };
 
+/// Domains the build required that no provider advertises, for one session.
+fn unavailable_domains_for(
+    session: &nmp_native_runtime_core::SessionSnapshot,
+    source: &nmp_native_runtime_app::AppSnapshot,
+) -> Vec<String> {
+    source
+        .session_domains
+        .iter()
+        .find(|view| view.session == session.id)
+        .map(|view| {
+            view.unavailable_domains
+                .iter()
+                .map(|domain| domain.as_str().to_owned())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The lifecycle state, widened so a session missing a domain its own content
+/// requires cannot read as a whole one.
+///
+/// The shortfall is also on the snapshot as a set, but a consumer that renders
+/// only `state` -- which is what the Inspector did all day -- would otherwise
+/// show "running" for a napplet running without the capabilities it declared.
+/// Reporting the degraded case as healthy has to be something a consumer
+/// chooses, not something it gets by not looking.
+fn project_session_state(
+    session: &nmp_native_runtime_core::SessionSnapshot,
+    source: &nmp_native_runtime_app::AppSnapshot,
+) -> String {
+    let lifecycle = format!("{:?}", session.state).to_ascii_lowercase();
+    if lifecycle == "running" && !unavailable_domains_for(session, source).is_empty() {
+        return "running-degraded".to_owned();
+    }
+    lifecycle
+}
+
 struct ProjectedWorkspaces {
     workspaces: Vec<crate::RuntimeWorkspaceDefinition>,
     published_ids: BTreeSet<String>,
@@ -123,7 +160,7 @@ impl RuntimeController {
                     d_tag: session.principal.d_tag().to_owned(),
                     aggregate_hash: session.principal.aggregate_hash().to_owned(),
                     profile: project_profile(session.profile),
-                    state: format!("{:?}", session.state).to_ascii_lowercase(),
+                    state: project_session_state(session, source),
                     domains: source
                         .session_domains
                         .iter()
@@ -135,6 +172,7 @@ impl RuntimeController {
                                 .collect()
                         })
                         .unwrap_or_default(),
+                    unavailable_domains: unavailable_domains_for(session, source),
                 })
                 .collect(),
             bindings: source

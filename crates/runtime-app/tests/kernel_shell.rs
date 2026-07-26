@@ -26,6 +26,9 @@ fn nap_shell_gates_capabilities_and_emits_exactly_one_uncorrelated_init() {
         vec![nmp_native_runtime_app::SessionDomainView {
             session,
             domains: vec![canary(), shell()],
+            // Every required domain was served, so the shortfall is empty
+            // rather than absent.
+            unavailable_domains: Vec::new(),
         }]
     );
 

@@ -7597,6 +7597,15 @@ public struct RuntimeSessionSnapshot {
      * the NAP-SHELL `shell.init` response.
      */
     public var domains: [String]
+    /**
+     * Domains this build's signed content requires that no provider on this
+     * runtime advertises. Empty means the session is running whole.
+     *
+     * `state` already reports `running-degraded` when this is non-empty, so a
+     * consumer cannot show the session as healthy by ignoring this field.
+     * This carries which domains, for a surface that wants to name them.
+     */
+    public var unavailableDomains: [String]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -7604,7 +7613,15 @@ public struct RuntimeSessionSnapshot {
         /**
          * Exact kernel-negotiated domain set used by both native injection and
          * the NAP-SHELL `shell.init` response.
-         */domains: [String]) {
+         */domains: [String],
+        /**
+         * Domains this build's signed content requires that no provider on this
+         * runtime advertises. Empty means the session is running whole.
+         *
+         * `state` already reports `running-degraded` when this is non-empty, so a
+         * consumer cannot show the session as healthy by ignoring this field.
+         * This carries which domains, for a surface that wants to name them.
+         */unavailableDomains: [String]) {
         self.id = id
         self.author = author
         self.dTag = dTag
@@ -7612,6 +7629,7 @@ public struct RuntimeSessionSnapshot {
         self.profile = profile
         self.state = state
         self.domains = domains
+        self.unavailableDomains = unavailableDomains
     }
 }
 
@@ -7643,6 +7661,9 @@ extension RuntimeSessionSnapshot: Equatable, Hashable {
         if lhs.domains != rhs.domains {
             return false
         }
+        if lhs.unavailableDomains != rhs.unavailableDomains {
+            return false
+        }
         return true
     }
 
@@ -7654,6 +7675,7 @@ extension RuntimeSessionSnapshot: Equatable, Hashable {
         hasher.combine(profile)
         hasher.combine(state)
         hasher.combine(domains)
+        hasher.combine(unavailableDomains)
     }
 }
 
@@ -7672,7 +7694,8 @@ public struct FfiConverterTypeRuntimeSessionSnapshot: FfiConverterRustBuffer {
                 aggregateHash: FfiConverterString.read(from: &buf),
                 profile: FfiConverterTypeRuntimeExecutionProfile.read(from: &buf),
                 state: FfiConverterString.read(from: &buf),
-                domains: FfiConverterSequenceString.read(from: &buf)
+                domains: FfiConverterSequenceString.read(from: &buf),
+                unavailableDomains: FfiConverterSequenceString.read(from: &buf)
         )
     }
 
@@ -7684,6 +7707,7 @@ public struct FfiConverterTypeRuntimeSessionSnapshot: FfiConverterRustBuffer {
         FfiConverterTypeRuntimeExecutionProfile.write(value.profile, into: &buf)
         FfiConverterString.write(value.state, into: &buf)
         FfiConverterSequenceString.write(value.domains, into: &buf)
+        FfiConverterSequenceString.write(value.unavailableDomains, into: &buf)
     }
 }
 

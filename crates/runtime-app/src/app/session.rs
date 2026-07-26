@@ -8,7 +8,7 @@ use nmp_native_runtime_core::{
 };
 
 use super::{AppState, RuntimeApp, SessionEntry};
-use crate::{commands::PlatformEvent, views::AppErrorCode};
+use crate::{activity::ActivityDetail, commands::PlatformEvent, views::AppErrorCode};
 
 impl RuntimeApp {
     pub(super) fn launch(
@@ -62,17 +62,20 @@ impl RuntimeApp {
                 .into_iter()
                 .partition(|domain| advertised_domains.contains(domain));
         if !unavailable_domains.is_empty() {
-            let dropped = unavailable_domains
+            // One detail per domain rather than one comma-joined blob. The
+            // joined string could only be read by splitting it back apart, so
+            // in practice nothing did, and the shortfall reached no surface.
+            let details = unavailable_domains
                 .iter()
-                .map(Capability::as_str)
-                .collect::<Vec<_>>()
-                .join(",");
-            self.record_activity(
+                .map(|domain| ActivityDetail::visible("unavailable-domain", domain.as_str()))
+                .collect::<Vec<_>>();
+            self.record_activity_with_details(
                 state,
                 &principal,
                 "capability",
                 "required-domain-unavailable",
-                &dropped,
+                "degraded",
+                details,
                 now,
             );
         }
@@ -185,6 +188,7 @@ impl RuntimeApp {
                 source_window,
                 push_observer: Some(push_observer),
                 push_delivery: None,
+                unavailable_domains,
                 ready: false,
                 last_provider_sequence: None,
                 delivered_push_count: 0,
