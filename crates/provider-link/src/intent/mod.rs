@@ -264,14 +264,39 @@ impl IntentProvider {
             NativeIntentOutcome::Cancelled => (
                 false,
                 false,
-                Some("user cancelled"),
+                Some("user cancelled".to_owned()),
                 None,
                 IntentActivityOutcome::Cancelled,
             ),
-            NativeIntentOutcome::Failed => (
+            NativeIntentOutcome::Failed { reason } => (
                 false,
                 false,
-                Some("invoke failed"),
+                // Previously every failure reported the same fixed
+                // "invoke failed" string. A napplet dispatching an intent
+                // could not tell "the handler never launched" from "the
+                // handler launched but its own JS never subscribed" from
+                // "the handler's session ended mid-dispatch" from "the
+                // push itself was refused" -- all reachable, distinct
+                // causes the retry loop already knows apart.
+                Some(match reason {
+                    NativeIntentFailureReason::HandlerLaunchRefused => {
+                        "handler could not be launched".to_owned()
+                    }
+                    NativeIntentFailureReason::HandlerNeverSubscribed => {
+                        "handler launched but never subscribed to the requested convention"
+                            .to_owned()
+                    }
+                    NativeIntentFailureReason::HandlerNeverObservedRunning => {
+                        "handler never reached a running session within the poll budget"
+                            .to_owned()
+                    }
+                    NativeIntentFailureReason::HandlerSessionEnded => {
+                        "handler session ended before the intent could be delivered".to_owned()
+                    }
+                    NativeIntentFailureReason::PushRefused { detail } => {
+                        format!("push refused: {detail}")
+                    }
+                }),
                 None,
                 IntentActivityOutcome::Refused,
             ),
@@ -311,7 +336,7 @@ impl IntentProvider {
             result.insert("windowId".to_owned(), Value::String(window_id.to_string()));
         }
         if let Some(error) = error {
-            result.insert("error".to_owned(), Value::String(error.to_owned()));
+            result.insert("error".to_owned(), Value::String(error));
         }
         outbound
             .push(

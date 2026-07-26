@@ -319,7 +319,12 @@ fn teardown_cancels_pending_dispatch_and_late_completion_is_refused() {
         &[Arc::from("intent-1")]
     );
     assert_eq!(
-        rig.provider.complete(token, NativeIntentOutcome::Failed),
+        rig.provider.complete(
+            token,
+            NativeIntentOutcome::Failed {
+                reason: NativeIntentFailureReason::HandlerLaunchRefused,
+            },
+        ),
         Err(IntentCompletionError::UnknownOperation)
     );
 }

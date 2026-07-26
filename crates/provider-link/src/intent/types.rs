@@ -218,7 +218,34 @@ pub struct IntentOperationToken(pub u64);
 pub enum NativeIntentOutcome {
     Handled { window_id: Option<Arc<str>> },
     Cancelled,
-    Failed,
+    Failed { reason: NativeIntentFailureReason },
+}
+
+/// Why a native intent dispatch failed. The retry loop that drives dispatch
+/// can distinguish these from each other -- collapsing them into one opaque
+/// `Failed` hid whether the handler never launched, launched but its own JS
+/// never reached `inc.subscribe`, its session vanished mid-dispatch, or the
+/// push itself was refused, all of which need different debugging.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NativeIntentFailureReason {
+    /// `launch_handler` itself refused: no verified artifact for the
+    /// handler, or its own required-domain derivation failed.
+    HandlerLaunchRefused,
+    /// The handler session was launched but never reached a state where
+    /// `inc.subscribe(convention, ...)` was observed, within the full poll
+    /// budget. Distinct from "the session never came up at all".
+    HandlerNeverSubscribed,
+    /// `launch_handler` was accepted, but no session for the handler was
+    /// ever observed `Launching`/`Running`/`Suspended` within the full poll
+    /// budget -- a stuck launch, or a launched session that ended before
+    /// this dispatch ever observed it running.
+    HandlerNeverObservedRunning,
+    /// The handler's session id was no longer a known INC session by the
+    /// time the push was attempted (it ended between being observed
+    /// running and the push landing).
+    HandlerSessionEnded,
+    /// The push itself was refused for a reason the transport reports.
+    PushRefused { detail: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

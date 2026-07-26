@@ -369,3 +369,160 @@ fn intent_launch_applies_the_same_required_domains_precondition_as_an_interactiv
         refusal.detail
     );
 }
+
+/// The retry loop must distinguish "the handler never subscribed to the
+/// convention it's dispatched for" from a bare `Failed`: before this fix,
+/// every failure of `intent.invoke` -- launch refused, never subscribed,
+/// session ended, push refused -- reported the identical fixed string
+/// `"invoke failed"`, so a napplet dispatching an intent could never tell
+/// these apart. Simulates the handler launching and reaching `shell.ready`
+/// but never sending `inc.subscribe`, and asserts the caller's eventual
+/// `intent.invoke.result` names that specific cause.
+#[test]
+fn intent_invoke_reports_why_it_failed_when_the_handler_never_subscribes() {
+    let temp = TempDir::new().unwrap();
+    let (handler_event, handler_author, handler_digest) = signed_manifest_event(
+        "nip29-chat-test",
+        b"<html>handler</html>",
+        vec![
+            vec!["requires".to_owned(), "intent".to_owned()],
+            vec!["requires".to_owned(), "inc".to_owned()],
+            vec![
+                "archetype".to_owned(),
+                "nip29-group".to_owned(),
+                "napplet:nip29-group/open".to_owned(),
+            ],
+        ],
+    );
+    let (caller_event, caller_author, caller_digest) = signed_manifest_event(
+        "nip29-groups-test",
+        b"<html>caller</html>",
+        vec![vec!["requires".to_owned(), "intent".to_owned()]],
+    );
+
+    let controller = RuntimeController::open(
+        RuntimeConfig {
+            runtime_store_path: temp.path().join("runtime.sqlite3").display().to_string(),
+            nmp_store_path: None,
+            artifact_cache_path: temp.path().join("artifacts").display().to_string(),
+            ..RuntimeConfig::default()
+        },
+        Box::new(FixtureSource(BTreeMap::from([
+            (handler_digest, b"<html>handler</html>".to_vec()),
+            (caller_digest, b"<html>caller</html>".to_vec()),
+        ]))),
+    )
+    .unwrap();
+
+    let handler_artifact = controller
+        .verify_artifact(
+            handler_event,
+            ArtifactCoordinate::Named {
+                author: handler_author,
+                d_tag: "nip29-chat-test".to_owned(),
+            },
+        )
+        .artifact
+        .expect("handler manifest verifies");
+    controller.install(Arc::clone(&handler_artifact));
+    for domain in ["intent", "inc"] {
+        controller.set_grant(
+            Arc::clone(&handler_artifact),
+            domain.to_owned(),
+            RuntimeSensitivity::Sensitive,
+            RuntimeGrantDecision::AllowExactBuild,
+        );
+    }
+
+    let caller_artifact = controller
+        .verify_artifact(
+            caller_event,
+            ArtifactCoordinate::Named {
+                author: caller_author,
+                d_tag: "nip29-groups-test".to_owned(),
+            },
+        )
+        .artifact
+        .expect("caller manifest verifies");
+    controller.install(Arc::clone(&caller_artifact));
+    controller.set_grant(
+        Arc::clone(&caller_artifact),
+        "intent".to_owned(),
+        RuntimeSensitivity::Sensitive,
+        RuntimeGrantDecision::AllowExactBuild,
+    );
+    controller.launch(
+        Arc::clone(&caller_artifact),
+        RuntimeExecutionProfile::Legacy,
+    );
+    let caller_session = controller.snapshot_value().sessions[0].id;
+    controller.mapped_envelope(caller_session, br#"{"type":"shell.ready"}"#.to_vec());
+
+    controller.mapped_envelope(
+        caller_session,
+        serde_json::to_vec(&serde_json::json!({
+            "type": "intent.invoke",
+            "id": "invoke-1",
+            "request": {
+                "archetype": "nip29-group",
+                "convention": "napplet:nip29-group/open",
+                "payload": {"group": "abc"}
+            }
+        }))
+        .unwrap(),
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let handler_session = loop {
+        if let Some(session) = controller
+            .snapshot_value()
+            .sessions
+            .iter()
+            .find(|session| session.id != caller_session)
+        {
+            break session.id;
+        }
+        assert!(Instant::now() < deadline, "handler session never launched");
+        thread::sleep(Duration::from_millis(20));
+    };
+
+    // Simulate the handler napplet's own JS boot reaching `shell.ready`
+    // but deliberately never sending `inc.subscribe` -- the exact case
+    // `NativeIntentFailureReason::HandlerNeverSubscribed` names.
+    controller.mapped_envelope(handler_session, br#"{"type":"shell.ready"}"#.to_vec());
+
+    // The retry loop's full poll budget is 40 * 250ms = 10s.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let result = loop {
+        if let Some(result) = controller
+            .app
+            .events_after(0)
+            .events
+            .into_iter()
+            .find_map(|event| match event.event {
+                PlatformEvent::ProviderPush {
+                    session, envelope, ..
+                } if session == SessionId(caller_session)
+                    && envelope.decode().ok()?.get("type")? == "intent.invoke.result" =>
+                {
+                    envelope.decode().ok()
+                }
+                _ => None,
+            })
+        {
+            break result;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "caller never received intent.invoke.result"
+        );
+        thread::sleep(Duration::from_millis(50));
+    };
+    assert_eq!(result["result"]["ok"], false);
+    assert_eq!(result["result"]["handled"], false);
+    assert_eq!(
+        result["result"]["error"],
+        "handler launched but never subscribed to the requested convention",
+        "a bare, undifferentiated failure must not still be reported here"
+    );
+}

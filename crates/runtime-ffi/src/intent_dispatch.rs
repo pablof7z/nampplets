@@ -23,7 +23,7 @@ use nmp_native_artifact::VerifiedArtifactHandle;
 use nmp_native_provider_inc::{IncNativePushError, IncProvider};
 use nmp_native_provider_link::{
     IntentPolicy, IntentPolicyDecision, IntentPolicyRequest, IntentProvider, NativeIntentDispatch,
-    NativeIntentDispatcher, NativeIntentOutcome, NativeIntentStartError,
+    NativeIntentDispatcher, NativeIntentFailureReason, NativeIntentOutcome, NativeIntentStartError,
 };
 use nmp_native_runtime_app::{PlatformCommand, RuntimeApp};
 use nmp_native_runtime_core::{ExecutionProfile, Principal, SessionState};
@@ -207,6 +207,13 @@ fn run_dispatch(
     convention: &str,
 ) -> NativeIntentOutcome {
     let mut launched = false;
+    // The retry loop can observe `NotSubscribed` many times before either
+    // succeeding or exhausting its budget. Remember that it happened at
+    // least once so the eventual `Failed` names the actual last-observed
+    // cause instead of collapsing "handler launched but its own JS never
+    // subscribed" into the same opaque outcome as "handler never came up
+    // at all".
+    let mut observed_unsubscribed = false;
     for _ in 0..MAXIMUM_READY_ATTEMPTS {
         if request.cancellation.is_cancelled() {
             return NativeIntentOutcome::Cancelled;
@@ -231,16 +238,28 @@ fn run_dispatch(
                     Err(IncNativePushError::NotSubscribed) => {
                         // The session exists but its own JS hasn't reached
                         // `inc.subscribe(convention, ...)` yet -- keep polling.
+                        observed_unsubscribed = true;
                     }
-                    Err(IncNativePushError::UnknownSession | IncNativePushError::Push(_)) => {
-                        return NativeIntentOutcome::Failed;
+                    Err(IncNativePushError::UnknownSession) => {
+                        return NativeIntentOutcome::Failed {
+                            reason: NativeIntentFailureReason::HandlerSessionEnded,
+                        };
+                    }
+                    Err(IncNativePushError::Push(error)) => {
+                        return NativeIntentOutcome::Failed {
+                            reason: NativeIntentFailureReason::PushRefused {
+                                detail: error.to_string(),
+                            },
+                        };
                     }
                 }
             }
             None if !launched => {
                 launched = true;
                 if !launch_handler(app, artifacts, request) {
-                    return NativeIntentOutcome::Failed;
+                    return NativeIntentOutcome::Failed {
+                        reason: NativeIntentFailureReason::HandlerLaunchRefused,
+                    };
                 }
                 if let Some(activation) = activation {
                     activation.focus_or_launch(request.handler.clone());
@@ -256,7 +275,17 @@ fn run_dispatch(
             return NativeIntentOutcome::Cancelled;
         }
     }
-    NativeIntentOutcome::Failed
+    // The poll budget is exhausted. If a session was ever observed running
+    // but never subscribed, that is the reportable cause; otherwise the
+    // handler's session never reached a running state at all within the
+    // budget (stuck launch, or the launched session immediately ended).
+    NativeIntentOutcome::Failed {
+        reason: if observed_unsubscribed {
+            NativeIntentFailureReason::HandlerNeverSubscribed
+        } else {
+            NativeIntentFailureReason::HandlerNeverObservedRunning
+        },
+    }
 }
 
 fn launch_handler(
