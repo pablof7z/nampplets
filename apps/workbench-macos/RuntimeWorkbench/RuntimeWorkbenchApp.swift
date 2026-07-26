@@ -8,23 +8,16 @@ final class RuntimeWorkbenchAppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.activateWorkbenchWindow()
         }
-        // A one-shot at launch is the wrong hook: SwiftUI applies
-        // `.defaultSize` on its own schedule, so a frame set here is sized over
-        // afterwards. Re-asserting on key and on resize also covers the Dock
-        // appearing or the display changing while the app is running.
-        for name: NSNotification.Name in [
-            NSWindow.didBecomeKeyNotification,
-            NSWindow.didResizeNotification,
-        ] {
-            NotificationCenter.default.addObserver(
-                forName: name,
-                object: nil,
-                queue: .main
-            ) { [weak self] note in
-                guard let window = note.object as? NSWindow else { return }
-                self?.fitToVisibleScreen(window)
-            }
-        }
+        // Deliberately no `didResize` observer. An earlier revision re-fitted
+        // the window on every resize, but `setFrame` itself raises
+        // `didResize`, so it could ping-pong with SwiftUI's own sizing and
+        // spin the main thread. That is what hung the first UI test at launch
+        // for the full 60s allowance while the app never became responsive.
+        //
+        // It is also unnecessary. The real defect was a minimum window size
+        // (1050x660) that a 1024pt display could not satisfy; with the floor
+        // lowered, AppKit's own `constrainFrameRect(_:to:)` keeps a new window
+        // inside the visible frame without any help from us.
     }
 
     private func activateWorkbenchWindow() {
