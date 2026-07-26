@@ -226,9 +226,14 @@ public struct PermissionReviewSheet: View {
                         ? "chevron.up"
                         : "slider.horizontal.3"
                 )
-                .font(.callout)
+                .font(NappletType.secondary)
+                .foregroundStyle(NappletInk.inkSecondary)
             }
-            .buttonStyle(.link)
+            // `.plain`, not `.link`: `.link` is macOS-only and broke the iOS
+            // build. It would have been wrong here anyway -- this is not the
+            // primary action, and the accent belongs to exactly one element
+            // per screen.
+            .buttonStyle(.plain)
             .accessibilityIdentifier("permission-choose-individually")
             .accessibilityHint(
                 "Shows a separate choice for each thing this napplet asked for"
