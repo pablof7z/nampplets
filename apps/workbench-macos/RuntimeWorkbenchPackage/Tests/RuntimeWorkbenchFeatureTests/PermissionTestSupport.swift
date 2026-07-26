@@ -37,6 +37,18 @@ func permissionPrincipal(hash: Character = "b")
     )!
 }
 
+/// Rust derives a review's revision as a SHA-256 over the whole effective
+/// review: the principal, and every capability's requirement, sensitivity,
+/// platform availability, controller, decisions and decision options. Native
+/// code never recomputes it -- it treats the revision as an opaque
+/// optimistic-concurrency token, echoes it back on the decision batch, and
+/// Rust refuses the batch as stale when the live review no longer hashes to
+/// it. These fixtures therefore only need one distinct, well-formed token per
+/// distinct review, which is what this stand-in produces.
+func permissionRevision(_ digit: Character) -> String {
+    String(repeating: digit, count: 64)
+}
+
 func validOptions(
     unavailable: Set<PermissionRequestedDecision> = []
 ) -> [PermissionDecisionOption] {
@@ -70,6 +82,7 @@ func permissionSnapshot() -> PermissionReviewSnapshot {
             )!
         ],
         platformAvailability: .available,
+        controller: .user,
         existingDecision: .denied,
         isGranted: false,
         requestedDecision: .askEveryTime,
@@ -84,6 +97,7 @@ func permissionSnapshot() -> PermissionReviewSnapshot {
         rationale: "Publishes approved replies through NMP.",
         dependencies: [],
         platformAvailability: .available,
+        controller: .user,
         existingDecision: .askEveryTime,
         isGranted: false,
         requestedDecision: .askEveryTime,
@@ -92,9 +106,13 @@ func permissionSnapshot() -> PermissionReviewSnapshot {
     )!
     let review = PermissionReview(
         principal: permissionPrincipal(),
+        revision: permissionRevision("1"),
         publisherDisplayName: "Alice",
         nappletTitle: "Good Morning",
-        capabilities: [identity, outbox]
+        capabilities: [identity, outbox],
+        // Every capability here is user-controlled, so the review offers the
+        // user something to decide and is not read-only.
+        isReadOnly: false
     )!
     return PermissionReviewSnapshot(review: review)
 }
@@ -102,9 +120,16 @@ func permissionSnapshot() -> PermissionReviewSnapshot {
 func noCapabilitiesPermissionSnapshot() -> PermissionReviewSnapshot {
     let review = PermissionReview(
         principal: permissionPrincipal(hash: "d"),
+        revision: permissionRevision("3"),
         publisherDisplayName: nil,
         nappletTitle: "Good Morning",
-        capabilities: []
+        capabilities: [],
+        // `isReadOnly` means "no capability in this review is the user's to
+        // decide". Rust computes it as `capabilities.iter().all(host policy)`,
+        // which is vacuously true for an empty review, and the Swift model
+        // enforces the same equality. A napplet that requests nothing
+        // therefore presents a review with nothing to decide.
+        isReadOnly: true
     )!
     return PermissionReviewSnapshot(review: review)
 }
@@ -119,6 +144,7 @@ func mixedManagedPermissionSnapshot() -> PermissionReviewSnapshot {
         rationale: "Publishes approved replies through NMP.",
         dependencies: [],
         platformAvailability: .available,
+        controller: .user,
         existingDecision: .askEveryTime,
         isGranted: false,
         requestedDecision: .askEveryTime,
@@ -127,9 +153,13 @@ func mixedManagedPermissionSnapshot() -> PermissionReviewSnapshot {
     )!
     let review = PermissionReview(
         principal: permissionPrincipal(hash: "e"),
+        revision: permissionRevision("4"),
         publisherDisplayName: "Alice",
         nappletTitle: "Good Morning",
-        capabilities: [managed, decidable]
+        capabilities: [managed, decidable],
+        // Mixed: `outbox` is still the user's to decide, so the review as a
+        // whole is not read-only even though `identity` is host-managed.
+        isReadOnly: false
     )!
     return PermissionReviewSnapshot(review: review)
 }
@@ -137,7 +167,12 @@ func mixedManagedPermissionSnapshot() -> PermissionReviewSnapshot {
 func managedPermissionCapability(
     isGranted: Bool
 ) -> PermissionCapabilityReview {
-    PermissionCapabilityReview(
+    // `controller` names who owns this capability's decision. Rust projects
+    // `.hostPolicy` exactly when the decision in force is `Managed`, and
+    // reuses one reason string for both the controller and every locked
+    // option, so the fixture does the same.
+    let reason = "This capability is managed by host policy."
+    return PermissionCapabilityReview(
         domain: "identity",
         title: "Identity",
         requirement: .required,
@@ -145,6 +180,7 @@ func managedPermissionCapability(
         rationale: "Reads the active public key.",
         dependencies: [],
         platformAvailability: .available,
+        controller: .hostPolicy(reason: reason),
         existingDecision: .managed,
         isGranted: isGranted,
         requestedDecision: nil,
@@ -153,7 +189,7 @@ func managedPermissionCapability(
             PermissionDecisionOption(
                 decision: decision,
                 isValid: false,
-                invalidReason: "This capability is managed by host policy."
+                invalidReason: reason
             )!
         }
     )!
@@ -173,6 +209,7 @@ func orderingPermissionSnapshot() -> PermissionReviewSnapshot {
             rationale: "Rationale for \(domain).",
             dependencies: [],
             platformAvailability: .available,
+            controller: .user,
             existingDecision: .askEveryTime,
             isGranted: false,
             requestedDecision: .askEveryTime,
@@ -182,6 +219,7 @@ func orderingPermissionSnapshot() -> PermissionReviewSnapshot {
     }
     let review = PermissionReview(
         principal: permissionPrincipal(hash: "f"),
+        revision: permissionRevision("5"),
         publisherDisplayName: "Alice",
         nappletTitle: "Good Morning",
         capabilities: [
@@ -200,7 +238,8 @@ func orderingPermissionSnapshot() -> PermissionReviewSnapshot {
                 requirement: .required,
                 sensitivity: .sensitive
             ),
-        ]
+        ],
+        isReadOnly: false
     )!
     return PermissionReviewSnapshot(review: review)
 }
@@ -216,6 +255,9 @@ func unavailablePermissionSnapshot() -> PermissionReviewSnapshot {
         platformAvailability: .unavailable(
             reason: "No native resource executor is installed."
         ),
+        // Platform unavailability narrows which decisions are offered; it does
+        // not move ownership of the decision away from the user.
+        controller: .user,
         existingDecision: .denied,
         isGranted: false,
         requestedDecision: .deny,
@@ -226,9 +268,11 @@ func unavailablePermissionSnapshot() -> PermissionReviewSnapshot {
     )!
     let review = PermissionReview(
         principal: permissionPrincipal(hash: "c"),
+        revision: permissionRevision("2"),
         publisherDisplayName: nil,
         nappletTitle: "Good Morning",
-        capabilities: [resource]
+        capabilities: [resource],
+        isReadOnly: false
     )!
     return PermissionReviewSnapshot(review: review)
 }

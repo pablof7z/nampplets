@@ -135,7 +135,10 @@ import Testing
             nativeCapability(domain: "outbox"),
         ]
     )
+    // Applying the decisions moves both grants, so Rust would hash a different
+    // effective review and hand back a different revision.
     let applied = nativeReview(
+        revision: "2",
         capabilities: [
             nativeCapability(
                 domain: "identity",
@@ -152,6 +155,11 @@ import Testing
     let native = RecordingNativePermissionService(review: initial)
     native.nextUpdate = NativeRuntimePermissionBatchUpdate(
         applied: true,
+        // `changed` is not a synonym for `applied`. Rust accepts a batch whose
+        // decisions all already match the decision in force and reports
+        // `applied: true, changed: false` for it. Here both domains move from
+        // `.denied`, so at least one durable grant really changed.
+        changed: true,
         review: applied,
         refusal: nil
     )
@@ -161,6 +169,7 @@ import Testing
     )
     let batch = PermissionDecisionBatch(
         principal: permissionManagerPrincipal(),
+        reviewRevision: initial.revision,
         decisions: [
             PermissionDecisionSelection(
                 domain: "identity",
@@ -177,6 +186,9 @@ import Testing
 
     #expect(native.batches.count == 1)
     #expect(native.batches[0].coordinate == nativeCoordinate())
+    // The revision is what binds these decisions to the review the user saw.
+    // The manager must forward it untouched or Rust cannot detect staleness.
+    #expect(native.batches[0].reviewRevision == initial.revision)
     #expect(
         native.batches[0].decisions == [
             NativeRuntimePermissionDecisionSelection(
@@ -203,13 +215,21 @@ import Testing
             capabilities: [nativeCapability(domain: "identity")]
         )
     )
+    // The change boundary no longer answers with the open-coded, timestamped
+    // `RuntimeRefusal` used for diagnostics elsewhere. It answers with the
+    // closed `RuntimePermissionChangeRefusal`, whose `code` is one of the
+    // reasons a permission change can be turned down and which native code is
+    // expected to switch on. `.dependencyDenied` is the typed name for the
+    // refusal this test drives.
     native.nextUpdate = NativeRuntimePermissionBatchUpdate(
         applied: false,
+        // Rust's refusal path always reports `changed: false`: a refused batch
+        // is atomic and moves no grant.
+        changed: false,
         review: nil,
-        refusal: NativeRuntimePermissionRefusal(
-            code: "permission-batch-refused",
-            detail: "the dependency closure was refused",
-            occurredAtMillis: 42
+        refusal: NativeRuntimePermissionChangeRefusal(
+            code: .dependencyDenied,
+            detail: "the dependency closure was refused"
         )
     )
     let manager = try RuntimeWorkbenchPermissionManager(
@@ -219,6 +239,7 @@ import Testing
     let reviewed = manager.snapshot().review
     let batch = PermissionDecisionBatch(
         principal: reviewed.principal,
+        reviewRevision: reviewed.revision,
         decisions: [
             PermissionDecisionSelection(
                 domain: "identity",
@@ -267,15 +288,26 @@ private final class RecordingNativePermissionService:
         _ batch: NativeRuntimePermissionDecisionBatch
     ) -> NativeRuntimePermissionBatchUpdate {
         batches.append(batch)
-        return nextUpdate ?? NativeRuntimePermissionBatchUpdate(
-            applied: false,
-            review: nil,
-            refusal: NativeRuntimePermissionRefusal(
-                code: "missing-test-update",
-                detail: "the test did not configure an update",
-                occurredAtMillis: 0
+        guard let update = nextUpdate else {
+            // Every refusal code in the closed set names a reason Rust turned
+            // a change down. None of them means "the harness was not set up",
+            // so rather than borrow one and let a misconfigured test read as a
+            // meaningful runtime refusal, fail loudly and answer with a
+            // refusal whose code is asserted nowhere.
+            Issue.record(
+                "The test did not configure a permission batch update."
             )
-        )
+            return NativeRuntimePermissionBatchUpdate(
+                applied: false,
+                changed: false,
+                review: nil,
+                refusal: NativeRuntimePermissionChangeRefusal(
+                    code: .closed,
+                    detail: "the test did not configure an update"
+                )
+            )
+        }
+        return update
     }
 }
 
@@ -295,13 +327,28 @@ private func nativeCoordinate() -> NativeRuntimePermissionCoordinate {
     )
 }
 
+/// Rust hashes the whole effective review into `revision` and refuses any
+/// decision batch that does not echo the live value back, so a review whose
+/// content differs must carry a different revision. Callers pass one distinct
+/// well-formed token per distinct review rather than recomputing the digest.
 private func nativeReview(
+    revision: Character = "1",
     capabilities: [NativeRuntimePermissionCapabilitySnapshot]
 ) -> NativeRuntimePermissionReviewSnapshot {
     NativeRuntimePermissionReviewSnapshot(
         coordinate: nativeCoordinate(),
+        revision: String(repeating: revision, count: 64),
         title: "Good Morning",
         capabilities: capabilities,
+        // Rust derives `readOnly` as "every capability is host-policy
+        // controlled" (vacuously true for an empty review), so the stand-in
+        // derives it the same way instead of letting callers assert it.
+        readOnly: capabilities.allSatisfy {
+            if case .hostPolicy = $0.controller {
+                return true
+            }
+            return false
+        },
         launchPermitted: false
     )
 }
@@ -328,12 +375,21 @@ private func nativeCapability(
         : ([.allowExactBuild, .allowSession].first {
             !invalidDecisions.contains($0)
         } ?? .denied)
+    // `controller` says whose decision this is. Rust projects `.hostPolicy`
+    // exactly when the decision in force is `Managed` and `.user` otherwise --
+    // platform unavailability narrows the offered options but never moves
+    // ownership -- so the stand-in derives it rather than accepting it.
+    let controller: NativeRuntimePermissionDecisionController = existing
+        == .managed
+        ? .hostPolicy(reason: invalidReason)
+        : .user
     return NativeRuntimePermissionCapabilitySnapshot(
         domain: domain,
         requirement: .required,
         sensitivity: sensitivity,
         dependencies: [],
         platformAvailability: availability,
+        controller: controller,
         existingDecision: existing,
         isGranted: granted.contains(existing),
         requestedDecision: requested,

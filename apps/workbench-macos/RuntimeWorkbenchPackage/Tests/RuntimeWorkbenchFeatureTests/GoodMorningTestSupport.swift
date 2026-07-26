@@ -116,6 +116,12 @@ func installApproveAndLaunchGoodMorning(
     let update = profile.native.applyPermissionDecisions(
         NativeRuntimePermissionDecisionBatch(
             coordinate: installed.permissionCoordinate,
+            // The batch is bound to the exact review these decisions were read
+            // from. Rust re-derives the live review's revision and refuses the
+            // batch as stale if anything in the effective policy moved in
+            // between, so this must be the revision of `review` itself and
+            // never a value the caller made up.
+            reviewRevision: review.revision,
             // Decide on provider availability, not on requirement. The
             // fixture declares every domain it wants as required, and a
             // domain the runtime registers no provider for can only ever be
