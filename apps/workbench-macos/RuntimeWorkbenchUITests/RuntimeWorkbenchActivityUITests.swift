@@ -41,14 +41,24 @@ extension RuntimeWorkbenchUITests {
             waitForNonexistence(of: permissionConfirm, timeout: 10)
         )
 
-        let inspector = app.descendants(matching: .any)["toggle-inspector"]
+        // `.firstMatch` because SwiftUI propagates an `accessibilityIdentifier`
+        // from a control onto the children of its label, so an `.any` query
+        // resolves both the toolbar Button and the image inside it and a click
+        // fails with "Multiple matching elements found". The product declares
+        // this identifier exactly once; there is one control, not two. The
+        // first match is the outermost element, which is the clickable one.
+        // Same reason "Not Now" and the evidence disclosure below use it.
+        let inspector = app.buttons["toggle-inspector"].firstMatch
         XCTAssertTrue(
             inspector.waitForExistence(timeout: 10),
             "The Inspector control must appear after the review is dismissed"
         )
         inspector.click()
 
-        let activity = app.descendants(matching: .any)["inspector-activity"]
+        // Same propagation trap as `toggle-inspector` above, and it would have
+        // surfaced the moment that one passed. `ContentView+Inspector.swift:123`
+        // declares this as a `Button`, so the type scope is checked, not guessed.
+        let activity = app.buttons["inspector-activity"].firstMatch
         XCTAssertTrue(
             activity.waitForExistence(timeout: 10),
             "Activity must be reachable from the Inspector"
