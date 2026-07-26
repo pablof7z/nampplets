@@ -4,7 +4,7 @@ extension ContentView {
     var nappletInspector: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Label("Napplet Inspector", systemImage: "info.circle")
+                Label("Details", systemImage: "info.circle")
                     .font(.headline)
                 Spacer()
                 Button {
@@ -47,32 +47,45 @@ extension ContentView {
     @ViewBuilder
     private var inspectorOverviewTab: some View {
         if let window = layout.selectedWindow {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: NappletMetrics.snug) {
                 Text(window.title)
                     .font(.title3.weight(.semibold))
                 LabeledContent(
                     "Status",
                     value: window.exactBuild.flatMap {
                         runningArtifacts[$0]
-                    } == nil ? "Not running" : "Running"
+                    } == nil ? "Not open" : "Running"
                 )
                 LabeledContent("Layout", value: layout.mode.title)
                 LabeledContent(
-                    "Window",
+                    "Size",
                     value: "\(Int(window.frame.width)) × \(Int(window.frame.height))"
                 )
+
+                // A twelve-character prefix of a hash is the worst of both:
+                // meaningless to a person, and useless for the comparison a
+                // technical reader would want. The whole value lives here.
                 if let exactBuild = window.exactBuild {
-                    LabeledContent("Build") {
-                        Text(String(exactBuild.aggregateHash.prefix(12)))
-                            .font(.system(.caption, design: .monospaced))
-                            .textSelection(.enabled)
+                    NappletEvidence {
+                        NappletFieldGrid(fields: [
+                            NappletField(
+                                "Publisher key",
+                                exactBuild.manifestAuthor
+                            ),
+                            NappletField("dTag", exactBuild.dTag),
+                            NappletField(
+                                "Aggregate hash",
+                                exactBuild.aggregateHash
+                            ),
+                        ])
                     }
+                    .font(.caption)
                 }
             }
 
             if let nativeActionNotice {
                 Divider()
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: NappletMetrics.tight) {
                     Label(
                         nativeActionNotice.title,
                         systemImage: nativeActionNotice.kind == .composeOpen
@@ -81,12 +94,15 @@ extension ContentView {
                     )
                     .font(.subheadline.weight(.semibold))
                     Text(nativeActionNotice.target)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.callout)
                         .textSelection(.enabled)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(nativeActionNotice.detail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button("Dismiss action") {
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Dismiss") {
                         self.nativeActionNotice = nil
                     }
                     .buttonStyle(.borderless)
@@ -96,17 +112,17 @@ extension ContentView {
 
             Divider()
 
-            Button("Review Permissions", systemImage: "lock.shield") {
+            Button("Permissions", systemImage: "lock.shield") {
                 openPermissionReview()
             }
-            Button("View Activity", systemImage: "waveform.path.ecg") {
+            Button("Activity", systemImage: "waveform.path.ecg") {
                 openActivityDrawer()
             }
         } else {
             ContentUnavailableView(
-                "No napplet selected",
+                "Nothing selected",
                 systemImage: "cursorarrow.click",
-                description: Text("Select a napplet window to inspect it.")
+                description: Text("Pick a napplet window to see its details.")
             )
         }
     }
