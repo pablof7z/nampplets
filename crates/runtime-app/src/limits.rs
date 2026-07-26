@@ -9,7 +9,7 @@ use nmp_native_providers::ShellProvider;
 use nmp_native_runtime_core::{
     GrantError, GrantLimits, HostDataPlane, ResourceLimits, ResourceRefusal,
 };
-use nmp_native_runtime_store::{RuntimeStore, StoreError};
+use nmp_native_runtime_store::{PermissionDefaultPreference, RuntimeStore, StoreError};
 use nmp_native_surface::BindingLimits;
 use thiserror::Error;
 
@@ -124,6 +124,9 @@ pub struct RuntimeAppConfig {
     pub store: Arc<RuntimeStore>,
     pub data_plane: Arc<dyn HostDataPlane>,
     pub clock: Arc<dyn KernelClock>,
+    /// Default selection for a capability with no existing decision.
+    /// Permission review remains mandatory; this never applies a grant.
+    pub permission_default: PermissionDefaultPreference,
     /// The mandatory NAP-SHELL provider. It is registered exactly once by the
     /// kernel and retained as the session-establishment authority.
     pub shell_provider: Arc<ShellProvider>,

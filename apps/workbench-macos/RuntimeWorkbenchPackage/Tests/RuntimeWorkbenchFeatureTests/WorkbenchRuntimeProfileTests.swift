@@ -1,3 +1,4 @@
+import Foundation
 @testable import RuntimeWorkbenchFeature
 import NMPNativeRuntimeApple
 import Testing
@@ -52,6 +53,31 @@ func productionNetworkInputsRefuseMissingOperatorLanes() {
             ]
         )
     }
+}
+
+@Test
+func profilePreferencesFlowThroughTheSharedAppleConsumer() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(
+            "workbench-preferences-\(UUID().uuidString)",
+            isDirectory: true
+        )
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let profile = try WorkbenchRuntimeProfile.open(storageRoot: root)
+    defer { profile.close() }
+    let restartRequired = try profile.savePreferences(
+        WorkbenchProfilePreferences(
+            appRelays: ["wss://home.example"],
+            indexerRelays: ["wss://search.example"],
+            permissionDefault: .allowSession
+        )
+    )
+    #expect(restartRequired)
+    let snapshot = profile.settingsSnapshot()
+    #expect(snapshot.preferences?.appRelays == ["wss://home.example"])
+    #expect(snapshot.preferences?.indexerRelays == ["wss://search.example"])
+    #expect(snapshot.preferences?.permissionDefault == .allowSession)
 }
 
 @Test

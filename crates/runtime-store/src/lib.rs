@@ -19,6 +19,9 @@ mod components;
 mod error;
 mod grants;
 mod installs;
+mod preferences;
+#[cfg(test)]
+mod preferences_tests;
 mod schema;
 #[cfg(test)]
 mod tests;
@@ -26,6 +29,10 @@ mod validate;
 mod workspaces;
 
 pub use error::StoreError;
+pub use preferences::{
+    MAXIMUM_PROFILE_RELAY_URL_BYTES, MAXIMUM_PROFILE_RELAYS_PER_LANE, PermissionDefaultPreference,
+    ProfilePreferences,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StoreLimits {

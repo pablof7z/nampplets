@@ -31,9 +31,26 @@ extension WorkbenchRuntimeProfile {
         if FileManager.default.fileExists(atPath: storageRoot.path) {
             try FileManager.default.removeItem(at: storageRoot)
         }
-        return try open(
+        let profile = try open(
             storageRoot: storageRoot,
-            accountPersistence: .transient
+            accountPersistence: .transient,
+            permissionMode: scenario == "full-window-layout-transition"
+                ? .demoPinnedGoodMorning
+                : .interactive
         )
+        if scenario == "full-window-layout-transition" {
+            let registration = profile.native.registerLocalAccount(
+                secretKey: String(repeating: "0", count: 63) + "1"
+            )
+            guard
+                registration.accepted,
+                let handle = registration.handle,
+                profile.native.activateLocalAccount(handle: handle).accepted
+            else {
+                profile.close()
+                throw CocoaError(.userCancelled)
+            }
+        }
+        return profile
     }
 }

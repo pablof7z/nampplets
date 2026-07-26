@@ -45,3 +45,9 @@ public typealias NativeRuntimeWorkspaceRole = RuntimeWorkspaceRole
 public typealias NativeRuntimeWorkspaceSlot = RuntimeWorkspaceSlot
 public typealias NativeRuntimeWorkspaceUpdate = RuntimeWorkspaceUpdate
 public typealias NativeRuntimePermissionMode = RuntimePermissionMode
+public typealias NativeRuntimePermissionDefault = RuntimePermissionDefault
+public typealias NativeRuntimeProfilePreferences = RuntimeProfilePreferences
+public typealias NativeRuntimeProfilePreferencesUpdate =
+    RuntimeProfilePreferencesUpdate
+public typealias NativeRuntimeStorageSnapshot = RuntimeStorageSnapshot
+public typealias NativeRuntimeStorageResetResult = RuntimeStorageResetResult

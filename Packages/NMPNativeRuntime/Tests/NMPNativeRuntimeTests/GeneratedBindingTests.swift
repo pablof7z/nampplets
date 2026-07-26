@@ -227,7 +227,8 @@ final class GeneratedBindingTests: XCTestCase {
             maximumArtifactTotalBytes: 4_194_304,
             maximumVerifiedReadBytes: 1_048_576,
             maximumBlobSources: 4,
-            permissionMode: .interactive
+            permissionMode: .interactive,
+            permissionDefault: .askEveryTime
         )
     }
 

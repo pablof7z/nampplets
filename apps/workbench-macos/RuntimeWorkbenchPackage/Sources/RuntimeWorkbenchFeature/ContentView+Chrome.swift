@@ -17,7 +17,7 @@ extension ContentView {
         } else {
             NavigationStack {
                 canvasBody
-                    .navigationTitle("Workbench")
+                    .navigationTitle("Napplets")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
@@ -79,7 +79,7 @@ extension ContentView {
         HStack(spacing: 10) {
             accountMenu
 
-            Text("Workbench")
+            Text("Napplets")
                 .font(.title3.weight(.semibold))
             Spacer()
 
@@ -273,7 +273,7 @@ extension ContentView {
                     .foregroundStyle(.orange)
             }
             Spacer()
-            Text("Direct napplet network denied · ephemeral WebKit store")
+            Text("Napplets use only the access you approve")
                 .foregroundStyle(.secondary)
         }
         .font(.caption)

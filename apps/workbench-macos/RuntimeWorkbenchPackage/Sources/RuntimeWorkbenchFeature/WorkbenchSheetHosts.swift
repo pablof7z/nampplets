@@ -44,7 +44,7 @@ struct ActivitySheetHost: View {
                     systemImage: "waveform.path.ecg.rectangle",
                     description: Text(reason)
                 )
-                .navigationTitle("Runtime Activity")
+                .navigationTitle("Recent Activity")
                 #if os(macOS)
                 .frame(minWidth: 620, minHeight: 420)
                 #endif
@@ -86,12 +86,14 @@ struct PermissionSheetHost: View {
 struct SettingsSheetHost: View {
     let snapshot: WorkbenchSettingsSnapshot?
     let openDestination: (WorkbenchSettingsDestination) -> Void
+    let performAction: WorkbenchProfileActionHandler
 
     var body: some View {
         if let snapshot {
             WorkbenchSettingsSheet(
                 snapshot: snapshot,
-                openDestination: openDestination
+                openDestination: openDestination,
+                performAction: performAction
             )
         } else {
             NavigationStack {
@@ -99,10 +101,10 @@ struct SettingsSheetHost: View {
                     "Settings unavailable",
                     systemImage: "gearshape.fill",
                     description: Text(
-                        "The bounded runtime profile status could not be displayed."
+                        "Preferences could not be displayed."
                     )
                 )
-                .navigationTitle("Settings")
+                .navigationTitle("Preferences")
                 #if os(macOS)
                 .frame(minWidth: 620, minHeight: 420)
                 #endif

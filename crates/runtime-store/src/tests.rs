@@ -115,6 +115,11 @@ fn sensitive_grant_does_not_transfer_to_update() {
         .set_grant(&principal('b'), &upload, GrantDecision::AllowExactBuild)
         .unwrap();
     assert_eq!(
+        store.grant_entry(&principal('b'), &upload).unwrap(),
+        Some(GrantDecision::AllowExactBuild)
+    );
+    assert_eq!(store.grant_entry(&principal('c'), &upload).unwrap(), None);
+    assert_eq!(
         store.grant(&principal('c'), &upload).unwrap(),
         GrantDecision::Denied
     );

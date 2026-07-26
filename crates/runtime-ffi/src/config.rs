@@ -14,6 +14,13 @@ pub enum RuntimePermissionMode {
     DemoPinnedGoodMorning,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum RuntimePermissionDefault {
+    AskEveryTime,
+    AllowSession,
+    AllowExactBuild,
+}
+
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct RuntimeConfig {
     pub runtime_store_path: String,
@@ -36,6 +43,7 @@ pub struct RuntimeConfig {
     pub maximum_verified_read_bytes: u64,
     pub maximum_blob_sources: u64,
     pub permission_mode: RuntimePermissionMode,
+    pub permission_default: RuntimePermissionDefault,
 }
 
 impl RuntimeConfig {
@@ -122,6 +130,7 @@ impl RuntimeConfig {
             maximum_command_items: maximum_config_items,
             maximum_command_string_bytes: maximum_config_string_bytes,
             permission_mode: self.permission_mode,
+            permission_default: self.permission_default,
         })
     }
 }
@@ -149,6 +158,7 @@ impl Default for RuntimeConfig {
             maximum_verified_read_bytes: DEFAULT_MAXIMUM_ARTIFACT_READ_BYTES,
             maximum_blob_sources: 8,
             permission_mode: RuntimePermissionMode::Interactive,
+            permission_default: RuntimePermissionDefault::AskEveryTime,
         }
     }
 }
@@ -173,6 +183,7 @@ pub(crate) struct ValidatedConfig {
     pub(crate) maximum_command_items: usize,
     pub(crate) maximum_command_string_bytes: usize,
     pub(crate) permission_mode: RuntimePermissionMode,
+    pub(crate) permission_default: RuntimePermissionDefault,
 }
 
 #[derive(Clone, Debug, thiserror::Error, uniffi::Error)]

@@ -80,6 +80,22 @@ pub enum StoreError {
     },
     #[error("activity record strings use {actual} bytes; the maximum is {maximum}")]
     ActivityRecordTooLarge { actual: usize, maximum: usize },
+    #[error("profile relay lane {lane} has {actual} entries; the maximum is {maximum}")]
+    ProfileRelayCapacity {
+        lane: &'static str,
+        actual: usize,
+        maximum: usize,
+    },
+    #[error("profile relay URL in {lane} is invalid")]
+    InvalidProfileRelay { lane: &'static str },
+    #[error("profile relay URL in {lane} is {actual} bytes; the maximum is {maximum}")]
+    ProfileRelayTooLarge {
+        lane: &'static str,
+        actual: usize,
+        maximum: usize,
+    },
+    #[error("profile relay lane {lane} contains a duplicate URL")]
+    DuplicateProfileRelay { lane: &'static str },
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
 }

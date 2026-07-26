@@ -36,8 +36,9 @@ public struct ContentView: View {
     private let catalogClient: any CatalogClient
     private let libraryManager: any WorkbenchLibraryManaging
     let injectedPermissionManager: (any PermissionReviewManaging)?
+    let profileAction: WorkbenchProfileActionHandler
 
-    @State var activity = "Opening application runtime profile"
+    @State var activity = "Getting things ready"
     @State var installedArtifacts:
         [WorkbenchExactBuildIdentity: NativeRuntimeInstalledArtifact] = [:]
     @State var permissionTargetIdentity:
@@ -82,7 +83,12 @@ public struct ContentView: View {
         accountManager: (any WorkbenchAccountManaging)? = nil,
         catalogClient: (any CatalogClient)? = nil,
         libraryManager: (any WorkbenchLibraryManaging)? = nil,
-        permissionManager: (any PermissionReviewManaging)? = nil
+        permissionManager: (any PermissionReviewManaging)? = nil,
+        profileAction: @escaping WorkbenchProfileActionHandler = { _ in
+            throw WorkbenchPreferencesError.unavailable(
+                "Preferences are unavailable while the app is opening."
+            )
+        }
     ) {
         self.profile = profile
         self.bootstrapError = bootstrapError
@@ -110,9 +116,10 @@ public struct ContentView: View {
             ?? profile.map(RuntimeWorkbenchLibraryManager.init(profile:))
             ?? UnavailableWorkbenchLibraryManager(
                 reason: bootstrapError
-                    ?? "The application runtime profile is still opening."
+                    ?? "Your napplets are still getting ready."
             )
         injectedPermissionManager = permissionManager
+        self.profileAction = profileAction
         _pendingWrites = StateObject(
             wrappedValue: RuntimeWorkbenchPendingWriteModel(profile: profile)
         )
@@ -174,50 +181,12 @@ public struct ContentView: View {
         .sheet(isPresented: $isSettingsSheetPresented) {
             SettingsSheetHost(
                 snapshot: settingsSnapshot,
-                openDestination: scheduleSettingsDestination
+                openDestination: scheduleSettingsDestination,
+                performAction: profileAction
             )
         }
         .task(id: profile.map(ObjectIdentifier.init)) {
-            if let bootstrapError {
-                activity = "Refused: \(bootstrapError)"
-                return
-            }
-            guard let profile else {
-                activity = "Opening application runtime profile"
-                return
-            }
-            profile.native.setIncActionHandler { action in
-                Task { @MainActor in
-                    handleNativeAction(action)
-                }
-            }
-            if await restorePersistedCanvasWindows() {
-                return
-            }
-            guard
-                ProcessInfo.processInfo.environment[
-                    "NMP_WORKBENCH_UI_TEST_SCENARIO"
-                ] == "good-morning-permission-launch"
-            else {
-                activity = "Canvas ready · add a napplet from the live catalog"
-                return
-            }
-            do {
-                let fixture = try GoodMorningFixture.load()
-                let installed = try await Task.detached {
-                    try fixture.install(profile: profile)
-                }.value
-                try prepareInstalledArtifact(
-                    installed,
-                    identity: WorkbenchExactBuildIdentity(
-                        manifestAuthor: GoodMorningFixture.author,
-                        dTag: GoodMorningFixture.dTag,
-                        aggregateHash: GoodMorningFixture.aggregateHash
-                    )
-                )
-            } catch {
-                activity = "Refused: \(error.localizedDescription)"
-            }
+            await bootstrapProfile()
         }
         .onChange(of: isAccountSheetPresented) { _, isPresented in
             if !isPresented {

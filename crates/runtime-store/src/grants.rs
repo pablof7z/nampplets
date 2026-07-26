@@ -153,6 +153,19 @@ impl RuntimeStore {
         principal: &Principal,
         capability: &Capability,
     ) -> Result<GrantDecision, StoreError> {
+        Ok(self
+            .grant_entry(principal, capability)?
+            .unwrap_or(GrantDecision::Denied))
+    }
+
+    /// Returns `None` only when this exact build has never stored a decision
+    /// for the capability. Callers that apply a profile default must preserve
+    /// this distinction from an explicit durable denial.
+    pub fn grant_entry(
+        &self,
+        principal: &Principal,
+        capability: &Capability,
+    ) -> Result<Option<GrantDecision>, StoreError> {
         let connection = self.connection.lock();
         let decision = connection
             .query_row(
@@ -167,8 +180,8 @@ impl RuntimeStore {
                 |row| row.get::<_, String>(0),
             )
             .optional()?;
-        decision.map_or(Ok(GrantDecision::Denied), |value| {
-            parse_grant_decision(&value)
-        })
+        decision
+            .map(|value| parse_grant_decision(&value))
+            .transpose()
     }
 }

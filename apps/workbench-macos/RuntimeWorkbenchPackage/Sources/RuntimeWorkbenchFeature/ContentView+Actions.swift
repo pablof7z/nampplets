@@ -3,6 +3,53 @@ import SwiftUI
 
 extension ContentView {
     @MainActor
+    func bootstrapProfile() async {
+        if let bootstrapError {
+            activity = "Refused: \(bootstrapError)"
+            return
+        }
+        guard let profile else {
+            activity = "Getting things ready"
+            return
+        }
+        profile.native.setIncActionHandler { action in
+            Task { @MainActor in
+                handleNativeAction(action)
+            }
+        }
+        if await restorePersistedCanvasWindows() {
+            return
+        }
+        guard [
+            "good-morning-permission-launch",
+            "full-window-layout-transition",
+        ].contains(
+            ProcessInfo.processInfo.environment[
+                "NMP_WORKBENCH_UI_TEST_SCENARIO"
+            ]
+        ) else {
+            activity = "Ready · add a napplet"
+            return
+        }
+        do {
+            let fixture = try GoodMorningFixture.load()
+            let installed = try await Task.detached {
+                try fixture.install(profile: profile)
+            }.value
+            try prepareInstalledArtifact(
+                installed,
+                identity: WorkbenchExactBuildIdentity(
+                    manifestAuthor: GoodMorningFixture.author,
+                    dTag: GoodMorningFixture.dTag,
+                    aggregateHash: GoodMorningFixture.aggregateHash
+                )
+            )
+        } catch {
+            activity = "Refused: \(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
     func openActivityDrawer() {
         guard let profile else {
             activitySheetPresentation = .unavailable(
@@ -112,12 +159,14 @@ extension ContentView {
 
     @MainActor
     func openSettings() {
-        let unavailableReason =
-            bootstrapError ?? "The application runtime profile is still opening."
-        settingsSnapshot = WorkbenchSettingsSnapshot(
-            profileAvailable: profile != nil,
-            unavailableReason: profile == nil ? unavailableReason : nil
-        )
+        if let profile {
+            settingsSnapshot = profile.settingsSnapshot()
+        } else {
+            settingsSnapshot = WorkbenchSettingsSnapshot(
+                unavailableReason: bootstrapError
+                    ?? "Preferences are unavailable while the app is opening."
+            )
+        }
         settingsRoute = WorkbenchSettingsRouteState()
         isSettingsSheetPresented = true
     }

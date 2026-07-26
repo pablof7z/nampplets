@@ -34,7 +34,7 @@ public struct ActivityDrawer: View {
 
                 facts
             }
-            .navigationTitle("Runtime Activity")
+            .navigationTitle("Recent Activity")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") {
