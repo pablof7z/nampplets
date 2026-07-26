@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rust-owned permission review revisions and changed-domain intent</title>
+    <link rel="stylesheet" href="../../assets/style.css">
+  </head>
+  <body>
+    <main class="shell">
+      <nav class="topbar">
+        <a href="../../">Planning pages</a>
+        
+      </nav>
+      <section class="hero">
+        <div class="eyebrow">Architecture plan</div>
+        <h1>Rust-owned permission review revisions and changed-domain intent</h1>
+        <p class="summary">Make mixed managed and user-decidable permission review a real Rust-owned, revision-checked transaction instead of a Swift-filtered full replacement.</p>
+        <div class="meta">
+          <span class="pill ready">Ready to implement</span>
+          <span class="pill">93 percent certainty</span>
+        </div>
+      </section>
+      <div class="grid">
+        <div>
+
+          <section class="section">
+            <h2>Boundaries</h2>
+            <pre class="mermaid">flowchart LR
+  Review[&quot;Rust review + revision&quot;] --&gt; Native[&quot;Native changed-domain intent&quot;]
+  Native --&gt; Validate[&quot;Rust reproject and validate&quot;]
+  Validate --&gt;|conflict| Refusal[&quot;Typed refusal + current review&quot;]
+  Validate --&gt;|valid| Commit[&quot;Atomic changed-grant commit&quot;]
+  Commit --&gt; Fresh[&quot;Fresh review + revision&quot;]</pre>
+          </section>
+          <section class="section">
+            <h2>Very High Level</h2>
+            <p>Replace the impossible full-replacement permission batch with a Rust-owned optimistic transaction. Each exact-build review will project an opaque revision plus the current controller and user-changeability of every requested capability. Native will submit only explicit changed-domain intent against that revision. Under the runtime lock, Rust will rebuild the current exact-build review, reject stale revisions, principal drift, managed-policy drift, duplicate or unknown domains, and currently unavailable choices before mutating any grant. On success it will commit the changed grants atomically and return a fresh review; an all-managed review remains read-only and never needs an empty or fabricated decision. Project the typed result through runtime-ffi and generated Apple bindings, then adapt the shared Workbench manager/model so first-run consent and revisitable review consume the same transaction while retaining distinct presentation lifecycles. Add executable runtime-app scenarios, real runtime-ffi mixed/stale coverage, and focused Apple tests.</p>
+          </section>
+          <section class="section">
+            <h2>Existing Rules Or ADRs</h2>
+            <ul><li>Rust continues to own product policy, validation, lifecycle, persistence, limits, and error semantics.</li><li>The exact-build principal remains manifest author, dTag, and aggregate hash.</li><li>Runtime persistence remains limited to runtime grants and does not create Nostr truth.</li><li>The runtime-app Cucumber pilot receives executable Given/When/Then coverage before the behavior is claimed.</li><li>Native performs mechanical projection and bounded intent submission only.</li></ul>
+          </section>
+          <section class="section">
+            <h2>Rule Tension And Tightening</h2>
+            <h3>Possible loosening</h3>
+            <ul><li>No repository rule or ADR needs loosening.</li></ul>
+            <h3>Possible tightening</h3>
+            <ul><li>Consider later requiring every mutable native review contract to carry an opaque Rust revision and return the current snapshot on conflict.</li></ul>
+          </section>
+          <section class="section">
+            <h2>Alternatives Considered</h2>
+            <ul><li>Keep Swift filtering and teach Rust to accept any subset: rejected because it cannot distinguish stale policy from deliberate omission.</li><li>Have native submit managed outcomes: rejected because native would fabricate host policy and violate ownership.</li><li>Continue full replacements with a revision: safer than current main but still lets a persistent review reassert unrelated stale values.</li><li>Automatically refresh and retry conflicts in native: rejected because it could silently change the meaning of the person&#x27;s action.</li></ul>
+          </section>
+        </div>
+        <aside>
+          <section class="card">
+            <h2>TTS Version</h2>
+            <audio controls preload="metadata" src="https://blossom.primal.net/8781662667890ef882cbe53e035f669d70057eb36637415789c3646c4a019922.mp3"></audio>
+            <p>Audio-friendly narration generated from the planning payload.</p>
+          </section>
+          <section class="card">
+            <h2>Certainty</h2>
+            <div class="certainty ">93%</div>
+            <p>Ready to implement.</p>
+          </section>
+          <section class="card links">
+            <h2>Links</h2>
+            
+            <a href="https://blossom.primal.net/8781662667890ef882cbe53e035f669d70057eb36637415789c3646c4a019922.mp3">Open narration</a>
+            <a href="../../docs/plans/issue-201-permission-review-revisions/plan.md">Detailed plan file</a>
+          </section>
+        </aside>
+      </div>
+    </main>
+
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+    </script>
+  </body>
+</html>
