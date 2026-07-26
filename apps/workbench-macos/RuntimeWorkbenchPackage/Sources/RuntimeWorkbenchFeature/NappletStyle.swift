@@ -1,7 +1,16 @@
 import SwiftUI
 
-/// Shared spacing and type used by the consumer-facing surfaces, so that
-/// restraint is a default rather than a thing each view remembers.
+/// Shared spacing used by the consumer-facing surfaces, so that restraint is a
+/// default rather than a thing each view remembers.
+///
+/// **These are native fallback tokens, not theme authority.** They are the
+/// Workbench's built-in defaults for host chrome, and nothing here is the
+/// product-wide source of truth for spacing or appearance. When a
+/// Rust-resolved semantic theme revision exists, precedence, validation,
+/// revision and active composition remain Rust's; this layer's job is to map
+/// semantic tokens onto concrete SwiftUI values and to supply these defaults
+/// when no revision is resolved. Treating the fixed numbers below as canonical
+/// product state is the mistake to avoid.
 public enum NappletMetrics {
     public static let hairline = 4.0
     public static let tight = 8.0

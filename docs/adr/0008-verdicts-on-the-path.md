@@ -128,6 +128,41 @@ failure -- and is therefore rare enough to mean something when it appears.
 
 "Verified" is not a green seal. It is the fact that the application did not ask.
 
+### These are native tokens, not theme authority
+
+`NappletMetrics` and the components in `NappletStyle.swift` are the Workbench's
+built-in defaults for host chrome. They are not the product-wide source of
+truth for appearance. If a Rust-resolved semantic theme revision lands, Rust
+keeps precedence, validation, revision and active composition, and this layer
+maps semantic tokens onto SwiftUI values while supplying these defaults when no
+revision is resolved.
+
+Host chrome and napplet presentation slots are distinct: the consent, browse
+and library surfaces are chrome and should consume the same resolved theme as
+any curated component adapter, but they are not themselves slots.
+
+### Capability strata are Rust's to classify, not Swift's to infer
+
+`NappletVocabulary` describes what a capability *does* in plain language. It
+deliberately does **not** classify how much authority a capability carries,
+and native code must not start inferring that from the domain string.
+
+The distinction is real and the vocabulary cannot currently express it. A
+capability may be a mediated outcome (this runtime's `keys` is a mediated
+signing request where the secret never leaves the host), a privileged broker, a
+raw escape hatch, or host-managed plumbing. Calling a mediated service "raw
+access" would be as misleading as smoothing genuine ambient authority into
+another calm row, and the same domain may mix levels across operations.
+
+Rust does not project an authority class today. `sensitivity`
+(ordinary/sensitive/unknown) is not sufficient to express it. Until an
+authority class and reason are projected — ideally per operation, or else at
+the highest authority a grant enables — native renders every capability with
+the same weight and says only what it does. **An escape hatch must never be
+smoothed, and a mediated service must never be exaggerated into ambient
+access**; neither is achievable in native code alone, so this is recorded as a
+known gap rather than papered over with string matching.
+
 ### Honest degradation is preserved
 
 A capability domain the shell does not have plain language for is never given
