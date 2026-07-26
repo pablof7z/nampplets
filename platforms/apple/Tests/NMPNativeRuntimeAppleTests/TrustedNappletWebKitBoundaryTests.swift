@@ -121,7 +121,7 @@ final class TrustedNappletWebKitBoundaryTests: XCTestCase {
               baseHref: base.getAttribute("href"),
               preludeIsThird:
                 prelude.tagName === "SCRIPT" &&
-                prelude.textContent.includes("nativeSessionToken"),
+                prelude.textContent.includes("MAX_PENDING_REQUESTS"),
               authoredScriptCount: scripts.length - 1,
               authoredScriptsFollowPrelude: scripts.slice(1).every(
                 script => Boolean(
@@ -192,6 +192,18 @@ final class TrustedNappletWebKitBoundaryTests: XCTestCase {
                 worker.onerror = () => worker.terminate();
               } catch (_) {}
 
+              let serviceWorkerRegistrationError = "";
+              try {
+                const registration =
+                  navigator.serviceWorker.register("./service-worker.js");
+                if (registration && typeof registration.catch === "function") {
+                  registration.catch(() => {});
+                }
+              } catch (error) {
+                serviceWorkerRegistrationError =
+                  String(error && error.name ? error.name : error);
+              }
+
               return {
                 hostDOMDenied,
                 localStorageDenied,
@@ -203,7 +215,13 @@ final class TrustedNappletWebKitBoundaryTests: XCTestCase {
                   window.webkit.messageHandlers.runtimeBridge
                 ),
                 windowNostrAbsent: typeof window.nostr === "undefined",
-                serviceWorkerAbsent: !("serviceWorker" in navigator)
+                // WebKit always exposes `navigator.serviceWorker`, so probing
+                // for the property proves nothing. What matters is that
+                // registering one is refused: the frame is sandboxed without
+                // `allow-same-origin`, so its origin is opaque and WebKit
+                // rejects registration outright.
+                serviceWorkerRegistrationDenied: serviceWorkerRegistrationError !== "",
+                serviceWorkerRegistrationError
               };
             })()
             """
@@ -216,10 +234,17 @@ final class TrustedNappletWebKitBoundaryTests: XCTestCase {
             "cookieDenied",
             "nativeBridgeAbsent",
             "windowNostrAbsent",
-            "serviceWorkerAbsent",
+            "serviceWorkerRegistrationDenied",
         ] {
             XCTAssertEqual(ambientState[key] as? Bool, true, "\(key) failed")
         }
+        // Pin the reason, not just the refusal: an opaque sandboxed origin is
+        // why registration is impossible, so a different error here means the
+        // boundary changed shape and must be re-examined.
+        XCTAssertEqual(
+            ambientState["serviceWorkerRegistrationError"] as? String,
+            "SecurityError"
+        )
         XCTAssertFalse(webView.configuration.websiteDataStore.isPersistent)
         await fulfillment(of: [unexpectedTransport], timeout: 0.75)
         XCTAssertEqual(connections.value, 0)
