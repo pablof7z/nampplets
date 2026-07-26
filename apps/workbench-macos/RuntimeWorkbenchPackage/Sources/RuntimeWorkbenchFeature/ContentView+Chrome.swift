@@ -71,9 +71,21 @@ extension ContentView {
                     profile: profile
                 )
             }
+        } else if let failure = pendingWrites.observationFailure {
+            ObservationUnavailableBar(
+                title: "Approval requests can't be observed",
+                detail: failure
+            )
+            .accessibilityIdentifier("pending-write-observation-unavailable")
         }
         if let receipt = receipts.receipts.last {
             ReceiptStatusBar(receipt: receipt)
+        } else if let failure = receipts.observationFailure {
+            ObservationUnavailableBar(
+                title: "Delivery receipts can't be observed",
+                detail: failure
+            )
+            .accessibilityIdentifier("receipt-observation-unavailable")
         }
     }
 }

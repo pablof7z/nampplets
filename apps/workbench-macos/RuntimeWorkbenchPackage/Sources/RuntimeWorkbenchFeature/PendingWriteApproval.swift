@@ -8,6 +8,11 @@ import SwiftUI
 @MainActor
 final class RuntimeWorkbenchPendingWriteModel: ObservableObject {
     @Published private(set) var writes: [NativeRuntimePendingWrite] = []
+    /// Set when `observePendingWrites` itself could not be established. An
+    /// empty `writes` array is indistinguishable from "no napplet has asked
+    /// to write" — this field is what lets the chrome tell a napplet stuck
+    /// waiting on approval apart from a genuinely idle one.
+    @Published private(set) var observationFailure: String?
 
     private var observation: NativeRuntimePendingWriteObservation?
 
@@ -22,6 +27,7 @@ final class RuntimeWorkbenchPendingWriteModel: ObservableObject {
             }
         } catch {
             writes = []
+            observationFailure = error.localizedDescription
         }
     }
 
@@ -55,6 +61,11 @@ final class RuntimeWorkbenchPendingWriteModel: ObservableObject {
 final class RuntimeWorkbenchReceiptModel: ObservableObject {
     @Published private(set) var receipts: [NativeRuntimeReceipt] = []
     @Published private(set) var receiptIDs: [String] = []
+    /// Set when `observeReceipts` itself could not be established. Kept
+    /// distinct from an empty `receipts` array for the same reason as
+    /// `RuntimeWorkbenchPendingWriteModel.observationFailure`: silence must
+    /// not read as "nothing has happened yet."
+    @Published private(set) var observationFailure: String?
 
     private var observation: NativeRuntimeReceiptObservation?
 
@@ -69,6 +80,7 @@ final class RuntimeWorkbenchReceiptModel: ObservableObject {
             }
         } catch {
             receipts = []
+            observationFailure = error.localizedDescription
         }
     }
 

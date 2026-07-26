@@ -125,3 +125,61 @@ func verifiedInstallEligibilityDoesNotInventPlatformCompatibility() throws {
     #expect(projected.canInstall)
     #expect(projected.platformCompatibility.isEmpty)
 }
+
+/// Regression for an observation setup failure rendering as an empty list.
+/// A closed profile makes `observePendingWrites`/`observeReceipts` throw
+/// before any subscription is established; the model must record that as a
+/// distinct, checkable failure rather than leaving `writes`/`receipts`
+/// empty and indistinguishable from "nothing pending."
+@MainActor
+@Test
+func pendingWriteModelRecordsAnObservationFailureInsteadOfLookingIdle() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(
+            "workbench-pending-write-closed-\(UUID().uuidString)",
+            isDirectory: true
+        )
+    defer { try? FileManager.default.removeItem(at: root) }
+    let profile = try WorkbenchRuntimeProfile.open(storageRoot: root)
+    profile.close()
+
+    let model = RuntimeWorkbenchPendingWriteModel(profile: profile)
+
+    #expect(model.writes.isEmpty)
+    #expect(model.observationFailure != nil)
+}
+
+@MainActor
+@Test
+func receiptModelRecordsAnObservationFailureInsteadOfLookingIdle() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(
+            "workbench-receipt-closed-\(UUID().uuidString)",
+            isDirectory: true
+        )
+    defer { try? FileManager.default.removeItem(at: root) }
+    let profile = try WorkbenchRuntimeProfile.open(storageRoot: root)
+    profile.close()
+
+    let model = RuntimeWorkbenchReceiptModel(profile: profile)
+
+    #expect(model.receipts.isEmpty)
+    #expect(model.observationFailure != nil)
+}
+
+@MainActor
+@Test
+func pendingWriteModelHasNoObservationFailureWhileTheProfileIsOpen() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(
+            "workbench-pending-write-open-\(UUID().uuidString)",
+            isDirectory: true
+        )
+    defer { try? FileManager.default.removeItem(at: root) }
+    let profile = try WorkbenchRuntimeProfile.open(storageRoot: root)
+    defer { profile.close() }
+
+    let model = RuntimeWorkbenchPendingWriteModel(profile: profile)
+
+    #expect(model.observationFailure == nil)
+}

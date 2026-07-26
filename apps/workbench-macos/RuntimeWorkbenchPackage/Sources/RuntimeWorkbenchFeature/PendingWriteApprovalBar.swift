@@ -119,3 +119,34 @@ struct PendingWriteApprovalBar: View {
         ]
     }
 }
+
+/// An empty pending-write or receipt list is ambiguous: it means either
+/// "nothing is happening" or "the observation that would have told us
+/// could not even be established." This bar exists so the second case is
+/// never silently presented as the first — a napplet genuinely stuck
+/// waiting on approval must not look identical to one doing nothing.
+struct ObservationUnavailableBar: View {
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: NappletMetrics.tight) {
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(NappletInk.caution)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: NappletMetrics.hairline) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, NappletMetrics.comfortable)
+        .padding(.vertical, NappletMetrics.hairline + 2)
+        .background(.regularMaterial)
+        .accessibilityElement(children: .contain)
+    }
+}
