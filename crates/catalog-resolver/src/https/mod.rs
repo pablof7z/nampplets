@@ -233,8 +233,8 @@ pub enum AcquisitionRefusal {
     MissingAddressEvidence,
     #[error("HTTPS response has {actual} resolved addresses; the maximum is {maximum}")]
     AddressLimit { actual: usize, maximum: usize },
-    #[error("supported redirect response is missing a valid Location")]
-    Redirect,
+    #[error("supported redirect response {reason}")]
+    Redirect { reason: &'static str },
     #[error("redirect exceeded the maximum of {maximum} hops")]
     TooManyRedirects { maximum: usize },
     #[error("effective response URL differs from the exact requested candidate")]
