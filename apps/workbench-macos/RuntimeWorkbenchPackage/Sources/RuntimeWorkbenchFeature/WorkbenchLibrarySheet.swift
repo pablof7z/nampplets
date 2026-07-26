@@ -39,7 +39,9 @@ public struct WorkbenchLibrarySheet: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .navigationTitle("Your Napplets")
+            // The place title is set on the page itself, where it can be a
+            // name rather than window chrome.
+            .navigationTitle("")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
@@ -56,8 +58,9 @@ public struct WorkbenchLibrarySheet: View {
                 }
             }
         }
+        .background(NappletInk.paper)
         #if os(macOS)
-        .frame(minWidth: 620, idealWidth: 720, minHeight: 480, idealHeight: 620)
+        .frame(minWidth: 640, idealWidth: 760, minHeight: 520, idealHeight: 680)
         #endif
         .onAppear {
             model.start()
@@ -147,59 +150,77 @@ public struct WorkbenchLibrarySheet: View {
 
     @ViewBuilder
     private func library(_ snapshot: WorkbenchLibrarySnapshot) -> some View {
-        if snapshot.builds.isEmpty {
-            ContentUnavailableView {
-                Label(
-                    snapshot.filterQuery.isEmpty
-                        ? "No napplets yet"
-                        : "No matches",
-                    systemImage: "square.stack.3d.up.slash"
-                )
-            } description: {
-                Text(
-                    snapshot.filterQuery.isEmpty
-                        ? "Napplets you add will live here."
-                        : "Nothing here matches that."
-                )
-            }
-        } else {
-            List(snapshot.builds) { build in
-                WorkbenchLibraryBuildRow(
-                    build: build,
-                    workspaces: snapshot.workspaces,
-                    commandsAvailable: model.commandsAvailable,
-                    onOpen: { onOpen(build) },
-                    onSuspend: model.suspend,
-                    onResume: model.resume,
-                    onAssign: { workspace in
-                        model.assign(build.exactBuild, to: workspace)
-                    },
-                    onClearAssignment: { workspace in
-                        model.clearAssignment(build.exactBuild, from: workspace)
-                    },
-                    onRequestUninstall: {
-                        uninstallCandidate = build
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Your Napplets")
+                    .font(NappletType.place)
+                    .nappletDisplayFace()
+                    .foregroundStyle(NappletInk.ink)
+
+                if snapshot.builds.isEmpty {
+                    Text(
+                        snapshot.filterQuery.isEmpty
+                            ? "Nothing here yet."
+                            : "Nothing matches that."
+                    )
+                    .font(NappletType.title)
+                    .foregroundStyle(NappletInk.ink)
+                    .padding(.top, NappletMetrics.generous)
+
+                    Text(
+                        snapshot.filterQuery.isEmpty
+                            ? "Napplets you add will live here."
+                            : "Try a shorter word."
+                    )
+                    .font(NappletType.body)
+                    .foregroundStyle(NappletInk.inkSecondary)
+                    .padding(.top, NappletMetrics.tight)
+                } else {
+                    VStack(alignment: .leading, spacing: NappletMetrics.snug) {
+                        ForEach(snapshot.builds) { build in
+                            WorkbenchLibraryBuildRow(
+                                build: build,
+                                workspaces: snapshot.workspaces,
+                                commandsAvailable: model.commandsAvailable,
+                                onOpen: { onOpen(build) },
+                                onSuspend: model.suspend,
+                                onResume: model.resume,
+                                onAssign: { workspace in
+                                    model.assign(
+                                        build.exactBuild,
+                                        to: workspace
+                                    )
+                                },
+                                onClearAssignment: { workspace in
+                                    model.clearAssignment(
+                                        build.exactBuild,
+                                        from: workspace
+                                    )
+                                },
+                                onRequestUninstall: {
+                                    uninstallCandidate = build
+                                }
+                            )
+                        }
                     }
-                )
-            }
-            .listStyle(.inset)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if snapshot.builds.count < Int(snapshot.totalInstalled) {
-                    VStack(spacing: 0) {
-                        Divider()
+                    .padding(.top, NappletMetrics.spacious)
+
+                    if snapshot.builds.count < Int(snapshot.totalInstalled) {
                         Text(
                             "Showing \(snapshot.builds.count) of "
                                 + "\(snapshot.totalInstalled)"
                         )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, NappletMetrics.comfortable)
-                        .padding(.vertical, NappletMetrics.tight)
+                        .font(NappletType.caption)
+                        .foregroundStyle(NappletInk.inkSecondary)
+                        .padding(.top, NappletMetrics.comfortable)
                     }
-                    .background(.bar)
                 }
             }
+            .frame(maxWidth: NappletMetrics.measure, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, NappletMetrics.generous)
+            .padding(.top, NappletMetrics.roomy)
+            .padding(.bottom, NappletMetrics.spacious)
         }
     }
 }

@@ -21,11 +21,12 @@ struct WorkbenchLibraryBuildRow: View {
             HStack(alignment: .firstTextBaseline, spacing: NappletMetrics.snug) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(build.title)
-                        .font(.headline)
+                        .font(NappletType.title)
+                        .foregroundStyle(NappletInk.ink)
                     if let status {
                         Text(status)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(NappletType.caption)
+                            .foregroundStyle(NappletInk.inkSecondary)
                     }
                 }
 
@@ -57,17 +58,25 @@ struct WorkbenchLibraryBuildRow: View {
 
             if !readyToRun {
                 Text(build.availability.detail)
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+                    .font(NappletType.caption)
+                    .foregroundStyle(NappletInk.caution)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             NappletEvidence {
                 NappletFieldGrid(fields: evidenceFields)
             }
-            .font(.caption)
+            .font(NappletType.caption)
         }
-        .padding(.vertical, NappletMetrics.tight)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(NappletMetrics.comfortable)
+        .background(
+            NappletInk.fillQuiet,
+            in: RoundedRectangle(
+                cornerRadius: NappletMetrics.cardCorner,
+                style: .continuous
+            )
+        )
         .accessibilityElement(children: .contain)
     }
 

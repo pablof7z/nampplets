@@ -104,8 +104,8 @@ public struct ActivityDrawer: View {
                 "Everything this napplet has asked for, and everything it was "
                     + "refused."
             )
-            .font(.callout)
-            .foregroundStyle(.secondary)
+            .font(NappletType.secondary)
+            .foregroundStyle(NappletInk.inkSecondary)
             .fixedSize(horizontal: false, vertical: true)
 
             NappletEvidence(label: "Which build this is") {
@@ -157,16 +157,20 @@ public struct ActivityDrawer: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: NappletMetrics.hairline + 2) {
             Label(title, systemImage: symbol)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(NappletType.caption)
+                .foregroundStyle(NappletInk.inkSecondary)
             Text(value, format: .number)
-                .font(.title2.monospacedDigit().weight(.semibold))
+                .font(NappletType.title.monospacedDigit())
+                .foregroundStyle(NappletInk.ink)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(NappletMetrics.snug)
         .background(
-            .quaternary.opacity(0.35),
-            in: RoundedRectangle(cornerRadius: NappletMetrics.tight)
+            NappletInk.fillQuiet,
+            in: RoundedRectangle(
+                cornerRadius: NappletMetrics.tight,
+                style: .continuous
+            )
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title): \(value)")
@@ -175,7 +179,7 @@ public struct ActivityDrawer: View {
     private func updateGapBanner(_ gap: ActivityUpdateGap) -> some View {
         HStack(alignment: .top, spacing: NappletMetrics.snug) {
             Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
-                .foregroundStyle(.orange)
+                .foregroundStyle(NappletInk.caution)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: NappletMetrics.hairline) {
                 Text("Some entries may be missing")
@@ -207,7 +211,7 @@ public struct ActivityDrawer: View {
             }
         }
         .padding(NappletMetrics.comfortable)
-        .background(.orange.opacity(0.08))
+        .background(NappletInk.ground(for: .caution("")))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             "Some entries may be missing. Refresh to get a complete picture."
@@ -311,15 +315,17 @@ private struct ActivityFactRow: View {
             VStack(alignment: .leading, spacing: NappletMetrics.hairline + 1) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(fact.title)
-                        .font(.headline)
+                        .font(NappletType.heading)
+                        .foregroundStyle(NappletInk.ink)
                     Spacer()
                     Text(fact.kind.title)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(NappletType.caption)
+                        .foregroundStyle(NappletInk.inkSecondary)
                 }
 
                 Text(fact.summary)
-                    .foregroundStyle(.secondary)
+                    .font(NappletType.secondary)
+                    .foregroundStyle(NappletInk.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if fact.evidenceSummary != nil || !detailFields.isEmpty {
@@ -366,9 +372,9 @@ private struct ActivityFactRow: View {
     /// never the only thing carrying it.
     private var tint: Color {
         switch fact.severity {
-        case .debug, .information: .secondary
-        case .warning: .orange
-        case .error: .red
+        case .debug, .information: NappletInk.inkSecondary
+        case .warning: NappletInk.caution
+        case .error: NappletInk.refusal
         }
     }
 }
