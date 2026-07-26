@@ -1,6 +1,11 @@
 [package]
 name = "nmp-native-runtime-ffi"
 version = "0.1.0"
+# `tests/receipt_steps.rs` is a submodule of the `bdd` target, not its own
+# integration test. Auto-discovery would also compile it as a standalone crate
+# root, where its `super::`/`crate::support` imports cannot resolve. Every
+# top-level file in `tests/` must therefore be listed below or it stops running.
+autotests = false
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -48,6 +53,12 @@ tempfile.workspace = true
 [[test]]
 name = "bdd"
 harness = false
+
+[[test]]
+name = "bounds_honesty"
+
+[[test]]
+name = "permission_review"
 
 [lints]
 workspace = true

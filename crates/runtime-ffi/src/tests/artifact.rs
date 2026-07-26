@@ -19,7 +19,7 @@ fn signed_artifact_crosses_only_as_sealed_handle_and_exact_reads() {
             .handle
             .authenticated_requirements()
             .expect("verified entry requirements"),
-        ["identity", "inc", "outbox", "resource", "theme", "link"]
+        GOOD_MORNING_DECLARED_DOMAINS
     );
     controller.install(Arc::clone(&artifact));
     controller.set_grant(
