@@ -162,7 +162,17 @@ public struct ActivityDrawer: View {
                             "Received revision",
                             "\(gap.receivedRevision)"
                         ),
-                    ])
+                        // Only stated when the runtime actually reported a
+                        // loss. Printing "0 events" for a plain revision
+                        // discontinuity would assert something the runtime
+                        // never said.
+                        gap.lostBeforeBatch > 0
+                            ? NappletField(
+                                "Events lost before this batch",
+                                "\(gap.lostBeforeBatch)"
+                            )
+                            : nil,
+                    ].compactMap { $0 })
                 }
                 .font(NappletType.caption)
             }

@@ -313,14 +313,20 @@ public struct ActivityUpdateGap: Equatable, Sendable {
     public let expectedPredecessorRevision: UInt64
     public let receivedPredecessorRevision: UInt64
     public let receivedRevision: UInt64
+    /// Runtime events the observer's cursor fell behind, straight from the
+    /// runtime rather than inferred from the revisions above. Zero means the
+    /// revisions themselves disagreed without the runtime reporting a loss.
+    public let lostBeforeBatch: UInt64
 
     public init(
         expectedPredecessorRevision: UInt64,
         receivedPredecessorRevision: UInt64,
-        receivedRevision: UInt64
+        receivedRevision: UInt64,
+        lostBeforeBatch: UInt64 = 0
     ) {
         self.expectedPredecessorRevision = expectedPredecessorRevision
         self.receivedPredecessorRevision = receivedPredecessorRevision
         self.receivedRevision = receivedRevision
+        self.lostBeforeBatch = lostBeforeBatch
     }
 }

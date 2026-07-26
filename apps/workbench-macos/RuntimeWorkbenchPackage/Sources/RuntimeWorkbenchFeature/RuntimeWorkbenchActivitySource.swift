@@ -170,13 +170,18 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
         case let .next(
             nextProjection,
             predecessorRevision,
-            eventCursorWasStale
+            _,
+            lostBeforeBatch
         ):
             projection = nextProjection
             latestAdmissionRefusal = nil
-            let deliveredPredecessor = eventCursorWasStale
-                ? predecessorRevision ^ 1
-                : predecessorRevision
+            // The staleness signal used to be smuggled downstream by XORing
+            // the predecessor revision with 1, so the view model's
+            // `predecessorRevision != currentRevision` check would trip. That
+            // worked, but the banner renders the received predecessor as
+            // evidence, so the evidence panel showed a number the runtime
+            // never produced. The real count travels on its own now and the
+            // revision stays true.
             for subscriber in subscribers.values {
                 subscriber.receive(
                     .next(
@@ -184,7 +189,8 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
                             from: nextProjection,
                             for: subscriber.scope
                         ),
-                        predecessorRevision: deliveredPredecessor
+                        predecessorRevision: predecessorRevision,
+                        lostBeforeBatch: lostBeforeBatch
                     )
                 )
             }

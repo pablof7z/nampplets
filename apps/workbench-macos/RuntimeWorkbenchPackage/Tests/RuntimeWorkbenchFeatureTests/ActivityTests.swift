@@ -308,7 +308,10 @@ private func activitySnapshot(
                     )
                 ]
             ),
-            predecessorRevision: 11
+            predecessorRevision: 11,
+            // A pure revision discontinuity: this observer missed a frame, but
+            // the runtime evicted nothing.
+            lostBeforeBatch: 0
         )
     )
 
@@ -317,7 +320,8 @@ private func activitySnapshot(
             == ActivityUpdateGap(
                 expectedPredecessorRevision: 10,
                 receivedPredecessorRevision: 11,
-                receivedRevision: 12
+                receivedRevision: 12,
+                lostBeforeBatch: 0
             )
     )
     #expect(model.snapshot?.revision == 12)
@@ -342,4 +346,68 @@ private func activitySnapshot(
     )
 
     #expect(String(describing: type(of: view)) == "ActivityDrawer")
+}
+
+/// The runtime can evict events the observer never saw while the revisions
+/// line up perfectly — `cursor_was_stale` and `lost_before_batch > 0` are the
+/// same fact in Rust, and neither implies a revision discontinuity.
+///
+/// The old adapter had no field to say that in, so it XORed the predecessor
+/// revision with 1 to force the mismatch check to trip. The warning appeared,
+/// but the banner renders the received predecessor as evidence, so the
+/// evidence panel showed a revision the runtime never produced.
+@MainActor
+@Test func lossWithMatchingRevisionsWarnsWithoutFabricatingARevision() {
+    let initial = activitySnapshot(revision: 10, facts: [])
+    let source = FakeActivitySource(initial: initial, refreshed: initial)
+    let model = ActivityViewModel(
+        source: source,
+        scope: activityScope,
+        developerModeAvailable: false
+    )
+
+    model.start()
+    source.push(
+        .next(
+            activitySnapshot(revision: 11, facts: []),
+            // Agrees with the current revision: nothing about the revisions is
+            // wrong. Only the runtime knows events were lost.
+            predecessorRevision: 10,
+            lostBeforeBatch: 7
+        )
+    )
+
+    let gap = model.updateGap
+    #expect(gap != nil)
+    #expect(gap?.lostBeforeBatch == 7)
+    // The true predecessor, not `10 ^ 1`.
+    #expect(gap?.receivedPredecessorRevision == 10)
+    #expect(gap?.expectedPredecessorRevision == 10)
+    #expect(gap?.receivedRevision == 11)
+}
+
+/// The mirror case: revisions disagree, the runtime reports no loss. The
+/// warning still belongs, but claiming events were lost would assert something
+/// the runtime never said.
+@MainActor
+@Test func revisionDiscontinuityAloneReportsNoLostEvents() {
+    let initial = activitySnapshot(revision: 10, facts: [])
+    let source = FakeActivitySource(initial: initial, refreshed: initial)
+    let model = ActivityViewModel(
+        source: source,
+        scope: activityScope,
+        developerModeAvailable: false
+    )
+
+    model.start()
+    source.push(
+        .next(
+            activitySnapshot(revision: 12, facts: []),
+            predecessorRevision: 11,
+            lostBeforeBatch: 0
+        )
+    )
+
+    #expect(model.updateGap?.lostBeforeBatch == 0)
+    #expect(model.updateGap?.receivedPredecessorRevision == 11)
 }

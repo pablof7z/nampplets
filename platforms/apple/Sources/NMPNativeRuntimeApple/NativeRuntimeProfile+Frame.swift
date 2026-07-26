@@ -221,7 +221,8 @@ extension NativeRuntimeProfile {
                             scope: observer.scope
                         ),
                         predecessorRevision: previousActivityRevision,
-                        eventCursorWasStale: frame.eventCursorWasStale
+                        eventCursorWasStale: frame.eventCursorWasStale,
+                        lostBeforeBatch: frame.lostBeforeBatch
                     )
                 )
             }

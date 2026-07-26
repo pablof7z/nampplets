@@ -100,7 +100,7 @@ final class ActivityViewModel {
             updateGap = nil
             refreshRefusal = nil
 
-        case let .next(nextSnapshot, predecessorRevision):
+        case let .next(nextSnapshot, predecessorRevision, lostBeforeBatch):
             guard nextSnapshot.scope == scope else {
                 return
             }
@@ -108,7 +108,8 @@ final class ActivityViewModel {
                 updateGap = ActivityUpdateGap(
                     expectedPredecessorRevision: 0,
                     receivedPredecessorRevision: predecessorRevision,
-                    receivedRevision: nextSnapshot.revision
+                    receivedRevision: nextSnapshot.revision,
+                    lostBeforeBatch: lostBeforeBatch
                 )
                 snapshot = nextSnapshot
                 return
@@ -116,11 +117,18 @@ final class ActivityViewModel {
             guard nextSnapshot.revision > currentRevision else {
                 return
             }
-            if predecessorRevision != currentRevision {
+            // Two independent reasons to warn, kept independent. A revision
+            // discontinuity means this observer missed a frame; a non-zero
+            // `lostBeforeBatch` means the runtime evicted events before the
+            // cursor reached them. The runtime can report the second while the
+            // revisions line up perfectly, and that case used to be signalled
+            // by corrupting `predecessorRevision` upstream.
+            if predecessorRevision != currentRevision || lostBeforeBatch > 0 {
                 updateGap = ActivityUpdateGap(
                     expectedPredecessorRevision: currentRevision,
                     receivedPredecessorRevision: predecessorRevision,
-                    receivedRevision: nextSnapshot.revision
+                    receivedRevision: nextSnapshot.revision,
+                    lostBeforeBatch: lostBeforeBatch
                 )
             }
             snapshot = nextSnapshot

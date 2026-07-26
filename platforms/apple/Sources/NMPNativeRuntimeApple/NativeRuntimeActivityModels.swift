@@ -101,7 +101,13 @@ public enum NativeRuntimeActivityUpdate: Sendable {
     case next(
         NativeRuntimeActivityProjection,
         predecessorRevision: UInt64,
-        eventCursorWasStale: Bool
+        eventCursorWasStale: Bool,
+        /// How many runtime events were evicted between this observer's cursor
+        /// and the oldest event still retained. `eventCursorWasStale` is the
+        /// same fact as `lostBeforeBatch > 0` — Rust derives both from the same
+        /// comparison — so this is the magnitude the boolean omits, and a
+        /// consumer must never have to infer the count from the flag.
+        lostBeforeBatch: UInt64
     )
 }
 
