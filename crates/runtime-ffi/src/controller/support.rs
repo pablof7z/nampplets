@@ -63,10 +63,74 @@ pub(crate) fn installation_capability_requests(
 /// Napplets read their settings through `config.subscribe`, which answers
 /// `no-schema` until some schema is registered, and the published SDK never
 /// registers the manifest one itself.
-pub(super) fn declared_config_schema(artifact: &VerifiedArtifact) -> Option<serde_json::Value> {
-    let document = verified_index_document(artifact).ok()??;
-    let schema = nmp_native_artifact::embedded_config_schema(&document)?;
-    serde_json::from_str(&schema).ok()
+///
+/// Returns `Ok(None)` only when there is genuinely nothing to install: no
+/// `/index.html` entry, or an entry that declares no `napplet-config-schema`
+/// at all. Failing to read the verified entry, or a declared schema whose
+/// JSON is malformed, are distinct reportable conditions and are returned as
+/// `Err` rather than folded into that same `None` -- otherwise the caller
+/// cannot tell "nothing declared" apart from "declared something broken",
+/// and `config.subscribe` answers `no-schema` forever with nothing anywhere
+/// explaining why.
+pub(super) fn declared_config_schema(
+    artifact: &VerifiedArtifact,
+) -> Result<Option<serde_json::Value>, String> {
+    let Some(document) = verified_index_document(artifact)? else {
+        return Ok(None);
+    };
+    parse_declared_config_schema(&document)
+}
+
+/// The pure parse half of [`declared_config_schema`], split out so its three
+/// outcomes -- nothing declared, malformed declared, valid declared -- are
+/// unit-testable without standing up a signed [`VerifiedArtifact`].
+fn parse_declared_config_schema(document: &[u8]) -> Result<Option<serde_json::Value>, String> {
+    let Some(schema) = nmp_native_artifact::embedded_config_schema(document) else {
+        return Ok(None);
+    };
+    serde_json::from_str(&schema)
+        .map(Some)
+        .map_err(|error| format!("declared napplet-config-schema is invalid JSON: {error}"))
+}
+
+#[cfg(test)]
+mod declared_config_schema_tests {
+    use super::parse_declared_config_schema;
+
+    #[test]
+    fn no_declaration_is_ok_none() {
+        assert_eq!(
+            parse_declared_config_schema(b"<head></head>"),
+            Ok(None),
+            "an entry document with no napplet-config-schema meta has nothing to report"
+        );
+    }
+
+    #[test]
+    fn valid_declaration_parses() {
+        let document = concat!(
+            "<head><meta name=\"napplet-config-schema\" content=\"{&quot;type&quot;:",
+            "&quot;object&quot;}\"></head>"
+        );
+        assert_eq!(
+            parse_declared_config_schema(document.as_bytes()),
+            Ok(Some(serde_json::json!({"type": "object"})))
+        );
+    }
+
+    #[test]
+    fn malformed_declaration_is_a_reported_error_not_absence() {
+        // Before this fix, invalid JSON here was swallowed by `.ok()` and
+        // produced `None` -- byte-identical to "no schema declared". A
+        // napplet whose settings never worked had no way to find out why.
+        let document =
+            "<head><meta name=\"napplet-config-schema\" content=\"{not valid json\"></head>";
+        let result = parse_declared_config_schema(document.as_bytes());
+        assert!(
+            result.is_err(),
+            "malformed declared schema JSON must be reported, not treated as absent: {result:?}"
+        );
+    }
 }
 
 /// Reads the verified entry document, or `None` when the artifact has no
