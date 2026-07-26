@@ -150,7 +150,17 @@ struct NappletFieldGrid: View {
 
     var body: some View {
         if disclosure.isTechnical {
-            grid
+            // Two columns where they fit, stacked where they don't. A
+            // sixty-four character hash in the value column of a 320pt
+            // inspector either overflows or wraps into an unreadable ladder,
+            // and evidence that cannot be read does not let the plain tier be
+            // confident. `ViewThatFits` decides from the real available width
+            // rather than from a platform guess, so the same grid is correct
+            // in a 680pt sheet, a narrow inspector section, and on iPhone.
+            ViewThatFits(in: .horizontal) {
+                grid
+                stacked
+            }
         }
     }
 
@@ -163,16 +173,34 @@ struct NappletFieldGrid: View {
             ForEach(fields) { field in
                 GridRow {
                     Text(field.label)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(NappletInk.inkSecondary)
                         .gridColumnAlignment(.leading)
-                    Text(field.value)
-                        .fontDesign(.monospaced)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    value(field)
                 }
             }
         }
-        .font(.caption)
+        .font(NappletType.record)
+    }
+
+    private var stacked: some View {
+        VStack(alignment: .leading, spacing: NappletMetrics.tight) {
+            ForEach(fields) { field in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(field.label)
+                        .foregroundStyle(NappletInk.inkSecondary)
+                    value(field)
+                }
+            }
+        }
+        .font(NappletType.record)
+    }
+
+    private func value(_ field: NappletField) -> some View {
+        Text(field.value)
+            .fontDesign(.monospaced)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
