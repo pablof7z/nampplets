@@ -12,7 +12,29 @@ final class RuntimeWorkbenchAppDelegate: NSObject, NSApplicationDelegate {
 
     private func activateWorkbenchWindow() {
         NSApplication.shared.activate(ignoringOtherApps: true)
-        NSApplication.shared.windows.first?.makeKeyAndOrderFront(nil)
+        guard let window = NSApplication.shared.windows.first else {
+            return
+        }
+        window.makeKeyAndOrderFront(nil)
+        fitToVisibleScreen(window)
+    }
+
+    /// Pulls the window out from under the Dock on displays too short for its
+    /// ideal size. See `WorkbenchWindowFitting` for why this is a correctness
+    /// fix and not a cosmetic one.
+    private func fitToVisibleScreen(_ window: NSWindow) {
+        guard let visibleFrame = (window.screen ?? NSScreen.main)?.visibleFrame
+        else {
+            return
+        }
+        guard !WorkbenchWindowFitting.fits(window.frame, in: visibleFrame)
+        else {
+            return
+        }
+        window.setFrame(
+            WorkbenchWindowFitting.fitted(window.frame, into: visibleFrame),
+            display: true
+        )
     }
 }
 
