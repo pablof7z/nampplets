@@ -16,6 +16,11 @@ enum ActivityPlainPresentation {
         "Recent activity available to this version of the app."
     static let updateGap =
         "Refresh to load the latest available entries."
+    /// Says "across all napplets" on purpose: the runtime's rings are not
+    /// partitioned by napplet, so the count cannot be attributed to this one.
+    static let runtimeDiscarded =
+        "The runtime keeps only its most recent entries across all napplets. "
+            + "These are gone and refreshing will not bring them back."
 }
 
 struct ActivityInventoryCell: View {

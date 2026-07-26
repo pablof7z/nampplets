@@ -226,7 +226,8 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
             facts: [],
             omittedFactCount: UInt64(
                 projection.records.count + projection.errors.count
-            )
+            ),
+            runtimeDiscardedCount: projection.runtimeDiscardedCount
         )!
     }
 

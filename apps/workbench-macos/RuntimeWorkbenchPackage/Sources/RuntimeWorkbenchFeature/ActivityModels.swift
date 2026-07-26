@@ -282,14 +282,21 @@ public struct ActivitySnapshot: Equatable, Sendable {
     public let revision: UInt64
     public let inventory: ActivityInventorySummary
     public let facts: [ActivityFact]
+    /// Entries that exist in the runtime but this app cannot render yet.
     public let omittedFactCount: UInt64
+    /// Entries the runtime's bounded rings evicted, which therefore no longer
+    /// exist anywhere. Distinct from `omittedFactCount`: "we cannot show this"
+    /// and "this is gone" are different facts and must not be summed.
+    /// Runtime-wide and cumulative — never attribute it to a single napplet.
+    public let runtimeDiscardedCount: UInt64
 
     public init?(
         scope: ActivityExactBuildScope,
         revision: UInt64,
         inventory: ActivityInventorySummary,
         facts: [ActivityFact],
-        omittedFactCount: UInt64 = 0
+        omittedFactCount: UInt64 = 0,
+        runtimeDiscardedCount: UInt64 = 0
     ) {
         guard facts.count <= ActivityLimits.maximumFacts,
               facts.allSatisfy({ $0.scope == scope }),
@@ -306,6 +313,7 @@ public struct ActivitySnapshot: Equatable, Sendable {
         self.inventory = inventory
         self.facts = facts
         self.omittedFactCount = omittedFactCount
+        self.runtimeDiscardedCount = runtimeDiscardedCount
     }
 }
 
