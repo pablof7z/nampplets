@@ -56,7 +56,7 @@ extension ContentView {
         librarySessionSubscription = libraryManager.subscribe { [self] update in
             let snapshot: WorkbenchLibrarySnapshot =
                 switch update {
-                case let .authoritative(snapshot), let .next(snapshot, _):
+                case let .authoritative(snapshot), let .next(snapshot, _, _):
                     snapshot
                 }
             runningLibrarySessionBuilds = Set(
