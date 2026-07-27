@@ -226,6 +226,7 @@ public enum NativeRuntimeLibraryProjection:
                 refusals: source.boundaryRefusals.map(
                     NativeRuntimeLibraryRefusal.init,
                 ),
+                droppedRefusalCount: source.droppedBoundaryRefusals,
             ),
         )
     }

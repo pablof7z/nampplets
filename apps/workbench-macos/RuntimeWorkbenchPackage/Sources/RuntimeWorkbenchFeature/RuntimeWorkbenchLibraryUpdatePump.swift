@@ -108,7 +108,7 @@ final class RuntimeWorkbenchLibraryMailbox: @unchecked Sendable {
     ) -> UInt64 {
         switch update {
         case .authoritative(let projection),
-             .next(let projection, _, _):
+             .next(let projection, _, _, _):
             projection.revision
         }
     }

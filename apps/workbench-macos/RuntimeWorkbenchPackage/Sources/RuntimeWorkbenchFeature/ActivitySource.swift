@@ -5,7 +5,14 @@
 /// native presentation can refuse to silently conceal missed diagnostics.
 public enum ActivityUpdate: Equatable, Sendable {
     case authoritative(ActivitySnapshot)
-    case next(ActivitySnapshot, predecessorRevision: UInt64)
+    /// `lostBeforeBatch` is how many runtime events were evicted before this
+    /// batch. It is carried explicitly so staleness never has to be encoded in
+    /// `predecessorRevision`, which the gap banner renders as evidence.
+    case next(
+        ActivitySnapshot,
+        predecessorRevision: UInt64,
+        lostBeforeBatch: UInt64
+    )
 }
 
 @MainActor

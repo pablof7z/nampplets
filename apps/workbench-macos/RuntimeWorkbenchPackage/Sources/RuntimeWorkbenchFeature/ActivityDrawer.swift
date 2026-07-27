@@ -44,6 +44,13 @@ public struct ActivityDrawer: View {
                     Divider()
                 }
 
+                if let discarded = model.snapshot?.runtimeDiscardedCount,
+                   discarded > 0
+                {
+                    runtimeDiscardedBanner(discarded)
+                    Divider()
+                }
+
                 facts
             }
             // Deliberately no container identifier. SwiftUI propagates one
@@ -162,7 +169,17 @@ public struct ActivityDrawer: View {
                             "Received revision",
                             "\(gap.receivedRevision)"
                         ),
-                    ])
+                        // Only stated when the runtime actually reported a
+                        // loss. Printing "0 events" for a plain revision
+                        // discontinuity would assert something the runtime
+                        // never said.
+                        gap.lostBeforeBatch > 0
+                            ? NappletField(
+                                "Events lost before this batch",
+                                "\(gap.lostBeforeBatch)"
+                            )
+                            : nil,
+                    ].compactMap { $0 })
                 }
                 .font(NappletType.caption)
             }
@@ -176,6 +193,36 @@ public struct ActivityDrawer: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             "Some entries may be missing. \(ActivityPlainPresentation.updateGap)"
+        )
+    }
+
+    /// Distinct from `updateGapBanner`, which reports that *this observer*
+    /// missed a frame. This reports that the runtime itself discarded entries
+    /// to stay inside its bound, so they no longer exist to be fetched — a
+    /// refresh cannot bring them back, and there is deliberately no Refresh
+    /// button here.
+    private func runtimeDiscardedBanner(_ discarded: UInt64) -> some View {
+        HStack(alignment: .top, spacing: NappletMetrics.snug) {
+            Image(systemName: "trash.slash")
+                .foregroundStyle(NappletInk.caution)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: NappletMetrics.hairline) {
+                Text("\(discarded) older entries were discarded")
+                    .font(.headline)
+                    .accessibilityIdentifier("runtime-activity-discarded")
+                Text(ActivityPlainPresentation.runtimeDiscarded)
+                    .font(NappletType.caption)
+                    .foregroundStyle(NappletInk.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+        .padding(NappletMetrics.comfortable)
+        .background(NappletInk.ground(for: .caution("")))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(
+            "\(discarded) older entries were discarded. "
+                + ActivityPlainPresentation.runtimeDiscarded
         )
     }
 

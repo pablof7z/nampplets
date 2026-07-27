@@ -184,11 +184,13 @@ final class NativeRuntimeLibraryTests: XCTestCase {
                 projection,
                 predecessorRevision: 51,
                 eventCursorWasStale: true,
+                lostBeforeBatch: 3,
             ),
             .next(
                 projection,
                 predecessorRevision: 51,
                 eventCursorWasStale: true,
+                lostBeforeBatch: 3,
             ),
         )
     }

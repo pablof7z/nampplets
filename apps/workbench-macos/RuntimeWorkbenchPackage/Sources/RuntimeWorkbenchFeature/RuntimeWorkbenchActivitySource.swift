@@ -170,13 +170,18 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
         case let .next(
             nextProjection,
             predecessorRevision,
-            eventCursorWasStale
+            _,
+            lostBeforeBatch
         ):
             projection = nextProjection
             latestAdmissionRefusal = nil
-            let deliveredPredecessor = eventCursorWasStale
-                ? predecessorRevision ^ 1
-                : predecessorRevision
+            // The staleness signal used to be smuggled downstream by XORing
+            // the predecessor revision with 1, so the view model's
+            // `predecessorRevision != currentRevision` check would trip. That
+            // worked, but the banner renders the received predecessor as
+            // evidence, so the evidence panel showed a number the runtime
+            // never produced. The real count travels on its own now and the
+            // revision stays true.
             for subscriber in subscribers.values {
                 subscriber.receive(
                     .next(
@@ -184,7 +189,8 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
                             from: nextProjection,
                             for: subscriber.scope
                         ),
-                        predecessorRevision: deliveredPredecessor
+                        predecessorRevision: predecessorRevision,
+                        lostBeforeBatch: lostBeforeBatch
                     )
                 )
             }
@@ -219,6 +225,17 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
         // gap: the runtime classifies each detail, and the
         // `ActivityDetailField` conversion below only carries the decision
         // across.
+        //
+        // One consequence worth naming, because it looks like an omission and
+        // is not. Each record carries `droppedDetailCount` — details the
+        // runtime truncated at `MAXIMUM_ACTIVITY_DETAILS` — and it reaches
+        // `NativeRuntimeActivityRecord` correctly. It stops here because it
+        // describes a single fact and there are no facts to hang it on.
+        // Folding it into `omittedFactCount` would be wrong: that counts whole
+        // records this app cannot render, not details missing from a record it
+        // can. When typed facts arrive and `facts` stops being empty,
+        // `ActivityFact` needs its own `droppedDetailCount` and the row states
+        // it.
         return ActivitySnapshot(
             scope: scope,
             revision: projection.revision,
@@ -226,7 +243,8 @@ public final class RuntimeWorkbenchActivitySource: ActivitySource {
             facts: [],
             omittedFactCount: UInt64(
                 projection.records.count + projection.errors.count
-            )
+            ),
+            runtimeDiscardedCount: projection.runtimeDiscardedCount
         )!
     }
 

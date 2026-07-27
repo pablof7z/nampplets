@@ -161,14 +161,16 @@ import Testing
         .next(
             nativeLibraryProjection(revision: 2),
             predecessorRevision: 1,
-            eventCursorWasStale: false
+            eventCursorWasStale: false,
+            lostBeforeBatch: 0
         )
     )
     native.push(
         .next(
             nativeLibraryProjection(revision: 3),
             predecessorRevision: 2,
-            eventCursorWasStale: false
+            eventCursorWasStale: false,
+            lostBeforeBatch: 0
         )
     )
     await drainMainQueue()
@@ -179,7 +181,7 @@ import Testing
         return
     }
     #expect(initial.revision == 1)
-    guard case let .next(latest, predecessorRevision) = updates[1] else {
+    guard case let .next(latest, predecessorRevision, _) = updates[1] else {
         Issue.record("Expected one coalesced pushed replacement")
         return
     }
@@ -203,7 +205,8 @@ import Testing
         .next(
             nativeLibraryProjection(revision: 2),
             predecessorRevision: 1,
-            eventCursorWasStale: false
+            eventCursorWasStale: false,
+            lostBeforeBatch: 0
         )
     )
     native.push(
@@ -212,7 +215,7 @@ import Testing
     await drainMainQueue()
 
     #expect(updates.count == 2)
-    guard case let .next(latest, predecessorRevision) = updates.last else {
+    guard case let .next(latest, predecessorRevision, _) = updates.last else {
         Issue.record("Expected the newer next replacement to win")
         return
     }
@@ -237,7 +240,8 @@ import Testing
         .next(
             nativeLibraryProjection(revision: 2),
             predecessorRevision: 9,
-            eventCursorWasStale: true
+            eventCursorWasStale: true,
+            lostBeforeBatch: 3
         )
     )
     native.push(
@@ -245,7 +249,7 @@ import Testing
     )
     await drainMainQueue()
 
-    guard case let .next(latest, predecessorRevision) = updates.last else {
+    guard case let .next(latest, predecessorRevision, _) = updates.last else {
         Issue.record("Expected same-revision next precedence")
         return
     }
@@ -269,7 +273,8 @@ import Testing
         .next(
             nativeLibraryProjection(revision: 2),
             predecessorRevision: 1,
-            eventCursorWasStale: false
+            eventCursorWasStale: false,
+            lostBeforeBatch: 0
         )
     )
     native.currentProjection = nativeLibraryProjection(revision: 3)
@@ -325,7 +330,8 @@ import Testing
         .next(
             nativeLibraryProjection(revision: 2),
             predecessorRevision: 1,
-            eventCursorWasStale: false
+            eventCursorWasStale: false,
+            lostBeforeBatch: 0
         )
     )
     await drainMainQueue()
@@ -497,5 +503,66 @@ private func drainMainQueue() async {
         DispatchQueue.main.async {
             continuation.resume()
         }
+    }
+}
+
+/// The frame layer re-delivers a library replacement at the *same* revision
+/// when the event cursor was stale — that is what `isCurrentStaleReplacement`
+/// exists for. The manager used to discard `eventCursorWasStale` outright and
+/// return early on any non-advancing revision, so the frame layer's deliberate
+/// warning was thrown away before it reached anyone.
+@MainActor
+@Test func aStaleReplacementAtTheSameRevisionStillReachesSubscribers() async {
+    let native = RecordingNativeLibraryService(
+        projection: nativeLibraryProjection(revision: 1)
+    )
+    let manager = RuntimeWorkbenchLibraryManager(native: native)
+    var updates: [WorkbenchLibraryUpdate] = []
+    let subscription = manager.subscribe { updates.append($0) }
+    defer { subscription.cancel() }
+
+    native.push(
+        .next(
+            nativeLibraryProjection(revision: 1),
+            predecessorRevision: 1,
+            eventCursorWasStale: true,
+            lostBeforeBatch: 4
+        )
+    )
+    await drainMainQueue()
+
+    guard case let .next(_, _, lostBeforeBatch) = updates.last else {
+        Issue.record("The stale replacement was swallowed by the freshness guard")
+        return
+    }
+    #expect(lostBeforeBatch == 4)
+}
+
+/// The mirror: a non-advancing revision with nothing lost carries no news, and
+/// must stay suppressed. Forwarding it would turn the fix into a noise source.
+@MainActor
+@Test func aNonAdvancingReplacementWithNoLossStaysSuppressed() async {
+    let native = RecordingNativeLibraryService(
+        projection: nativeLibraryProjection(revision: 1)
+    )
+    let manager = RuntimeWorkbenchLibraryManager(native: native)
+    var updates: [WorkbenchLibraryUpdate] = []
+    let subscription = manager.subscribe { updates.append($0) }
+    defer { subscription.cancel() }
+
+    native.push(
+        .next(
+            nativeLibraryProjection(revision: 1),
+            predecessorRevision: 1,
+            eventCursorWasStale: false,
+            lostBeforeBatch: 0
+        )
+    )
+    await drainMainQueue()
+
+    #expect(updates.count == 1)
+    guard case .authoritative = updates[0] else {
+        Issue.record("Expected only the initial authoritative replacement")
+        return
     }
 }

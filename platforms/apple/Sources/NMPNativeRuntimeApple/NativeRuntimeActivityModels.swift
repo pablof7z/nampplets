@@ -77,6 +77,11 @@ public struct NativeRuntimeActivityProjection: Sendable {
     public let sessions: [NativeRuntimeActivitySession]
     public let records: [NativeRuntimeActivityRecord]
     public let errors: [NativeRuntimeActivityError]
+    /// Entries the runtime's bounded rings already evicted, so they never
+    /// reached this projection at all. Cumulative since the runtime opened,
+    /// and **runtime-wide** — the rings are not partitioned by exact build, so
+    /// this count must never be presented as belonging to one napplet.
+    public let runtimeDiscardedCount: UInt64
 
     init(
         _ snapshot: RuntimeSnapshot,
@@ -92,6 +97,10 @@ public struct NativeRuntimeActivityProjection: Sendable {
         errors = snapshot.recentErrors
             .compactMap(NativeRuntimeActivityError.init)
             .filter { $0.scope == scope }
+        // Deliberately not scope-filtered: the evicted entries are gone, so
+        // their scope is unknowable. Carrying the runtime-wide total keeps the
+        // loss visible instead of discarding the only record that it happened.
+        runtimeDiscardedCount = snapshot.droppedActivity &+ snapshot.droppedErrors
     }
 }
 
@@ -101,7 +110,13 @@ public enum NativeRuntimeActivityUpdate: Sendable {
     case next(
         NativeRuntimeActivityProjection,
         predecessorRevision: UInt64,
-        eventCursorWasStale: Bool
+        eventCursorWasStale: Bool,
+        /// How many runtime events were evicted between this observer's cursor
+        /// and the oldest event still retained. `eventCursorWasStale` is the
+        /// same fact as `lostBeforeBatch > 0` — Rust derives both from the same
+        /// comparison — so this is the magnitude the boolean omits, and a
+        /// consumer must never have to infer the count from the flag.
+        lostBeforeBatch: UInt64
     )
 }
 

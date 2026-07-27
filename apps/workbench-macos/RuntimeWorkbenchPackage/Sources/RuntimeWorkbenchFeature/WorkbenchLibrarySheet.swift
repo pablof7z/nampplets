@@ -105,7 +105,11 @@ public struct WorkbenchLibrarySheet: View {
             Divider()
         }
         if let refusal = snapshot.refusals.last {
-            refusalBanner(refusal)
+            refusalBanner(
+                refusal,
+                retainedCount: snapshot.refusals.count,
+                droppedCount: snapshot.droppedRefusalCount
+            )
             Divider()
         }
     }

@@ -98,16 +98,29 @@ final class WorkbenchLibrarySheetModel {
             filterDraft = nextSnapshot.filterQuery
             updateGap = nil
 
-        case let .next(nextSnapshot, predecessorRevision):
+        case let .next(nextSnapshot, predecessorRevision, lostBeforeBatch):
             guard let currentRevision = snapshot?.revision else {
                 snapshot = nextSnapshot
                 filterDraft = nextSnapshot.filterQuery
                 updateGap = WorkbenchLibraryUpdateGap(
                     expectedPredecessorRevision: 0,
                     receivedPredecessorRevision: predecessorRevision,
-                    receivedRevision: nextSnapshot.revision
+                    receivedRevision: nextSnapshot.revision,
+                    lostBeforeBatch: lostBeforeBatch
                 )
                 return
+            }
+            // Reported before the freshness guard on purpose. A stale cursor
+            // does not imply a newer revision — the frame layer re-delivers at
+            // the same one — so warning only about newer snapshots would drop
+            // exactly the case this is meant to catch.
+            if lostBeforeBatch > 0 {
+                updateGap = WorkbenchLibraryUpdateGap(
+                    expectedPredecessorRevision: currentRevision,
+                    receivedPredecessorRevision: predecessorRevision,
+                    receivedRevision: nextSnapshot.revision,
+                    lostBeforeBatch: lostBeforeBatch
+                )
             }
             guard nextSnapshot.revision > currentRevision else {
                 return
@@ -116,7 +129,8 @@ final class WorkbenchLibrarySheetModel {
                 updateGap = WorkbenchLibraryUpdateGap(
                     expectedPredecessorRevision: currentRevision,
                     receivedPredecessorRevision: predecessorRevision,
-                    receivedRevision: nextSnapshot.revision
+                    receivedRevision: nextSnapshot.revision,
+                    lostBeforeBatch: lostBeforeBatch
                 )
             }
             snapshot = nextSnapshot

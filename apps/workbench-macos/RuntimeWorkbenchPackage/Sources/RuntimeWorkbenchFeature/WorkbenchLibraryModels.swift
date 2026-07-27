@@ -249,6 +249,10 @@ public struct WorkbenchLibrarySnapshot: Equatable, Sendable {
     public let builds: [WorkbenchLibraryBuild]
     public let workspaces: [WorkbenchLibraryWorkspace]
     public let refusals: [WorkbenchLibraryRefusal]
+    /// Refusals the runtime evicted to stay inside its bound. `refusals` holds
+    /// only the survivors, so this is the difference between "the runtime
+    /// refused this many times" and "this many refusals are still readable".
+    public let droppedRefusalCount: UInt64
 
     public init?(
         revision: UInt64,
@@ -257,7 +261,8 @@ public struct WorkbenchLibrarySnapshot: Equatable, Sendable {
         totalInstalled: UInt64,
         builds: [WorkbenchLibraryBuild],
         workspaces: [WorkbenchLibraryWorkspace],
-        refusals: [WorkbenchLibraryRefusal] = []
+        refusals: [WorkbenchLibraryRefusal] = [],
+        droppedRefusalCount: UInt64 = 0
     ) {
         let unavailableReason = availability.unavailableReason ?? ""
         let projectedBytes = filterQuery.utf8.count
@@ -297,6 +302,7 @@ public struct WorkbenchLibrarySnapshot: Equatable, Sendable {
         self.builds = builds
         self.workspaces = workspaces
         self.refusals = refusals
+        self.droppedRefusalCount = droppedRefusalCount
     }
 }
 
@@ -304,7 +310,11 @@ public enum WorkbenchLibraryUpdate: Equatable, Sendable {
     case authoritative(WorkbenchLibrarySnapshot)
     case next(
         WorkbenchLibrarySnapshot,
-        predecessorRevision: UInt64
+        predecessorRevision: UInt64,
+        /// Runtime events lost before this batch. Carried explicitly so a
+        /// stale cursor never has to be inferred from, or encoded into, the
+        /// revision numbers.
+        lostBeforeBatch: UInt64
     )
 }
 
@@ -312,14 +322,20 @@ public struct WorkbenchLibraryUpdateGap: Equatable, Sendable {
     public let expectedPredecessorRevision: UInt64
     public let receivedPredecessorRevision: UInt64
     public let receivedRevision: UInt64
+    /// Runtime events the observer's cursor fell behind, reported by the
+    /// runtime rather than inferred from the revisions above. Zero means the
+    /// revisions themselves disagreed without a reported loss.
+    public let lostBeforeBatch: UInt64
 
     public init(
         expectedPredecessorRevision: UInt64,
         receivedPredecessorRevision: UInt64,
-        receivedRevision: UInt64
+        receivedRevision: UInt64,
+        lostBeforeBatch: UInt64 = 0
     ) {
         self.expectedPredecessorRevision = expectedPredecessorRevision
         self.receivedPredecessorRevision = receivedPredecessorRevision
         self.receivedRevision = receivedRevision
+        self.lostBeforeBatch = lostBeforeBatch
     }
 }

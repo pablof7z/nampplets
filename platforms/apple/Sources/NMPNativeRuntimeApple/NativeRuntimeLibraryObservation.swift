@@ -13,6 +13,10 @@ public enum NativeRuntimeLibraryUpdate:
         NativeRuntimeLibraryProjection,
         predecessorRevision: UInt64,
         eventCursorWasStale: Bool,
+        /// Runtime events evicted before this batch reached the observer.
+        /// `eventCursorWasStale` is the same fact as `lostBeforeBatch > 0`;
+        /// this is the magnitude the boolean omits.
+        lostBeforeBatch: UInt64,
     )
 }
 
