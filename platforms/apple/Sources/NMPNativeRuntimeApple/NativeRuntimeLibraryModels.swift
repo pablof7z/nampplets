@@ -64,6 +64,12 @@ public enum NativeRuntimeLibrarySessionState:
     Sendable
 {
     case running
+    /// Running, but without a domain the build's own content requires.
+    ///
+    /// A distinct case rather than `.running`: flattening it here would put
+    /// the original defect back, one layer down, since this projection is what
+    /// the Inspector reads.
+    case runningDegraded
     case suspended
 }
 

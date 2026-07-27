@@ -111,7 +111,11 @@ final class RuntimeProfileLifecycleTests: RuntimeNappletSessionTestCase {
             try profile.snapshotForTesting.sessions.first(where: {
                 $0.id == secondRuntime.sessionID
             })?.state,
-            "running"
+            // Degraded, not running. The good-morning fixture declares `link`
+            // and `resource`, which no provider here serves, so this session
+            // has never been whole -- it read as running only because the
+            // state string could not express the difference.
+            "running-degraded"
         )
 
         let received = expectation(

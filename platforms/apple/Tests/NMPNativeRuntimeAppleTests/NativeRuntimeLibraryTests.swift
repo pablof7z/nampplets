@@ -242,6 +242,7 @@ final class NativeRuntimeLibraryTests: XCTestCase {
             profile: .legacy,
             state: state,
             domains: ["shell"],
+            unavailableDomains: [],
         )
     }
 

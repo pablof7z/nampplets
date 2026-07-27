@@ -178,6 +178,8 @@ public enum NativeRuntimeLibraryProjection:
                 switch session.state {
                 case "running":
                     state = .running
+                case "running-degraded":
+                    state = .runningDegraded
                 case "suspended":
                     state = .suspended
                 default:

@@ -51,7 +51,9 @@ final class TrustedNappletPresentationLifecycleTests:
             try profile.snapshotForTesting.sessions.first(where: {
                 $0.id == runtime.sessionID
             })?.state,
-            "running"
+            // Degraded for the same reason as every other good-morning
+            // session: `link` and `resource` have no provider on this runtime.
+            "running-degraded"
         )
         XCTAssertNotNil(
             try runtime.readSealed(logicalPath: "/index.html"),

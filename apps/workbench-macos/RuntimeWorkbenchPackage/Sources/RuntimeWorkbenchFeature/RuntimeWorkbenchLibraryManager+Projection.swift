@@ -127,6 +127,8 @@ extension RuntimeWorkbenchLibraryManager {
         switch state {
         case .running:
             .running
+        case .runningDegraded:
+            .runningDegraded
         case .suspended:
             .suspended
         }

@@ -113,7 +113,11 @@ extension NativeRuntimeProfile {
                 && $0.author == coordinate.manifestAuthor
                 && $0.dTag == coordinate.dTag
                 && $0.aggregateHash == coordinate.aggregateHash
-                && $0.state == "running"
+                // Degraded counts as created. The runtime launches without a
+                // required domain on purpose, so refusing here would turn
+                // "started without `lists`" into "failed to start" and make
+                // most real napplets unlaunchable.
+                && ($0.state == "running" || $0.state == "running-degraded")
         }) else {
             let detail = launchedSnapshot.recentErrors.last?.detail
                 ?? launchedSnapshot.boundaryRefusals.last?.detail

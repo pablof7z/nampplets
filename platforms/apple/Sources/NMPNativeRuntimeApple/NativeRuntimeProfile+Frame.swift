@@ -202,7 +202,12 @@ extension NativeRuntimeProfile {
             settingsExecutor.retainRunningSessions(
                 Set(
                     snapshot.sessions
-                        .filter { $0.state == "running" }
+                        // A degraded session is still live and still owns its
+                        // settings; dropping it here would revoke config from
+                        // exactly the sessions already missing something.
+                        .filter {
+                            $0.state == "running" || $0.state == "running-degraded"
+                        }
                         .map(\.id)
                 )
             )

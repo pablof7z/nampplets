@@ -83,7 +83,10 @@ struct WorkbenchLibraryBuildRow: View {
     /// Silence when a napplet is simply ready. The row speaks only about what
     /// is unusual: that it is running, paused, or not fully downloaded.
     private var status: String? {
-        let running = build.sessions.filter { $0.state == .running }.count
+        // Counts live sessions, degraded included -- "2 running" must not
+        // become "1 running" because one is missing a domain. Degradation is
+        // named on the session itself, not subtracted from this total.
+        let running = build.sessions.filter(\.state.isLive).count
         let suspended = build.sessions.filter { $0.state == .suspended }.count
         if running > 0 {
             return suspended > 0 ? "Running · \(suspended) paused" : "Running"
@@ -104,7 +107,11 @@ struct WorkbenchLibraryBuildRow: View {
             Section("Running now") {
                 ForEach(build.sessions) { session in
                     switch session.state {
-                    case .running:
+                    // Degraded offers the same command as running: it is a
+                    // live session and pausing it means the same thing. The
+                    // shortfall is stated on the session, not by withholding
+                    // a control the operator would expect.
+                    case .running, .runningDegraded:
                         Button("Pause", systemImage: "pause.circle") {
                             onSuspend(session)
                         }

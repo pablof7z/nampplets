@@ -91,10 +91,31 @@ public enum WorkbenchLibraryBuildAvailability: Equatable, Sendable {
 
 public enum WorkbenchLibrarySessionState: String, Equatable, Sendable {
     case running
+    /// Running without a domain the build's own content requires.
+    case runningDegraded = "running-degraded"
     case suspended
 
+    /// True for any live session, degraded or whole. Read this where the
+    /// question is "does a session exist"; match the case itself where the
+    /// question is "is it whole", so the two can never be confused.
+    public var isLive: Bool {
+        switch self {
+        case .running, .runningDegraded:
+            true
+        case .suspended:
+            false
+        }
+    }
+
     public var title: String {
-        rawValue.capitalized
+        switch self {
+        case .running:
+            "Running"
+        case .runningDegraded:
+            "Running, degraded"
+        case .suspended:
+            "Suspended"
+        }
     }
 }
 

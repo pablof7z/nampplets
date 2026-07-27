@@ -45,12 +45,16 @@ final class NativeRuntimeLibraryCommandTests: RuntimeNappletSessionTestCase {
         XCTAssertEqual(snapshot.totalInstalled, 1)
         let build = try XCTUnwrap(snapshot.builds.first)
         XCTAssertEqual(build.availability, .sealedExactBytesReady)
+        // Degraded, not running. The good-morning fixture declares `link` and
+        // `resource`, which no provider on this runtime serves, so this
+        // session has never been whole -- it read as running only because the
+        // state string could not express the difference.
         XCTAssertEqual(
             build.sessions,
             [
                 NativeRuntimeLibrarySession(
                     id: runtime.sessionID,
-                    state: .running
+                    state: .runningDegraded
                 ),
             ]
         )
@@ -110,7 +114,7 @@ final class NativeRuntimeLibraryCommandTests: RuntimeNappletSessionTestCase {
 
         profile.resumeInstalledSession(runtime.sessionID)
         snapshot = try librarySnapshot(profile.installedLibraryProjection())
-        XCTAssertEqual(snapshot.builds.first?.sessions.first?.state, .running)
+        XCTAssertEqual(snapshot.builds.first?.sessions.first?.state, .runningDegraded)
 
         profile.clearInstalledBuildAssignment(
             build.exactBuild,

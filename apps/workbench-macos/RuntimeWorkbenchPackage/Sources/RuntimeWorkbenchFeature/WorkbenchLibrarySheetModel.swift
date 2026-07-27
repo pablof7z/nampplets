@@ -51,7 +51,9 @@ final class WorkbenchLibrarySheetModel {
     }
 
     func suspend(_ session: WorkbenchLibrarySession) {
-        guard commandsAvailable, session.state == .running else {
+        // Suspending asks "is this live", not "is this whole": a degraded
+        // session is running and can be suspended like any other.
+        guard commandsAvailable, session.state.isLive else {
             return
         }
         manager.suspend(sessionID: session.id)
