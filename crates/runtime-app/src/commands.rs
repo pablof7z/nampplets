@@ -135,6 +135,15 @@ pub enum PlatformEvent {
     },
     EnvelopeIgnored {
         session: SessionId,
+        /// The envelope's own `type`, read independently of whether it parsed
+        /// into a routable domain and action, and bounded so an adversarial
+        /// value cannot inflate this event.
+        ///
+        /// `None` means there was no type to read -- malformed JSON, or a
+        /// missing or non-string field -- never that the napplet sent
+        /// something unremarkable. A napplet controls this string, so
+        /// "nothing to read" cannot be spelled as one.
+        message_type: Option<String>,
     },
     ProviderOperationFinished {
         operation: ProviderOperationId,

@@ -78,7 +78,7 @@ impl RuntimeApp {
                 "envelope",
                 "route",
                 "unroutable",
-                vec![ActivityDetail::visible("type", &raw_message_type(bytes))],
+                vec![envelope_type_evidence(bytes).detail()],
                 now,
             );
         }
@@ -118,10 +118,15 @@ impl RuntimeApp {
         }
         match self.bridge.dispatch(&context, &plan, bytes, now) {
             Ok(DispatchOutcome::IgnoredUnknown) => {
+                // Read independently of `route`. The two disagree on purpose:
+                // `link.open` routes fine and is still ignored here for want
+                // of a provider, and that is the case a napplet most needs
+                // named, because it gets no reply and no refusal either.
                 self.push_event(
                     state,
                     PlatformEvent::EnvelopeIgnored {
                         session: session_id,
+                        message_type: envelope_type_evidence(bytes).into_named(),
                     },
                 );
             }
@@ -278,24 +283,81 @@ pub(super) fn envelope_route(bytes: &[u8]) -> Option<(Capability, String)> {
     Some((Capability::new(domain).ok()?, action.to_owned()))
 }
 
-/// Best-effort, bounded rendering of the raw `type` field of an envelope
-/// that [`envelope_route`] could not route, for the activity fact recorded
-/// alongside it. Never panics and never grows with attacker-controlled
-/// input beyond [`MAXIMUM_RECORDED_MESSAGE_TYPE_BYTES`].
-fn raw_message_type(bytes: &[u8]) -> String {
+/// What the `type` field of an unroutable envelope turned out to be.
+///
+/// A napplet controls that string, so "the napplet sent this" and "there was
+/// nothing to read" cannot both be strings: a napplet sending the literal
+/// `<malformed-json>` would otherwise be indistinguishable from a malformed
+/// envelope in the evidence a person reads.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum EnvelopeTypeEvidence {
+    /// The bounded `type` the napplet actually sent.
+    Named(String),
+    MalformedJson,
+    MissingOrNonStringType,
+}
+
+impl EnvelopeTypeEvidence {
+    /// The activity detail, keyed by whether there was a type at all.
+    ///
+    /// The key carries the distinction rather than the value, because the
+    /// value is attacker-controlled: a napplet sending the literal
+    /// `<malformed-json>` would otherwise produce a detail identical to a
+    /// genuinely malformed envelope. Under `type` the string is always the
+    /// napplet's own; `type-unavailable` is always the runtime's.
+    fn detail(&self) -> ActivityDetail {
+        match self {
+            Self::Named(message_type) => ActivityDetail::visible("type", message_type),
+            Self::MalformedJson => ActivityDetail::visible("type-unavailable", "malformed-json"),
+            Self::MissingOrNonStringType => {
+                ActivityDetail::visible("type-unavailable", "missing-or-non-string-type")
+            }
+        }
+    }
+
+    /// The napplet-supplied type, if there was one. `None` carries "nothing
+    /// to read" without inventing a string for it.
+    fn into_named(self) -> Option<String> {
+        match self {
+            Self::Named(message_type) => Some(message_type),
+            Self::MalformedJson | Self::MissingOrNonStringType => None,
+        }
+    }
+}
+
+/// Best-effort, bounded reading of the raw `type` field of an envelope that
+/// [`envelope_route`] could not route. Never panics and never grows with
+/// attacker-controlled input beyond [`MAXIMUM_RECORDED_MESSAGE_TYPE_BYTES`].
+pub(super) fn envelope_type_evidence(bytes: &[u8]) -> EnvelopeTypeEvidence {
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes) else {
-        return "<malformed-json>".to_owned();
+        return EnvelopeTypeEvidence::MalformedJson;
     };
     let Some(message_type) = value.get("type").and_then(serde_json::Value::as_str) else {
-        return "<missing-or-non-string-type>".to_owned();
+        return EnvelopeTypeEvidence::MissingOrNonStringType;
     };
-    let mut truncated: String = message_type
-        .chars()
-        .take(MAXIMUM_RECORDED_MESSAGE_TYPE_BYTES)
-        .collect();
-    if truncated.len() < message_type.len() {
-        truncated.push('…');
+    EnvelopeTypeEvidence::Named(bounded_utf8_prefix(
+        message_type,
+        MAXIMUM_RECORDED_MESSAGE_TYPE_BYTES,
+    ))
+}
+
+/// The longest prefix of `value` that is at most `maximum_bytes` long and
+/// still valid UTF-8.
+///
+/// Bounding by `chars` instead would not bound the bytes: a napplet sending
+/// multi-byte characters gets up to four bytes per retained char, so the
+/// recorded value overruns the stated maximum by 4x on input it controls.
+fn bounded_utf8_prefix(value: &str, maximum_bytes: usize) -> String {
+    if value.len() <= maximum_bytes {
+        return value.to_owned();
     }
+    // The ellipsis is itself three bytes and must fit inside the bound.
+    let mut end = maximum_bytes.saturating_sub('…'.len_utf8());
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut truncated = value[..end].to_owned();
+    truncated.push('…');
     truncated
 }
 
