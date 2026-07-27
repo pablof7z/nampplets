@@ -5,7 +5,7 @@ use std::sync::{Arc, atomic::Ordering};
 use base64::Engine as _;
 use nmp_native_artifact::{
     ManifestCoordinate, ManifestError, ManifestEventLimits, ManifestEventVerifier,
-    VerifiedArtifactHandle, reopen_verified_artifact,
+    VerifiedArtifactHandle, VerifiedManifest, reopen_verified_artifact,
 };
 use nmp_native_runtime_app::{ExecutableArtifact, PlatformCommand};
 use nmp_native_runtime_core::Principal;
@@ -362,44 +362,14 @@ impl RuntimeController {
     /// the event signature exactly as a fresh install would, so a corrupted
     /// or substituted retained event is refused the same way any other
     /// invalid manifest would be.
-    fn reopen_sealed_artifact(
+    pub(super) fn reopen_sealed_artifact(
         &self,
         principal: &Principal,
         installed: &InstalledBuild,
     ) -> Result<Arc<VerifiedArtifactHandle>, RuntimeCatalogFailure> {
-        let metadata: serde_json::Value =
-            serde_json::from_str(installed.manifest_metadata.as_str()).map_err(|error| {
-                runtime_catalog_failure(
-                    "installed-manifest-event-unavailable",
-                    format!("installed manifest metadata is invalid JSON: {error}"),
-                )
-            })?;
-        let signed_event_b64 = metadata
-            .get("signed_event_b64")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| {
-                runtime_catalog_failure(
-                    "installed-manifest-event-unavailable",
-                    "this build was installed before offline reopen was supported; reinstall it once to enable reopening after a restart",
-                )
-            })?;
-        let event_json = base64::engine::general_purpose::STANDARD
-            .decode(signed_event_b64)
-            .map_err(|error| {
-                runtime_catalog_failure(
-                    "installed-manifest-event-unavailable",
-                    format!("retained signed event is not valid base64: {error}"),
-                )
-            })?;
-        let coordinate = ManifestCoordinate::named(principal.manifest_author(), principal.d_tag())
-            .map_err(|error| {
-                runtime_catalog_failure("invalid-exact-build-coordinate", error.to_string())
-            })?;
-        let verifier = ManifestEventVerifier::new(ManifestEventLimits {
-            maximum_event_bytes: self.maximum_manifest_bytes,
-            ..ManifestEventLimits::default()
-        })
-        .map_err(|error| runtime_catalog_failure("invalid-limits", error.to_string()))?;
+        let event_json = retained_manifest_event(installed)?;
+        let coordinate = named_manifest_coordinate(principal)?;
+        let verifier = self.manifest_event_verifier()?;
         let handle =
             reopen_verified_artifact(&verifier, &event_json, &coordinate, &self.artifact_cache)
                 .map_err(|error| match error {
@@ -412,6 +382,37 @@ impl RuntimeController {
                     ),
                 })?;
         Ok(Arc::new(handle))
+    }
+
+    /// Re-verifies the retained signed manifest event alone, without opening
+    /// the sealed artifact bytes.
+    ///
+    /// This is the cheap half of `reopen_sealed_artifact`: enough to read
+    /// anything the manifest itself authenticates -- archetypes, title,
+    /// signed `requires` tags -- and not enough to execute the build. The
+    /// startup intent-handler restore uses it to decide which installations
+    /// are worth the full reopen, which re-reads and re-hashes every sealed
+    /// byte of every file the build declares.
+    pub(super) fn retained_manifest(
+        &self,
+        principal: &Principal,
+        installed: &InstalledBuild,
+    ) -> Result<VerifiedManifest, RuntimeCatalogFailure> {
+        let event_json = retained_manifest_event(installed)?;
+        let coordinate = named_manifest_coordinate(principal)?;
+        self.manifest_event_verifier()?
+            .verify_json(&event_json, &coordinate)
+            .map_err(|error| {
+                runtime_catalog_failure("installed-manifest-event-unavailable", error.to_string())
+            })
+    }
+
+    fn manifest_event_verifier(&self) -> Result<ManifestEventVerifier, RuntimeCatalogFailure> {
+        ManifestEventVerifier::new(ManifestEventLimits {
+            maximum_event_bytes: self.maximum_manifest_bytes,
+            ..ManifestEventLimits::default()
+        })
+        .map_err(|error| runtime_catalog_failure("invalid-limits", error.to_string()))
     }
 
     pub(crate) fn verified_installed_artifact(
@@ -447,4 +448,42 @@ impl RuntimeController {
         }
         Ok(artifact)
     }
+}
+
+/// Recovers the exact signed manifest event bytes retained in an
+/// installation's metadata at install time. Decoding only: the caller still
+/// re-verifies the signature before trusting anything the event claims.
+fn retained_manifest_event(installed: &InstalledBuild) -> Result<Vec<u8>, RuntimeCatalogFailure> {
+    let metadata: serde_json::Value = serde_json::from_str(installed.manifest_metadata.as_str())
+        .map_err(|error| {
+            runtime_catalog_failure(
+                "installed-manifest-event-unavailable",
+                format!("installed manifest metadata is invalid JSON: {error}"),
+            )
+        })?;
+    let signed_event_b64 = metadata
+        .get("signed_event_b64")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| {
+            runtime_catalog_failure(
+                "installed-manifest-event-unavailable",
+                "this build was installed before offline reopen was supported; reinstall it once to enable reopening after a restart",
+            )
+        })?;
+    base64::engine::general_purpose::STANDARD
+        .decode(signed_event_b64)
+        .map_err(|error| {
+            runtime_catalog_failure(
+                "installed-manifest-event-unavailable",
+                format!("retained signed event is not valid base64: {error}"),
+            )
+        })
+}
+
+fn named_manifest_coordinate(
+    principal: &Principal,
+) -> Result<ManifestCoordinate, RuntimeCatalogFailure> {
+    ManifestCoordinate::named(principal.manifest_author(), principal.d_tag()).map_err(|error| {
+        runtime_catalog_failure("invalid-exact-build-coordinate", error.to_string())
+    })
 }

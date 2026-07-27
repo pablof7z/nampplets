@@ -397,5 +397,11 @@ pub(super) fn open_runtime_controller(
         artifact_cache_path,
         closed: AtomicBool::new(false),
     });
+    // The intent registry is process-local and starts empty, while the
+    // installations that populate it are durable. Rebuild it here or a
+    // handler napplet stops resolving the moment the app is quit and
+    // reopened, with the installation, its grants and its signed archetype
+    // declaration all still intact in the store.
+    controller.restore_intent_handlers();
     Ok(controller)
 }

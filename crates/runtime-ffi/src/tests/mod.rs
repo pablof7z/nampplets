@@ -5,6 +5,7 @@ mod artifact;
 mod catalog;
 mod envelope;
 mod intent;
+mod intent_restore;
 mod library;
 mod native_capabilities;
 mod permissions;

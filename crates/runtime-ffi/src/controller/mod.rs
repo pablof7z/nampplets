@@ -2,6 +2,7 @@
 
 mod accounts;
 mod catalog;
+mod intent_restore;
 mod library;
 mod observation;
 mod open;
