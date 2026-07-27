@@ -59,14 +59,34 @@ extension ContentView {
                 case let .authoritative(snapshot), let .next(snapshot, _, _):
                     snapshot
                 }
-            runningLibrarySessionBuilds = Set(
-                snapshot.builds
-                    .filter { build in
-                        build.sessions.contains { $0.state == .running }
-                    }
-                    .map(\.exactBuild)
-            )
+            runningLibrarySessionBuilds = Self.buildsWithLiveSessions(in: snapshot)
         }
+    }
+
+    /// The exact builds Rust currently reports at least one *live* session
+    /// for. Live, not whole: a session missing a required domain is degraded
+    /// but still running, and the Inspector must say "Running" for it rather
+    /// than "Session ended".
+    ///
+    /// This reads `isLive` instead of comparing against `.running`. The
+    /// comparison was written when `running` was the only live state, and
+    /// would have silently started excluding degraded sessions the moment
+    /// `.runningDegraded` existed — turning "the Inspector wrongly says
+    /// Running for a dead session" into "the Inspector wrongly says Session
+    /// ended for a live one", which is the same defect from the other side.
+    ///
+    /// Kept as a pure function so the distinction is testable without a live
+    /// runtime, matching `hasObservedRunningSession` below.
+    nonisolated static func buildsWithLiveSessions(
+        in snapshot: WorkbenchLibrarySnapshot
+    ) -> Set<WorkbenchLibraryExactBuild> {
+        Set(
+            snapshot.builds
+                .filter { build in
+                    build.sessions.contains(where: \.state.isLive)
+                }
+                .map(\.exactBuild)
+        )
     }
 
     @MainActor
