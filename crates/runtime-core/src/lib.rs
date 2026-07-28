@@ -9,6 +9,7 @@ mod grants;
 mod host_data;
 mod identity;
 mod lifecycle;
+mod lists;
 mod principal;
 mod resources;
 
@@ -30,6 +31,10 @@ pub use identity::{
 };
 pub use lifecycle::{
     ExecutionProfile, Session, SessionError, SessionId, SessionSnapshot, SessionState,
+};
+pub use lists::{
+    ListEntry, ListItemTag, ListReadLimits, ListSelector, ListSnapshot, ListsDataError,
+    ListsDataPlane,
 };
 pub use principal::{Principal, PrincipalError};
 pub use resources::{
