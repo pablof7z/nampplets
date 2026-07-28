@@ -7,6 +7,12 @@ protocol TrustedNappletRuntimeSession: VerifiedArtifactByteReader {
     var sessionID: UInt64 { get }
 
     func setResponseSink(_ sink: (@Sendable (Data) -> Void)?)
+    /// Receives the runtime's own classification of a napplet diagnostic.
+    ///
+    /// Native renders these; it does not decide which envelopes are
+    /// diagnostics. That judgement is the runtime's, and arrives already
+    /// levelled and bounded.
+    func setDiagnosticSink(_ sink: (@Sendable (String, String) -> Void)?)
     func setResponseSink(
         owner: UUID,
         _ sink: @escaping @Sendable (Data) -> Void
@@ -27,6 +33,7 @@ final class RustRuntimeNappletSession: TrustedNappletRuntimeSession, @unchecked 
     private let lock = NSLock()
     private var responseSink:
         (owner: UUID, receive: @Sendable (Data) -> Void)?
+    private var diagnosticSink: (@Sendable (String, String) -> Void)?
     private var isStopped = false
 
     init(
@@ -84,6 +91,12 @@ final class RustRuntimeNappletSession: TrustedNappletRuntimeSession, @unchecked 
         lock.unlock()
     }
 
+    func setDiagnosticSink(_ sink: (@Sendable (String, String) -> Void)?) {
+        lock.lock()
+        diagnosticSink = sink
+        lock.unlock()
+    }
+
     func mappedEnvelope(_ bytes: Data) {
         lock.lock()
         let stopped = isStopped
@@ -95,20 +108,32 @@ final class RustRuntimeNappletSession: TrustedNappletRuntimeSession, @unchecked 
     func deliver(frame: RuntimeObservationFrame) {
         lock.lock()
         let sink = responseSink?.receive
+        let diagnostics = diagnosticSink
         let stopped = isStopped
         lock.unlock()
-        guard !stopped, let sink else { return }
+        guard !stopped else { return }
 
-        for event in frame.events
-        where (event.kind == "envelope-handled"
-            || event.kind == "provider-push")
-            && event.sessionId == sessionID {
-            guard let response = event.responseJson,
-                  let bytes = response.data(using: .utf8)
-            else {
+        for event in frame.events where event.sessionId == sessionID {
+            switch event.kind {
+            case "envelope-handled", "provider-push":
+                guard let sink,
+                      let response = event.responseJson,
+                      let bytes = response.data(using: .utf8)
+                else {
+                    continue
+                }
+                sink(bytes)
+            case "napplet-diagnostic":
+                // `detail` is the runtime's own level and `responseJson` its
+                // bounded message. Neither is parsed out of a napplet-authored
+                // envelope here.
+                guard let diagnostics, let message = event.responseJson else {
+                    continue
+                }
+                diagnostics(event.detail, message)
+            default:
                 continue
             }
-            sink(bytes)
         }
     }
 
@@ -120,6 +145,7 @@ final class RustRuntimeNappletSession: TrustedNappletRuntimeSession, @unchecked 
         }
         isStopped = true
         responseSink = nil
+        diagnosticSink = nil
         let profile = profile
         self.profile = nil
         lock.unlock()

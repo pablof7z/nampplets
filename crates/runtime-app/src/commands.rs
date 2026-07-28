@@ -13,6 +13,7 @@ use nmp_native_runtime_store::{
 };
 
 use crate::{
+    NappletDiagnosticLevel,
     limits::ExecutableArtifact,
     views::{AppErrorFact, PermissionDecision},
 };
@@ -144,6 +145,16 @@ pub enum PlatformEvent {
         /// something unremarkable. A napplet controls this string, so
         /// "nothing to read" cannot be spelled as one.
         message_type: Option<String>,
+    },
+    /// One diagnostic the napplet mirrored to its host.
+    ///
+    /// Classified by the runtime, not by the shell: the level is a closed set
+    /// and the message is bounded, so what reaches native presentation is a
+    /// runtime-owned fact rather than a string the napplet chose the shape of.
+    NappletDiagnostic {
+        session: SessionId,
+        level: NappletDiagnosticLevel,
+        message: String,
     },
     ProviderOperationFinished {
         operation: ProviderOperationId,

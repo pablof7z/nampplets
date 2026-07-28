@@ -59,6 +59,12 @@ public struct TrustedNappletView {
                     self?.deliverRuntimeResponse(bytes)
                 }
             }
+            artifact.runtimeSession?.setDiagnosticSink { [weak self] level, message in
+                Task { @MainActor [weak self] in
+                    guard let self, !self.stopped else { return }
+                    self.onActivity(.consoleEntry(level: level, message: message))
+                }
+            }
         }
 
         func makeWebView() -> WKWebView {
@@ -110,6 +116,7 @@ public struct TrustedNappletView {
             artifact.runtimeSession?.clearResponseSink(
                 owner: responseSinkOwner
             )
+            artifact.runtimeSession?.setDiagnosticSink(nil)
             artifactSchemeHandler.teardown()
             webView.stopLoading()
             webView.navigationDelegate = nil
@@ -314,27 +321,23 @@ public struct TrustedNappletView {
             return candidate.resolvingSymlinksInPath().standardizedFileURL == trustedShellURL
         }
 
-        /// `debug.console` mirrors the sandboxed napplet iframe's own
-        /// console/error output for the Napplet Inspector. It is diagnostic
-        /// only -- native reports it straight to `onActivity` and never
-        /// forwards it to Rust, since it carries no NAP domain authority and
-        /// isn't part of the verified envelope protocol.
-        private static let consoleMessageType = "debug.console"
-
+        /// Every bridge message goes to the runtime, unconditionally.
+        ///
+        /// Whether one is part of the NAP envelope protocol is a
+        /// protocol-membership judgement, and Rust owns those: it reserves the
+        /// `debug.*` domain, classifies the envelope itself, bounds it, and
+        /// keeps it away from providers. Native asserting that here — on a
+        /// `type` the sandboxed iframe supplies — would let any content that
+        /// reaches the bridge choose what the runtime observes, simply by
+        /// naming itself well.
+        ///
+        /// The Inspector's console is fed from the runtime's own classified
+        /// diagnostic, delivered back through `setDiagnosticSink`, so nothing
+        /// here reads a napplet-authored payload to decide what to draw.
         private func route(
             messageType: String,
             encodedEnvelope: Data
         ) {
-            if messageType == Self.consoleMessageType {
-                if let envelope = try? JSONSerialization.jsonObject(with: encodedEnvelope)
-                    as? [String: Any],
-                    let level = envelope["level"] as? String,
-                    let message = envelope["message"] as? String
-                {
-                    onActivity(.consoleEntry(level: level, message: message))
-                }
-                return
-            }
             onActivity(.request(type: messageType))
             artifact.runtimeSession?.mappedEnvelope(encodedEnvelope)
         }

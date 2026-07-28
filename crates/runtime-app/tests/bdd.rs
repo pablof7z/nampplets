@@ -9,13 +9,13 @@
 mod section_revision_steps;
 mod support;
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 use cucumber::{World, given, then, when};
 use nmp_native_nap_bridge::{ProviderPushError, ProviderPushSender};
 use nmp_native_runtime_app::{
-    AppErrorCode, PermissionChangeRefusalCode, PermissionChangeRequest, PermissionChangeResult,
-    PermissionPlatformAvailability, PermissionReviewView, PlatformCommand,
+    AppErrorCode, NappletDiagnosticLevel, PermissionChangeRefusalCode, PermissionChangeRequest,
+    PermissionChangeResult, PermissionPlatformAvailability, PermissionReviewView, PlatformCommand,
 };
 use nmp_native_runtime_core::{
     CapabilityRequirement, GrantDecision, Principal, Sensitivity, SessionId,
@@ -427,6 +427,105 @@ fn then_one_revocation_observed(world: &mut RuntimeWorld) {
     let revoked = world.rig().provider.revoked.lock();
     assert_eq!(revoked.len(), 1);
     assert_eq!(revoked[0].session, session);
+}
+
+// ---------------------------------------------------------------- diagnostics
+
+#[given("a running napplet session")]
+fn given_running_session(world: &mut RuntimeWorld) {
+    let rig = Rig::new(false);
+    let exact = principal('a');
+    rig.install(exact.clone());
+    rig.allow_runtime(exact.clone());
+    let session = rig.launch(exact.clone());
+    rig.ready(session);
+    world.principal = Some(exact);
+    world.session = Some(session);
+    world.rig = Some(rig);
+}
+
+fn send_envelope(world: &mut RuntimeWorld, bytes: String) {
+    let session = world.session.unwrap();
+    world.rig().app.dispatch(PlatformCommand::MappedEnvelope {
+        session,
+        bytes: Arc::from(bytes.as_bytes()),
+    });
+}
+
+#[when(regex = r#"^the napplet reports "([^"]*)" at level "([^"]*)"$"#)]
+fn when_napplet_reports(world: &mut RuntimeWorld, message: String, level: String) {
+    send_envelope(
+        world,
+        format!(r#"{{"type":"debug.console","level":"{level}","message":"{message}"}}"#),
+    );
+}
+
+#[when("the napplet sends a diagnostic with no message")]
+fn when_napplet_sends_messageless_diagnostic(world: &mut RuntimeWorld) {
+    send_envelope(
+        world,
+        r#"{"type":"debug.console","level":"warn"}"#.to_owned(),
+    );
+}
+
+fn diagnostic_levels(world: &mut RuntimeWorld) -> Vec<NappletDiagnosticLevel> {
+    world
+        .rig()
+        .app
+        .events_after(0)
+        .events
+        .into_iter()
+        .filter_map(|item| match item.event {
+            nmp_native_runtime_app::PlatformEvent::NappletDiagnostic { level, .. } => Some(level),
+            _ => None,
+        })
+        .collect()
+}
+
+#[then(regex = r#"^the runtime reports one diagnostic at level "([^"]*)"$"#)]
+fn then_one_diagnostic_at_level(world: &mut RuntimeWorld, expected: String) {
+    let levels = diagnostic_levels(world);
+    assert_eq!(levels.len(), 1, "expected exactly one diagnostic");
+    assert_eq!(levels[0].as_str(), expected);
+}
+
+#[then("the runtime reports no diagnostic")]
+fn then_no_diagnostic(world: &mut RuntimeWorld) {
+    assert!(diagnostic_levels(world).is_empty());
+}
+
+#[then("the diagnostic is not reported as an unrecognised protocol envelope")]
+fn then_not_ignored(world: &mut RuntimeWorld) {
+    let ignored = world
+        .rig()
+        .app
+        .events_after(0)
+        .events
+        .into_iter()
+        .filter(|item| {
+            matches!(
+                item.event,
+                nmp_native_runtime_app::PlatformEvent::EnvelopeIgnored { .. }
+            )
+        })
+        .count();
+    assert_eq!(ignored, 0);
+}
+
+#[then("the runtime records that it could not read the diagnostic")]
+fn then_records_unreadable(world: &mut RuntimeWorld) {
+    let snapshot = world.rig().app.snapshot();
+    assert!(
+        snapshot.recent_activity.iter().any(|fact| {
+            fact.category.as_ref() == "envelope" && fact.operation.as_ref() == "diagnostic"
+        }),
+        "an unreadable diagnostic still leaves an activity fact"
+    );
+}
+
+#[then("no provider was called")]
+fn then_no_provider_call(world: &mut RuntimeWorld) {
+    assert!(world.rig().provider.seen.lock().is_empty());
 }
 
 #[tokio::main]
