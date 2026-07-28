@@ -24,7 +24,6 @@ public final class WorkbenchRuntimeProfile: @unchecked Sendable {
         let permissionDefault: NativeRuntimePermissionDefault
     }
 
-    private static let maximumOperatorRelaysPerLane = 4
 
     let native: NativeRuntimeProfile
     let openingConfiguration: OpeningConfiguration
@@ -63,7 +62,14 @@ public final class WorkbenchRuntimeProfile: @unchecked Sendable {
     /// Reads the finite operator relay lanes from the application bundle.
     ///
     /// These are deployment inputs, not napplet-selected routes. NMP remains
-    /// the sole owner of discovery, routing, canonical events, and receipts.
+    /// the sole owner of discovery, routing, canonical events, and receipts,
+    /// and the runtime is the sole judge of which of these relays are usable:
+    /// it applies the scheme, credential, duplicate and cap rules, admits what
+    /// it can, and records every relay it drops as a boundary refusal.
+    ///
+    /// Reading the plist is all that is left here on purpose. Deciding which
+    /// relays count belongs in one place, or a second host reproduces the
+    /// rules approximately and routes differently for reasons nobody can see.
     static func operatorNetworkInputs(
         infoDictionary: [String: Any]
     ) throws -> OperatorNetworkInputs {
@@ -75,6 +81,8 @@ public final class WorkbenchRuntimeProfile: @unchecked Sendable {
             key: "NMPAppRelays",
             infoDictionary: infoDictionary
         )
+        // An absent lane is a broken bundle, which is this layer's to catch:
+        // there is nothing for the runtime to judge and no relay to name.
         guard !indexers.isEmpty, !appRelays.isEmpty else {
             throw CocoaError(.propertyListReadCorrupt)
         }
@@ -84,6 +92,8 @@ public final class WorkbenchRuntimeProfile: @unchecked Sendable {
         )
     }
 
+    /// The configured lane, read verbatim apart from surrounding whitespace a
+    /// plist editor may have left behind.
     private static func relayLane(
         key: String,
         infoDictionary: [String: Any]
@@ -91,22 +101,9 @@ public final class WorkbenchRuntimeProfile: @unchecked Sendable {
         guard let configured = infoDictionary[key] as? [String] else {
             return []
         }
-        var relays: [String] = []
-        for value in configured.prefix(maximumOperatorRelaysPerLane) {
-            let relay = value.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
-            guard
-                !relay.isEmpty,
-                relay.hasPrefix("wss://"),
-                !relay.contains("@"),
-                !relays.contains(relay)
-            else {
-                continue
-            }
-            relays.append(relay)
-        }
-        return relays
+        return configured
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     static func open(

@@ -253,7 +253,7 @@ impl RuntimeController {
 
     /// The single bounded-append path for boundary refusals. Eviction past the
     /// cap is counted, never silent: `dropped_boundary_refusals` reports it.
-    fn record_boundary_refusal(&self, refusal: RuntimeRefusal) {
+    pub(crate) fn record_boundary_refusal(&self, refusal: RuntimeRefusal) {
         self.boundary_refusals
             .lock()
             .push(self.maximum_boundary_events, refusal);

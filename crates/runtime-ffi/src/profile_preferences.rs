@@ -1,9 +1,8 @@
-use nmp::RelayUrl;
 use nmp_native_runtime_store::{
     MAXIMUM_PROFILE_RELAYS_PER_LANE, PermissionDefaultPreference, ProfilePreferences,
 };
 
-use crate::{RuntimePermissionDefault, RuntimeRefusal};
+use crate::{RuntimePermissionDefault, RuntimeRefusal, relay_lane::refuse_lane_on_first_fault};
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
 pub struct RuntimeProfilePreferences {
@@ -37,16 +36,36 @@ pub struct RuntimeStorageResetResult {
 pub(crate) fn validate_profile_preferences(
     preferences: RuntimeProfilePreferences,
 ) -> Result<ProfilePreferences, String> {
-    validate_relay_lane("indexer", &preferences.indexer_relays, true)?;
-    validate_relay_lane("app", &preferences.app_relays, true)?;
+    refuse_lane_on_first_fault(
+        "indexer",
+        &preferences.indexer_relays,
+        MAXIMUM_PROFILE_RELAYS_PER_LANE,
+        true,
+    )?;
+    refuse_lane_on_first_fault(
+        "app",
+        &preferences.app_relays,
+        MAXIMUM_PROFILE_RELAYS_PER_LANE,
+        true,
+    )?;
     store_preferences(preferences)
 }
 
 pub(crate) fn validate_configured_profile_preferences(
     preferences: RuntimeProfilePreferences,
 ) -> Result<ProfilePreferences, String> {
-    validate_relay_lane("indexer", &preferences.indexer_relays, false)?;
-    validate_relay_lane("app", &preferences.app_relays, false)?;
+    refuse_lane_on_first_fault(
+        "indexer",
+        &preferences.indexer_relays,
+        MAXIMUM_PROFILE_RELAYS_PER_LANE,
+        false,
+    )?;
+    refuse_lane_on_first_fault(
+        "app",
+        &preferences.app_relays,
+        MAXIMUM_PROFILE_RELAYS_PER_LANE,
+        false,
+    )?;
     store_preferences(preferences)
 }
 
@@ -83,30 +102,4 @@ pub(crate) fn stored_permission_default(
         RuntimePermissionDefault::AllowSession => PermissionDefaultPreference::AllowSession,
         RuntimePermissionDefault::AllowExactBuild => PermissionDefaultPreference::AllowExactBuild,
     }
-}
-
-fn validate_relay_lane(
-    lane: &str,
-    relays: &[String],
-    require_non_empty: bool,
-) -> Result<(), String> {
-    if require_non_empty && relays.is_empty() {
-        return Err(format!(
-            "{lane} relays must contain at least one secure relay"
-        ));
-    }
-    if relays.len() > MAXIMUM_PROFILE_RELAYS_PER_LANE {
-        return Err(format!(
-            "{lane} relays has {} entries; the maximum is {MAXIMUM_PROFILE_RELAYS_PER_LANE}",
-            relays.len()
-        ));
-    }
-    for relay in relays {
-        if !relay.starts_with("wss://") || relay.contains('@') || RelayUrl::parse(relay).is_err() {
-            return Err(format!(
-                "{lane} relays must use valid wss:// addresses without credentials"
-            ));
-        }
-    }
-    Ok(())
 }

@@ -154,7 +154,7 @@ pub(super) fn open_runtime_controller(
     inc_action_executor: Option<Arc<dyn NativeIncActionExecutor>>,
     intent_activation_executor: Option<Arc<dyn NativeIntentActivationExecutor>>,
 ) -> Result<Arc<RuntimeController>, RuntimeOpenError> {
-    let config = config.validated()?;
+    let mut config = config.validated()?;
     let runtime_store = Arc::new(
         RuntimeStore::open(&config.runtime_store_path, StoreLimits::default()).map_err(
             |error| RuntimeOpenError::RuntimeStore {
@@ -178,6 +178,7 @@ pub(super) fn open_runtime_controller(
     let projected_profile_preferences = project_profile_preferences(&profile_preferences);
     let nmp_store_path = config.nmp_store_path.as_ref().map(PathBuf::from);
     let artifact_cache_path = PathBuf::from(&config.artifact_cache_path);
+    let dropped_relays = std::mem::take(&mut config.dropped_relays);
     let artifact_cache = Arc::new(
         FileArtifactCache::open(&config.artifact_cache_path).map_err(|error| {
             RuntimeOpenError::ArtifactCache {
@@ -403,5 +404,13 @@ pub(super) fn open_runtime_controller(
     // reopened, with the installation, its grants and its signed archetype
     // declaration all still intact in the store.
     controller.restore_intent_handlers();
+    // A relay this runtime would not admit is reported, never simply absent.
+    // Operator lanes ship inside the bundle, so a mistyped relay cannot be
+    // corrected at runtime -- which is exactly why it has to be visible rather
+    // than silently missing from routing.
+    for dropped in dropped_relays {
+        let refusal = controller.refusal("operator-relay-refused", dropped.detail());
+        controller.record_boundary_refusal(refusal);
+    }
     Ok(controller)
 }

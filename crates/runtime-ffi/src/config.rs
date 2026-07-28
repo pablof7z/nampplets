@@ -6,6 +6,7 @@ use crate::{
     DEFAULT_MAXIMUM_ARTIFACT_READ_BYTES, DEFAULT_MAXIMUM_BOUNDARY_EVENTS,
     DEFAULT_MAXIMUM_CONFIG_ITEMS, DEFAULT_MAXIMUM_CONFIG_STRING_BYTES,
     DEFAULT_MAXIMUM_MANIFEST_BYTES, DEFAULT_MAXIMUM_OBSERVERS,
+    relay_lane::{DroppedRelay, admit_lane},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
@@ -104,13 +105,26 @@ impl RuntimeConfig {
             }
         }
 
+        // Operator relay lanes are judged here, once, in Rust. They used to
+        // be filtered by each host before they ever arrived, which meant the
+        // scheme, credential and duplicate rules lived in the shell and a
+        // second host had to reproduce them exactly to route the same way.
+        let (indexer_relays, mut dropped_relays) =
+            admit_lane("indexer", &self.indexer_relays, maximum_nmp_relays);
+        let (app_relays, dropped_app) = admit_lane("app", &self.app_relays, maximum_nmp_relays);
+        let (fallback_relays, dropped_fallback) =
+            admit_lane("fallback", &self.fallback_relays, maximum_nmp_relays);
+        dropped_relays.extend(dropped_app);
+        dropped_relays.extend(dropped_fallback);
+
         Ok(ValidatedConfig {
             runtime_store_path: self.runtime_store_path,
             nmp_store_path: self.nmp_store_path,
             artifact_cache_path: self.artifact_cache_path,
-            indexer_relays: self.indexer_relays,
-            app_relays: self.app_relays,
-            fallback_relays: self.fallback_relays,
+            indexer_relays,
+            app_relays,
+            fallback_relays,
+            dropped_relays,
             allowed_local_relay_hosts: self.allowed_local_relay_hosts,
             maximum_nmp_relays,
             maximum_bridge_workers,
@@ -162,6 +176,9 @@ pub(crate) struct ValidatedConfig {
     pub(crate) indexer_relays: Vec<String>,
     pub(crate) app_relays: Vec<String>,
     pub(crate) fallback_relays: Vec<String>,
+    /// Relays the runtime would not admit, each with its reason. Carried so
+    /// open can record them as evidence rather than let them disappear.
+    pub(crate) dropped_relays: Vec<DroppedRelay>,
     pub(crate) allowed_local_relay_hosts: Vec<String>,
     pub(crate) maximum_nmp_relays: usize,
     pub(crate) maximum_bridge_workers: usize,

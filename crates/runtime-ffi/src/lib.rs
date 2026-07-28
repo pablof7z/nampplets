@@ -16,6 +16,7 @@ mod permission_types;
 mod profile_preferences;
 mod projection;
 mod receipt_projection;
+mod relay_lane;
 mod slots;
 mod snapshot_integrity;
 mod snapshot_types;

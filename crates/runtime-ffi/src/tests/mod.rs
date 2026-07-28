@@ -8,6 +8,7 @@ mod intent;
 mod intent_restore;
 mod library;
 mod native_capabilities;
+mod operator_relays;
 mod permissions;
 mod profile_preferences;
 mod receipt_slot;
