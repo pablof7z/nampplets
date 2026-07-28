@@ -18,6 +18,7 @@ use nmp_native_provider_link::{
     CancelIntentChoice, IntentProvider, IntentProviderLimits, NativeIntentDispatcher,
     NoopIntentActivity,
 };
+use nmp_native_provider_lists::{ListsDataPlane, ListsProvider, ListsProviderLimits};
 use nmp_native_providers::{
     ConfigProvider, ConfigProviderLimits, ShellProvider, ShellProviderLimits, StorageProvider,
     StorageProviderLimits, ThemeProvider, ThemeProviderLimits,
@@ -239,6 +240,13 @@ pub(super) fn open_runtime_controller(
     .map_err(|error| RuntimeOpenError::Runtime {
         detail: error.to_string(),
     })?;
+    let lists_source: Arc<dyn ListsDataPlane> = data_plane.clone();
+    let lists_provider: Arc<dyn Provider> =
+        ListsProvider::new(lists_source, ListsProviderLimits::default()).map_err(|error| {
+            RuntimeOpenError::Runtime {
+                detail: error.to_string(),
+            }
+        })?;
     let inc_provider_concrete: Arc<IncProvider> = match inc_action_executor {
         Some(callback) => Arc::new(
             IncProvider::with_native_actions(
@@ -328,6 +336,7 @@ pub(super) fn open_runtime_controller(
     let mut providers = vec![
         storage_provider,
         identity_provider,
+        lists_provider,
         inc_provider,
         intent_provider_erased,
         outbox_provider,
