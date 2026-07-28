@@ -6,6 +6,7 @@
 //! [`AppState`] owned here.
 
 mod binding;
+mod diagnostic;
 mod envelope;
 mod facts;
 mod install;
@@ -15,6 +16,8 @@ mod push;
 mod revisions;
 mod session;
 mod terminal;
+
+pub use diagnostic::NappletDiagnosticLevel;
 mod workspace;
 
 use std::{
@@ -126,6 +129,13 @@ pub(crate) struct SessionEntry {
     /// empty one, and there is no third state where the answer is unknown.
     pub(crate) unavailable_domains: BTreeSet<Capability>,
     ready: bool,
+    /// Diagnostics this session has already mirrored to the host.
+    ///
+    /// The trusted shell caps its own console wrapper, but that wrapper runs
+    /// inside the sandboxed frame -- a napplet posting the envelope directly
+    /// never meets it. The kernel keeps its own count so the bound holds
+    /// against the path that bypasses the shell.
+    pub(crate) diagnostics_mirrored: u32,
     last_provider_sequence: Option<u64>,
     delivered_push_count: u64,
     _artifact: Arc<dyn ExecutableArtifact>,
