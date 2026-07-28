@@ -8,7 +8,7 @@ use nmp_native_runtime_core::{BoundedJson, Capability, SessionId, SessionState};
 use super::{ActiveOperation, AppState, RuntimeApp};
 use crate::{
     activity::ActivityDetail,
-    app::diagnostic::{DiagnosticEnvelope, classify_diagnostic},
+    app::diagnostic::{DiagnosticEnvelope, MAXIMUM_SESSION_DIAGNOSTICS, classify_diagnostic},
     commands::{PlatformEvent, ProviderOperationId},
     views::AppErrorCode,
 };
@@ -33,6 +33,14 @@ impl RuntimeApp {
     ) {
         match diagnostic {
             DiagnosticEnvelope::Console { level, message } => {
+                let Some(entry) = state.sessions.get_mut(&session_id) else {
+                    return;
+                };
+                if entry.diagnostics_mirrored >= MAXIMUM_SESSION_DIAGNOSTICS {
+                    return;
+                }
+                entry.diagnostics_mirrored += 1;
+                let exhausted = entry.diagnostics_mirrored == MAXIMUM_SESSION_DIAGNOSTICS;
                 self.record_activity(
                     state,
                     principal,
@@ -49,6 +57,19 @@ impl RuntimeApp {
                         message,
                     },
                 );
+                if exhausted {
+                    // Said once, at the boundary, rather than silently from
+                    // here on. A console that simply stops is the failure
+                    // this whole path exists to prevent.
+                    self.record_activity(
+                        state,
+                        principal,
+                        "envelope",
+                        "diagnostic",
+                        "budget-exhausted",
+                        now,
+                    );
+                }
             }
             DiagnosticEnvelope::Unreadable { reason } => {
                 self.record_activity(state, principal, "envelope", "diagnostic", reason, now);

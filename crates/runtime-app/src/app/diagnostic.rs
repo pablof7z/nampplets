@@ -22,6 +22,15 @@ pub(crate) const CONSOLE_ACTION: &str = "console";
 /// post past that shell entirely, so the kernel bounds it again.
 const MAXIMUM_DIAGNOSTIC_MESSAGE_BYTES: usize = 4 * 1024;
 
+/// Diagnostics one session may mirror to the host.
+///
+/// Mirrors the trusted shell's own console cap. That cap lives inside the
+/// sandboxed frame, so a napplet posting the envelope directly never meets it;
+/// this is the copy that holds regardless. It never resets within a session,
+/// which is exactly the shell's behaviour, so a legitimate napplet cannot
+/// reach it any sooner than it already would.
+pub(crate) const MAXIMUM_SESSION_DIAGNOSTICS: u32 = 500;
+
 /// The severity of one diagnostic, as a closed set the runtime owns.
 ///
 /// The napplet names a level; it does not get to widen the set. Anything

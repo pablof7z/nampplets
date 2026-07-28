@@ -177,3 +177,48 @@ fn a_diagnostic_never_reaches_a_provider() {
 
     assert_eq!(rig.provider.seen.lock().len(), before);
 }
+
+/// The trusted shell caps its own console wrapper, but that wrapper runs
+/// inside the sandboxed frame. A napplet posting the envelope directly never
+/// meets it, so the kernel keeps the bound that actually holds.
+#[test]
+fn a_session_may_mirror_only_a_finite_number_of_diagnostics() {
+    let rig = Rig::new(false);
+    let session = running_session(&rig);
+
+    for index in 0..600 {
+        send(
+            &rig,
+            session,
+            format!(r#"{{"type":"debug.console","level":"log","message":"{index}"}}"#).as_bytes(),
+        );
+    }
+
+    assert_eq!(
+        diagnostics(&rig).len(),
+        500,
+        "the napplet does not choose how much of the event ring it occupies"
+    );
+}
+
+#[test]
+fn reaching_the_diagnostic_budget_is_said_once_rather_than_going_quiet() {
+    let rig = Rig::new(false);
+    let session = running_session(&rig);
+
+    for index in 0..600 {
+        send(
+            &rig,
+            session,
+            format!(r#"{{"type":"debug.console","level":"log","message":"{index}"}}"#).as_bytes(),
+        );
+    }
+
+    let snapshot = rig.app.snapshot();
+    let exhausted = snapshot
+        .recent_activity
+        .iter()
+        .filter(|fact| fact.outcome.as_ref() == "budget-exhausted")
+        .count();
+    assert_eq!(exhausted, 1, "a console that simply stops explains nothing");
+}
