@@ -42,6 +42,8 @@ use identity::{
     identity_read_without_account, map_identity_engine_error, project_identity_frame,
     public_identity_query_name, supported_identity_kind, validate_identity_read_limits,
 };
+#[cfg(test)]
+use identity::{project_follows, project_profile, project_relay_list};
 mod lists;
 mod nap;
 
