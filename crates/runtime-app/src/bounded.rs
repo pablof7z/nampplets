@@ -131,7 +131,7 @@ mod tests {
     }
 
     #[test]
-    fn overflow_past_the_cap_reports_the_exact_omitted_count() {
+    fn overflow_past_the_cap_reports_the_exact_dropped_count() {
         let mut facts = BoundedFacts::with_capacity(4);
         for value in 0..10_u64 {
             facts.push(4, value);
