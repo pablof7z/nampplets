@@ -8,6 +8,7 @@ use nmp_native_runtime_core::{BoundedJson, Capability, SessionId, SessionState};
 use super::{ActiveOperation, AppState, RuntimeApp};
 use crate::{
     activity::ActivityDetail,
+    app::diagnostic::{DiagnosticEnvelope, MAXIMUM_SESSION_DIAGNOSTICS, classify_diagnostic},
     commands::{PlatformEvent, ProviderOperationId},
     views::AppErrorCode,
 };
@@ -17,6 +18,65 @@ use crate::{
 const MAXIMUM_RECORDED_MESSAGE_TYPE_BYTES: usize = 128;
 
 impl RuntimeApp {
+    /// Records one classified diagnostic.
+    ///
+    /// A readable entry becomes a typed event native presentation can render.
+    /// An unreadable one still leaves an activity fact, because the failure
+    /// mode this replaces was a diagnostic that disappeared without trace.
+    fn record_diagnostic(
+        &self,
+        state: &mut AppState,
+        principal: &nmp_native_runtime_core::Principal,
+        session_id: SessionId,
+        diagnostic: DiagnosticEnvelope,
+        now: u64,
+    ) {
+        match diagnostic {
+            DiagnosticEnvelope::Console { level, message } => {
+                let Some(entry) = state.sessions.get_mut(&session_id) else {
+                    return;
+                };
+                if entry.diagnostics_mirrored >= MAXIMUM_SESSION_DIAGNOSTICS {
+                    return;
+                }
+                entry.diagnostics_mirrored += 1;
+                let exhausted = entry.diagnostics_mirrored == MAXIMUM_SESSION_DIAGNOSTICS;
+                self.record_activity(
+                    state,
+                    principal,
+                    "envelope",
+                    "diagnostic",
+                    level.as_str(),
+                    now,
+                );
+                self.push_event(
+                    state,
+                    PlatformEvent::NappletDiagnostic {
+                        session: session_id,
+                        level,
+                        message,
+                    },
+                );
+                if exhausted {
+                    // Said once, at the boundary, rather than silently from
+                    // here on. A console that simply stops is the failure
+                    // this whole path exists to prevent.
+                    self.record_activity(
+                        state,
+                        principal,
+                        "envelope",
+                        "diagnostic",
+                        "budget-exhausted",
+                        now,
+                    );
+                }
+            }
+            DiagnosticEnvelope::Unreadable { reason } => {
+                self.record_activity(state, principal, "envelope", "diagnostic", reason, now);
+            }
+        }
+    }
+
     pub(super) fn dispatch_envelope(
         self: &Arc<Self>,
         state: &mut AppState,
@@ -61,6 +121,14 @@ impl RuntimeApp {
         let principal = entry.context.principal.clone();
         let context = entry.context.clone();
         let plan = entry.plan.clone();
+        // Classify before any protocol-shaped decision. `debug.*` is
+        // reserved: the runtime answers for it, so it never routes, never
+        // dispatches, and never reaches a provider — and the shell never has
+        // to compare a type string of its own to find that out.
+        if let Some(diagnostic) = classify_diagnostic(bytes) {
+            self.record_diagnostic(state, &principal, session_id, diagnostic, now);
+            return None;
+        }
         let route = envelope_route(bytes);
         if route.is_none() {
             // The envelope cannot be routed: its `type` field is missing,
@@ -347,7 +415,7 @@ pub(super) fn envelope_type_evidence(bytes: &[u8]) -> EnvelopeTypeEvidence {
 /// Bounding by `chars` instead would not bound the bytes: a napplet sending
 /// multi-byte characters gets up to four bytes per retained char, so the
 /// recorded value overruns the stated maximum by 4x on input it controls.
-fn bounded_utf8_prefix(value: &str, maximum_bytes: usize) -> String {
+pub(super) fn bounded_utf8_prefix(value: &str, maximum_bytes: usize) -> String {
     if value.len() <= maximum_bytes {
         return value.to_owned();
     }

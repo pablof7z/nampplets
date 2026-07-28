@@ -293,6 +293,22 @@ pub(crate) fn project_event(sequence: u64, event: &PlatformEvent) -> RuntimeEven
             };
         }
         PlatformEvent::EnvelopeIgnored { .. } => "envelope-ignored",
+        PlatformEvent::NappletDiagnostic {
+            session,
+            level,
+            message,
+        } => {
+            // Projected structurally rather than as a debug string: the point
+            // of classifying in Rust is that native renders a typed fact
+            // instead of re-parsing one.
+            return RuntimeEvent {
+                sequence,
+                kind: "napplet-diagnostic".to_owned(),
+                detail: level.as_str().to_owned(),
+                session_id: Some(session.0),
+                response_json: Some(message.clone()),
+            };
+        }
         PlatformEvent::ProviderOperationFinished { .. } => "provider-operation-finished",
         PlatformEvent::ProviderPush {
             session, envelope, ..

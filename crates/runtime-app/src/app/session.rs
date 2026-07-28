@@ -190,6 +190,7 @@ impl RuntimeApp {
                 push_delivery: None,
                 unavailable_domains,
                 ready: false,
+                diagnostics_mirrored: 0,
                 last_provider_sequence: None,
                 delivered_push_count: 0,
                 _artifact: artifact,
