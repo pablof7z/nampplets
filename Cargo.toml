@@ -8,6 +8,7 @@ members = [
     "crates/provider-identity",
     "crates/provider-inc",
     "crates/provider-link",
+    "crates/provider-lists",
     "crates/provider-resource",
     "crates/providers",
     "crates/performance-harness",

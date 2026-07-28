@@ -27,6 +27,7 @@ nmp-native-nmp-adapter = { path = "../nmp-adapter" }
 nmp-native-provider-identity = { path = "../provider-identity" }
 nmp-native-provider-inc = { path = "../provider-inc" }
 nmp-native-provider-link = { path = "../provider-link" }
+nmp-native-provider-lists = { path = "../provider-lists" }
 nmp-native-providers = { path = "../providers" }
 nmp-native-runtime-app = { path = "../runtime-app" }
 nmp-native-runtime-core = { path = "../runtime-core" }
