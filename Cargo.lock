@@ -1918,6 +1918,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "nmp-native-provider-lists"
+version = "0.1.0"
+dependencies = [
+ "cucumber",
+ "nmp-native-nap-bridge",
+ "nmp-native-runtime-core",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+]
+
+[[package]]
 name = "nmp-native-provider-resource"
 version = "0.1.0"
 dependencies = [
@@ -1994,6 +2008,7 @@ dependencies = [
  "nmp-native-provider-identity",
  "nmp-native-provider-inc",
  "nmp-native-provider-link",
+ "nmp-native-provider-lists",
  "nmp-native-providers",
  "nmp-native-runtime-app",
  "nmp-native-runtime-core",

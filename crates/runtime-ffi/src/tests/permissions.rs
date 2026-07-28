@@ -334,3 +334,42 @@ fn malformed_declared_config_schema_reaches_the_snapshot_surface() {
         refusal.detail
     );
 }
+
+/// Reproduces the defect behind the "This app can't tell whether that works
+/// here" caution the permission sheet used to show for `lists`: the runtime
+/// registered no provider for that domain, so the review could only project
+/// `Unknown`. A registered provider is the whole difference between a caution
+/// and a usable choice.
+#[test]
+fn a_napplet_requesting_lists_gets_a_definite_verdict_and_a_real_choice() {
+    let temp = TempDir::new().unwrap();
+    let runtime = controller(&temp);
+    let coordinate = install_lists_fixture(&runtime);
+
+    let review = runtime.permission_review(coordinate).review.unwrap();
+    let lists = review
+        .capabilities
+        .iter()
+        .find(|capability| capability.domain == "lists")
+        .expect("the review lists the requested lists capability");
+
+    assert_eq!(
+        lists.platform_availability,
+        RuntimePermissionPlatformAvailability::Available,
+        "lists must not project as unknown once its provider is registered"
+    );
+    assert_eq!(
+        lists.sensitivity,
+        RuntimePermissionSensitivity::Sensitive,
+        "changing who you follow or mute is social-graph data"
+    );
+    // The sheet's Allow switch is only usable when an affirmative decision is
+    // actually offered as valid.
+    assert!(
+        lists
+            .decision_options
+            .iter()
+            .any(|option| option.valid && option.decision == RuntimeGrantDecision::AllowExactBuild),
+        "the user is offered a real affirmative choice"
+    );
+}

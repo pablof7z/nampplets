@@ -44,6 +44,7 @@ Bringing a new crate/package into scope means:
 | --- | --- | --- |
 | `crates/runtime-app` | Pilot | `cargo test -p nmp-native-runtime-app --test bdd` (also runs under `cargo test --workspace`) |
 | `crates/runtime-ffi` | Pilot | `cargo test -p nmp-native-runtime-ffi --test bdd` (also runs under `cargo test --workspace`) |
+| `crates/provider-lists` | Pilot | `cargo test -p nmp-native-provider-lists --test bdd` (also runs under `cargo test --workspace`) |
 | `crates/performance-harness` | Pilot | `cargo test -p nmp-native-performance-harness --test bdd` (also runs under `cargo test --workspace`) |
 | `apps/workbench-macos/RuntimeWorkbenchPackage` | Pilot | Quick/Nimble in `RuntimeWorkbenchFeatureTests` (runs under `swift test` and the shared `RuntimeWorkbench` scheme) |
 
