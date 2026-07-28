@@ -6,6 +6,7 @@
 //! [`AppState`] owned here.
 
 mod binding;
+mod diagnostic;
 mod envelope;
 mod facts;
 mod install;
@@ -15,6 +16,8 @@ mod push;
 mod revisions;
 mod session;
 mod terminal;
+
+pub use diagnostic::NappletDiagnosticLevel;
 mod workspace;
 
 use std::{

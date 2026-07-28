@@ -315,28 +315,42 @@ public struct TrustedNappletView {
         }
 
         /// `debug.console` mirrors the sandboxed napplet iframe's own
-        /// console/error output for the Napplet Inspector. It is diagnostic
-        /// only -- native reports it straight to `onActivity` and never
-        /// forwards it to Rust, since it carries no NAP domain authority and
-        /// isn't part of the verified envelope protocol.
+        /// console/error output into the Napplet Inspector.
+        ///
+        /// Native reads this string to decide what to *draw*, never to decide
+        /// what the runtime gets to see. Whether a message is part of the NAP
+        /// envelope protocol is a protocol-membership judgement, and Rust owns
+        /// those: it reserves the `debug.*` domain, classifies the envelope
+        /// itself, and keeps it away from providers. Native asserting that
+        /// here — on a `type` the sandboxed iframe supplies — would let any
+        /// content that reaches the bridge choose what the runtime observes,
+        /// simply by naming itself well.
         private static let consoleMessageType = "debug.console"
 
         private func route(
             messageType: String,
             encodedEnvelope: Data
         ) {
-            if messageType == Self.consoleMessageType {
-                if let envelope = try? JSONSerialization.jsonObject(with: encodedEnvelope)
-                    as? [String: Any],
-                    let level = envelope["level"] as? String,
-                    let message = envelope["message"] as? String
-                {
-                    onActivity(.consoleEntry(level: level, message: message))
-                }
+            // Unconditional, and first. Every bridge message reaches the
+            // runtime; nothing native decides can keep one out of its sight.
+            artifact.runtimeSession?.mappedEnvelope(encodedEnvelope)
+
+            // Presentation only, and strictly after the forward above. A
+            // console entry the Inspector cannot parse still reached Rust,
+            // which records it — so a malformed diagnostic no longer vanishes
+            // without trace the way it did when this branch also controlled
+            // routing.
+            guard messageType == Self.consoleMessageType else {
+                onActivity(.request(type: messageType))
                 return
             }
-            onActivity(.request(type: messageType))
-            artifact.runtimeSession?.mappedEnvelope(encodedEnvelope)
+            if let envelope = try? JSONSerialization.jsonObject(with: encodedEnvelope)
+                as? [String: Any],
+                let level = envelope["level"] as? String,
+                let message = envelope["message"] as? String
+            {
+                onActivity(.consoleEntry(level: level, message: message))
+            }
         }
 
         private func deliverRuntimeResponse(_ bytes: Data) {

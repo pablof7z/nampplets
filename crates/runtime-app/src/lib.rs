@@ -17,7 +17,7 @@ pub use activity::{
     ActivityDetail, ActivityDetailValue, ActivityFact, ActivitySensitivity,
     MAXIMUM_ACTIVITY_DETAILS,
 };
-pub use app::{AppObserver, ObservationClosed, RuntimeApp};
+pub use app::{AppObserver, NappletDiagnosticLevel, ObservationClosed, RuntimeApp};
 pub use bounded::BoundedFacts;
 pub use commands::{
     EventBatch, PermissionChangeRequest, PlatformCommand, PlatformEvent, ProviderOperationId,
