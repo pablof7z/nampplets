@@ -72,6 +72,14 @@ pub struct RuntimeController {
     pub(crate) intent_provider: Arc<IntentProvider>,
     pub(crate) artifacts: Arc<Mutex<BTreeMap<Principal, Arc<VerifiedArtifactHandle>>>>,
     boundary_refusals: Mutex<BoundedFacts<RuntimeRefusal>>,
+    /// Relays refused at open, retained for the whole process lifetime.
+    ///
+    /// These also reach `boundary_refusals`, but that ring evicts: a busy
+    /// session can push an open-time deployment fault out of it and
+    /// re-silence exactly the thing this was added to stop hiding. The set is
+    /// finite by construction -- it cannot exceed the configured lanes -- so
+    /// retaining it costs nothing that needs bounding.
+    refused_operator_relays: Vec<RuntimeRefusal>,
     projection_fault_latch: Mutex<ProjectionFaultLatch>,
     maximum_boundary_events: usize,
     signal: watch::Sender<u64>,

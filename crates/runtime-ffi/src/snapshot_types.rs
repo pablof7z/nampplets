@@ -222,6 +222,11 @@ pub struct RuntimeSnapshot {
     pub dropped_errors: u64,
     pub boundary_refusals: Vec<RuntimeRefusal>,
     pub dropped_boundary_refusals: u64,
+    /// Operator relays this runtime refused at open. Unlike
+    /// `boundary_refusals` this never evicts, because a relay the deployment
+    /// configured and the runtime would not admit stays true for the whole
+    /// process.
+    pub refused_operator_relays: Vec<RuntimeRefusal>,
     pub active_resources: u64,
     pub resource_high_watermark: u64,
     pub resource_refusal_count: u64,

@@ -27,6 +27,40 @@ use tempfile::TempDir;
 
 pub use receipt::ReceiptProjectionRig;
 
+/// The relay-lane scenarios never resolve an artifact; admission happens
+/// before anything is fetched.
+pub struct NoArtifactSource;
+
+impl ArtifactSource for NoArtifactSource {
+    fn fetch(&self, request: ArtifactFetchRequest) -> ArtifactFetchResponse {
+        ArtifactFetchResponse::Body {
+            source_url: request.candidate_urls.first().cloned().unwrap_or_default(),
+            http_status: 404,
+            bytes: Vec::new(),
+        }
+    }
+}
+
+/// Every `operator-relay-refused` detail on the current snapshot, and the
+/// durable copy that the bounded ring cannot evict.
+pub fn relay_refusals(controller: &RuntimeController) -> (Vec<String>, Vec<String>) {
+    let RuntimeSnapshotProjection::Snapshot { snapshot } = controller.snapshot() else {
+        panic!("the relay scenarios never produce a refused snapshot");
+    };
+    let ringed = snapshot
+        .boundary_refusals
+        .iter()
+        .filter(|refusal| refusal.code == "operator-relay-refused")
+        .map(|refusal| refusal.detail.clone())
+        .collect();
+    let durable = snapshot
+        .refused_operator_relays
+        .iter()
+        .map(|refusal| refusal.detail.clone())
+        .collect();
+    (ringed, durable)
+}
+
 const AUTHOR: &str = "266815e0c9210dfa324c6cba3573b14bee49da4209a9456f9484e5106cd408a5";
 const D_TAG: &str = "good-morning";
 const MAXIMUM_FIXTURE_BYTES: usize = 512 * 1_024;

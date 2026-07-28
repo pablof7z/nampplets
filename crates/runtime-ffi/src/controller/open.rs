@@ -6,6 +6,7 @@ use std::sync::{
 };
 use std::{collections::BTreeMap, path::PathBuf};
 
+use crate::{RuntimeRefusal, support::now_millis};
 use nmp::EngineConfig;
 use nmp_native_artifact::{FileArtifactCache, VerifiedArtifactHandle};
 use nmp_native_nap_bridge::{BridgeLimits, Provider};
@@ -396,6 +397,14 @@ pub(super) fn open_runtime_controller(
         intent_provider,
         artifacts,
         boundary_refusals: Mutex::new(BoundedFacts::with_capacity(config.maximum_boundary_events)),
+        refused_operator_relays: dropped_relays
+            .iter()
+            .map(|dropped| RuntimeRefusal {
+                code: "operator-relay-refused".to_owned(),
+                detail: dropped.detail(),
+                occurred_at_millis: now_millis(),
+            })
+            .collect(),
         projection_fault_latch: Mutex::new(Default::default()),
         maximum_boundary_events: config.maximum_boundary_events,
         signal,
@@ -413,12 +422,9 @@ pub(super) fn open_runtime_controller(
     // reopened, with the installation, its grants and its signed archetype
     // declaration all still intact in the store.
     controller.restore_intent_handlers();
-    // A relay this runtime would not admit is reported, never simply absent.
-    // Operator lanes ship inside the bundle, so a mistyped relay cannot be
-    // corrected at runtime -- which is exactly why it has to be visible rather
-    // than silently missing from routing.
-    for dropped in dropped_relays {
-        let refusal = controller.refusal("operator-relay-refused", dropped.detail());
+    // Also recorded on the ordinary refusal ring so it surfaces beside every
+    // other boundary fault; the durable copy above is what survives eviction.
+    for refusal in controller.refused_operator_relays.clone() {
         controller.record_boundary_refusal(refusal);
     }
     Ok(controller)

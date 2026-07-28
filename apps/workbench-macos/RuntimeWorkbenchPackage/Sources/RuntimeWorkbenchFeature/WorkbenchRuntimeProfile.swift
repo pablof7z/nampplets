@@ -92,18 +92,17 @@ public final class WorkbenchRuntimeProfile: @unchecked Sendable {
         )
     }
 
-    /// The configured lane, read verbatim apart from surrounding whitespace a
-    /// plist editor may have left behind.
+    /// The configured lane, read verbatim.
+    ///
+    /// Not even whitespace is stripped. Trimming would quietly repair one
+    /// class of plist mistake and silently discard another (an all-whitespace
+    /// entry), which is the shell making relay decisions again in miniature.
+    /// The runtime judges every entry and names what it refuses.
     private static func relayLane(
         key: String,
         infoDictionary: [String: Any]
     ) -> [String] {
-        guard let configured = infoDictionary[key] as? [String] else {
-            return []
-        }
-        return configured
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        infoDictionary[key] as? [String] ?? []
     }
 
     static func open(

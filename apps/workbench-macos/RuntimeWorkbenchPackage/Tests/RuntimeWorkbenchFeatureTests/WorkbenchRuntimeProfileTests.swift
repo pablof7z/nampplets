@@ -27,9 +27,10 @@ func operatorLanesAreReadVerbatimForTheRuntimeToJudge() throws {
         ]
     )
 
-    // Surrounding whitespace a plist editor left behind is not a relay policy
-    // decision, so it is the one thing trimmed here.
-    #expect(inputs.indexerRelays == ["wss://purplepag.es", "wss://relay.primal.net"])
+    // Not even whitespace is repaired here: trimming would quietly fix one
+    // class of plist mistake while silently discarding another. The runtime
+    // judges every entry and names what it refuses.
+    #expect(inputs.indexerRelays == ["  wss://purplepag.es  ", "wss://relay.primal.net"])
     // Passed through untouched: the duplicate and the insecure entry are the
     // runtime's to refuse, by name, rather than this layer's to disappear.
     #expect(inputs.appRelays == [
@@ -49,14 +50,15 @@ func productionNetworkInputsRefuseAnAbsentOperatorLane() {
             infoDictionary: ["NMPAppRelays": ["wss://relay.example"]]
         )
     }
-    #expect(throws: (any Error).self) {
-        try WorkbenchRuntimeProfile.operatorNetworkInputs(
-            infoDictionary: [
-                "NMPIndexerRelays": ["   "],
-                "NMPAppRelays": ["wss://relay.example"],
-            ]
-        )
-    }
+    // A whitespace-only entry is a configured entry: it reaches the runtime,
+    // which refuses it by name rather than letting this layer vanish it.
+    let whitespace = try? WorkbenchRuntimeProfile.operatorNetworkInputs(
+        infoDictionary: [
+            "NMPIndexerRelays": ["   "],
+            "NMPAppRelays": ["wss://relay.example"],
+        ]
+    )
+    #expect(whitespace?.indexerRelays == ["   "])
 }
 
 @Test

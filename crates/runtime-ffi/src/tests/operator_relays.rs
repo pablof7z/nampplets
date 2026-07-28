@@ -10,12 +10,17 @@
 use tempfile::TempDir;
 
 use super::*;
+use crate::RuntimeOpenError;
 
 fn relays(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| (*value).to_owned()).collect()
 }
 
-fn open_with(temp: &TempDir, indexer: &[&str], app: &[&str]) -> Arc<RuntimeController> {
+fn try_open(
+    temp: &TempDir,
+    indexer: &[&str],
+    app: &[&str],
+) -> Result<Arc<RuntimeController>, RuntimeOpenError> {
     RuntimeController::open(
         RuntimeConfig {
             runtime_store_path: temp.path().join("runtime.sqlite3").display().to_string(),
@@ -27,7 +32,10 @@ fn open_with(temp: &TempDir, indexer: &[&str], app: &[&str]) -> Arc<RuntimeContr
         },
         Box::new(FixtureSource(BTreeMap::new())),
     )
-    .unwrap()
+}
+
+fn open_with(temp: &TempDir, indexer: &[&str], app: &[&str]) -> Arc<RuntimeController> {
+    try_open(temp, indexer, app).unwrap()
 }
 
 fn refusals(controller: &Arc<RuntimeController>) -> Vec<String> {
@@ -108,6 +116,67 @@ fn a_partly_unusable_lane_still_opens_on_what_is_left() {
 
     // Opening at all is the assertion: a partly unusable lane degrades
     // instead of taking the runtime down.
-    assert_eq!(controller.snapshot_value().boundary_refusals.len(), 1);
     assert_eq!(refusals(&controller).len(), 1);
+}
+
+/// Degrading a lane is survivable; emptying it is not. A runtime routing
+/// through no relays at all, while every other signal reads healthy, is the
+/// failure this whole change exists to stop.
+#[test]
+fn a_lane_whose_every_entry_is_refused_stops_the_runtime_opening() {
+    let temp = TempDir::new().unwrap();
+    let error = try_open(
+        &temp,
+        &["ws://one.example", "wss://user:pass@two.example"],
+        &["wss://app.example"],
+    )
+    .unwrap_err();
+
+    let RuntimeOpenError::InvalidConfig { detail } = error else {
+        panic!("an emptied lane refuses the open as invalid configuration");
+    };
+    assert!(detail.contains("indexer"));
+    assert!(detail.contains("ws://one.example"), "{detail}");
+    assert!(detail.contains("credentials"), "{detail}");
+}
+
+/// A lane nobody configured is not an emptied lane.
+#[test]
+fn an_unconfigured_lane_is_not_treated_as_emptied() {
+    let temp = TempDir::new().unwrap();
+    assert!(try_open(&temp, &[], &[]).is_ok());
+}
+
+/// Whitespace reaches the runtime now that the shell stopped trimming it, so
+/// the runtime has to name it rather than let it vanish.
+#[test]
+fn a_whitespace_only_operator_relay_is_refused_by_name() {
+    let temp = TempDir::new().unwrap();
+    let controller = open_with(
+        &temp,
+        &["   ", "wss://indexer.example"],
+        &["wss://app.example"],
+    );
+
+    let refusals = refusals(&controller);
+    assert_eq!(refusals.len(), 1);
+    assert!(refusals[0].starts_with("indexer relay"));
+}
+
+/// The ordinary refusal ring evicts. A relay the deployment configured and
+/// this runtime would not admit stays true for the whole process, so it is
+/// also retained where nothing can push it out.
+#[test]
+fn refused_operator_relays_survive_where_the_bounded_ring_would_evict() {
+    let temp = TempDir::new().unwrap();
+    let controller = open_with(
+        &temp,
+        &["ws://plaintext.example", "wss://indexer.example"],
+        &["wss://app.example"],
+    );
+
+    let durable = controller.snapshot_value().refused_operator_relays;
+    assert_eq!(durable.len(), 1);
+    assert_eq!(durable[0].code, "operator-relay-refused");
+    assert!(durable[0].detail.contains("ws://plaintext.example"));
 }

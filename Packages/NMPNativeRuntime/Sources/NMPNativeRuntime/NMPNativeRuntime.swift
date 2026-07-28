@@ -7742,13 +7742,26 @@ public struct RuntimeSnapshot {
     public var droppedErrors: UInt64
     public var boundaryRefusals: [RuntimeRefusal]
     public var droppedBoundaryRefusals: UInt64
+    /**
+     * Operator relays this runtime refused at open. Unlike
+     * `boundary_refusals` this never evicts, because a relay the deployment
+     * configured and the runtime would not admit stays true for the whole
+     * process.
+     */
+    public var refusedOperatorRelays: [RuntimeRefusal]
     public var activeResources: UInt64
     public var resourceHighWatermark: UInt64
     public var resourceRefusalCount: UInt64
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(revision: UInt64, closed: Bool, installedLibrary: RuntimeInstalledLibrarySnapshot, sessions: [RuntimeSessionSnapshot], bindings: [RuntimeBindingSnapshot], pendingWrites: [RuntimePendingWriteSnapshot], receipts: [RuntimeReceiptSnapshot], workspaces: [RuntimeWorkspaceDefinition], recentActivity: [RuntimeActivitySnapshot], droppedActivity: UInt64, recentErrors: [RuntimeErrorSnapshot], droppedErrors: UInt64, boundaryRefusals: [RuntimeRefusal], droppedBoundaryRefusals: UInt64, activeResources: UInt64, resourceHighWatermark: UInt64, resourceRefusalCount: UInt64) {
+    public init(revision: UInt64, closed: Bool, installedLibrary: RuntimeInstalledLibrarySnapshot, sessions: [RuntimeSessionSnapshot], bindings: [RuntimeBindingSnapshot], pendingWrites: [RuntimePendingWriteSnapshot], receipts: [RuntimeReceiptSnapshot], workspaces: [RuntimeWorkspaceDefinition], recentActivity: [RuntimeActivitySnapshot], droppedActivity: UInt64, recentErrors: [RuntimeErrorSnapshot], droppedErrors: UInt64, boundaryRefusals: [RuntimeRefusal], droppedBoundaryRefusals: UInt64,
+        /**
+         * Operator relays this runtime refused at open. Unlike
+         * `boundary_refusals` this never evicts, because a relay the deployment
+         * configured and the runtime would not admit stays true for the whole
+         * process.
+         */refusedOperatorRelays: [RuntimeRefusal], activeResources: UInt64, resourceHighWatermark: UInt64, resourceRefusalCount: UInt64) {
         self.revision = revision
         self.closed = closed
         self.installedLibrary = installedLibrary
@@ -7763,6 +7776,7 @@ public struct RuntimeSnapshot {
         self.droppedErrors = droppedErrors
         self.boundaryRefusals = boundaryRefusals
         self.droppedBoundaryRefusals = droppedBoundaryRefusals
+        self.refusedOperatorRelays = refusedOperatorRelays
         self.activeResources = activeResources
         self.resourceHighWatermark = resourceHighWatermark
         self.resourceRefusalCount = resourceRefusalCount
@@ -7818,6 +7832,9 @@ extension RuntimeSnapshot: Equatable, Hashable {
         if lhs.droppedBoundaryRefusals != rhs.droppedBoundaryRefusals {
             return false
         }
+        if lhs.refusedOperatorRelays != rhs.refusedOperatorRelays {
+            return false
+        }
         if lhs.activeResources != rhs.activeResources {
             return false
         }
@@ -7845,6 +7862,7 @@ extension RuntimeSnapshot: Equatable, Hashable {
         hasher.combine(droppedErrors)
         hasher.combine(boundaryRefusals)
         hasher.combine(droppedBoundaryRefusals)
+        hasher.combine(refusedOperatorRelays)
         hasher.combine(activeResources)
         hasher.combine(resourceHighWatermark)
         hasher.combine(resourceRefusalCount)
@@ -7874,6 +7892,7 @@ public struct FfiConverterTypeRuntimeSnapshot: FfiConverterRustBuffer {
                 droppedErrors: FfiConverterUInt64.read(from: &buf),
                 boundaryRefusals: FfiConverterSequenceTypeRuntimeRefusal.read(from: &buf),
                 droppedBoundaryRefusals: FfiConverterUInt64.read(from: &buf),
+                refusedOperatorRelays: FfiConverterSequenceTypeRuntimeRefusal.read(from: &buf),
                 activeResources: FfiConverterUInt64.read(from: &buf),
                 resourceHighWatermark: FfiConverterUInt64.read(from: &buf),
                 resourceRefusalCount: FfiConverterUInt64.read(from: &buf)
@@ -7895,6 +7914,7 @@ public struct FfiConverterTypeRuntimeSnapshot: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.droppedErrors, into: &buf)
         FfiConverterSequenceTypeRuntimeRefusal.write(value.boundaryRefusals, into: &buf)
         FfiConverterUInt64.write(value.droppedBoundaryRefusals, into: &buf)
+        FfiConverterSequenceTypeRuntimeRefusal.write(value.refusedOperatorRelays, into: &buf)
         FfiConverterUInt64.write(value.activeResources, into: &buf)
         FfiConverterUInt64.write(value.resourceHighWatermark, into: &buf)
         FfiConverterUInt64.write(value.resourceRefusalCount, into: &buf)

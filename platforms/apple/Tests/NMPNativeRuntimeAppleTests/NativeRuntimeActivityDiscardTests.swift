@@ -79,6 +79,7 @@ final class NativeRuntimeActivityDiscardTests: XCTestCase {
             droppedErrors: droppedErrors,
             boundaryRefusals: [],
             droppedBoundaryRefusals: 0,
+            refusedOperatorRelays: [],
             activeResources: 0,
             resourceHighWatermark: 0,
             resourceRefusalCount: 0

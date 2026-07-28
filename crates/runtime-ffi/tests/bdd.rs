@@ -5,6 +5,8 @@
 // `crate::support` would not resolve. This file is the target's crate root, so
 // `mod` resolves against `tests/` and the path must be spelled out. Same shape
 // as `crates/runtime-app/tests/bdd.rs`.
+#[path = "bdd/operator_relay_steps.rs"]
+mod operator_relay_steps;
 #[path = "bdd/receipt_steps.rs"]
 mod receipt_steps;
 mod support;
@@ -27,6 +29,7 @@ struct RuntimeFfiWorld {
     receipt_rig: Option<ReceiptProjectionRig>,
     receipt: Option<RuntimeReceiptSnapshot>,
     prior_receipt: Option<RuntimeReceiptSnapshot>,
+    relays: operator_relay_steps::OperatorRelayLanes,
 }
 
 impl RuntimeFfiWorld {

@@ -62,6 +62,7 @@ fn snapshot(
         recent_errors: Vec::new(),
         dropped_errors: 0,
         boundary_refusals: Vec::new(),
+        refused_operator_relays: Vec::new(),
         dropped_boundary_refusals: 0,
         active_resources: 0,
         resource_high_watermark: 0,

@@ -116,6 +116,30 @@ impl RuntimeConfig {
             admit_lane("fallback", &self.fallback_relays, maximum_nmp_relays);
         dropped_relays.extend(dropped_app);
         dropped_relays.extend(dropped_fallback);
+        // Degrading a lane is one thing; emptying it is another. A lane that
+        // was configured and survives with nothing left is a runtime routing
+        // through no relays at all while every other signal reads healthy --
+        // so it refuses instead, naming what it could not admit.
+        for (lane, configured, admitted) in [
+            ("indexer", &self.indexer_relays, &indexer_relays),
+            ("app", &self.app_relays, &app_relays),
+            ("fallback", &self.fallback_relays, &fallback_relays),
+        ] {
+            if !configured.is_empty() && admitted.is_empty() {
+                let reasons = dropped_relays
+                    .iter()
+                    .filter(|dropped| dropped.lane == lane)
+                    .map(DroppedRelay::detail)
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                return Err(RuntimeOpenError::InvalidConfig {
+                    detail: format!(
+                        "every configured {lane} relay was refused, leaving that \
+                         lane empty: {reasons}"
+                    ),
+                });
+            }
+        }
 
         Ok(ValidatedConfig {
             runtime_store_path: self.runtime_store_path,
