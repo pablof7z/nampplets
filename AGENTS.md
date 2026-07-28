@@ -101,6 +101,24 @@ schema, or lifecycle state machine. Coordinate changes at the owning boundary.
   artifacts, and misleading "what's on main" answers.
 - Always open a pull request for the change; never push or merge directly into
   `main` from the base checkout.
+- The stash stack is shared with the base checkout and every other worktree,
+  and other agents push and pop it concurrently. Never use bare `git stash` /
+  `git stash pop`: you may silently restore, and then commit, another
+  session's work.
+  - `git stash` on a clean tree **succeeds while saving nothing**. There is no
+    error and no output that reads as a failure, so a later `pop` reaches for
+    whatever is on top of the shared stack — some other session's entry,
+    arbitrarily far from anything you were doing.
+  - Prefer a temporary WIP commit to set work aside. If you must stash, use
+    `git stash push -u -m "<unique-tag>"`, capture your entry's SHA
+    immediately with `git stash list --format='%H %gs'`, restore with
+    `git stash apply <sha>` rather than `pop`, and drop the entry afterwards
+    by re-finding it by tag.
+  - To A/B a change against a moving `main`, use a scratch clone rather than
+    mutating a live worktree. `git reset --soft` in a worktree whose `main`
+    has moved underneath it can stage superseded content, which commits as a
+    revert of someone else's merged work while looking like a routine
+    restage.
 - Agents MUST clean up their worktree immediately once they are done with it
   and the pull request has been published (even if it is still awaiting CI or
   review) — do not hold a worktree open "just in case" while a PR sits
