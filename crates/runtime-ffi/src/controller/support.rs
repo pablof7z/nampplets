@@ -1,5 +1,7 @@
 //! Private controller helpers: capability derivation and bounded refusals.
 
+use std::sync::atomic::Ordering;
+
 use nmp_native_artifact::INDEX_PATH;
 use nmp_native_runtime_core::{Capability, CapabilityRequest, CapabilityRequirement, Principal};
 use nmp_native_runtime_store::InstalledBuild;
@@ -253,10 +255,25 @@ impl RuntimeController {
 
     /// The single bounded-append path for boundary refusals. Eviction past the
     /// cap is counted, never silent: `dropped_boundary_refusals` reports it.
+    /// The revision a native consumer gates on.
+    ///
+    /// Both components only ever increase, so their sum is monotonic: a
+    /// consumer comparing it against the last value it drew can never see it
+    /// go backwards, and sees it move whenever *either* the application state
+    /// or the boundary-refusal record changed. Saturating so exhaustion
+    /// cannot wrap a consumer back onto a revision it has already drawn.
+    pub(crate) fn projected_revision(&self, app_revision: u64) -> u64 {
+        app_revision.saturating_add(self.boundary_refusal_epoch.load(Ordering::Acquire))
+    }
+
     pub(crate) fn record_boundary_refusal(&self, refusal: RuntimeRefusal) {
         self.boundary_refusals
             .lock()
             .push(self.maximum_boundary_events, refusal);
+        // Move the revision consumers gate on, not just the wakeup signal. A
+        // consumer that redraws only when the revision changes would otherwise
+        // skip the very frame carrying this refusal.
+        self.boundary_refusal_epoch.fetch_add(1, Ordering::AcqRel);
         bump_signal(&self.signal);
     }
 }

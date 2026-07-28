@@ -114,7 +114,7 @@ impl RuntimeController {
         };
 
         let candidate = RuntimeSnapshot {
-            revision: source.revision,
+            revision: self.projected_revision(source.revision),
             closed: source.closed,
             installed_library: RuntimeInstalledLibrarySnapshot {
                 query: source.library.query.to_string(),

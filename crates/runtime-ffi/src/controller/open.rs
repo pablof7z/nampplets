@@ -1,5 +1,6 @@
 //! Controller construction: every native capability wiring lives here.
 
+use std::sync::atomic::AtomicU64;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize},
@@ -397,6 +398,7 @@ pub(super) fn open_runtime_controller(
         intent_provider,
         artifacts,
         boundary_refusals: Mutex::new(BoundedFacts::with_capacity(config.maximum_boundary_events)),
+        boundary_refusal_epoch: AtomicU64::new(0),
         refused_operator_relays: dropped_relays
             .iter()
             .map(|dropped| RuntimeRefusal {

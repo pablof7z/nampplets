@@ -21,7 +21,7 @@ use std::{
     path::PathBuf,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
 };
 
@@ -72,6 +72,14 @@ pub struct RuntimeController {
     pub(crate) intent_provider: Arc<IntentProvider>,
     pub(crate) artifacts: Arc<Mutex<BTreeMap<Principal, Arc<VerifiedArtifactHandle>>>>,
     boundary_refusals: Mutex<BoundedFacts<RuntimeRefusal>>,
+    /// Counts boundary refusals so the projected revision moves when one is
+    /// recorded.
+    ///
+    /// Native consumers redraw only when the revision changes. A refusal that
+    /// reaches the snapshot without moving it is invisible: the consumer has
+    /// already decided the frame holds nothing new. Monotonic and never reset,
+    /// so it composes with the app revision without either going backwards.
+    boundary_refusal_epoch: AtomicU64,
     /// Relays refused at open, retained for the whole process lifetime.
     ///
     /// These also reach `boundary_refusals`, but that ring evicts: a busy
