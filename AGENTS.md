@@ -126,10 +126,6 @@ schema, or lifecycle state machine. Coordinate changes at the owning boundary.
 - Before ending a session or handing off in-progress work, leave a clear
   handoff note on the owning GitHub issue or PR with the branch/worktree,
   blocker, and next step so the work can be resumed without context loss.
-- If you have fabric access, you may also tag `@chief-of-staff` via mosaico as
-  an optional extra handoff signal, but that is not the required or exclusive
-  mechanism.
-
 ## Required gates
 
 Run the narrow gate while iterating, then all applicable gates before handoff:
