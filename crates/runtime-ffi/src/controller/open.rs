@@ -59,7 +59,7 @@ impl RuntimeController {
         config: RuntimeConfig,
         artifact_source: Box<dyn ArtifactSource>,
     ) -> Result<Arc<Self>, RuntimeOpenError> {
-        open_runtime_controller(config, artifact_source, None, None, None, None)
+        open_runtime_controller(config, artifact_source, None, None, None, None, Vec::new())
     }
 
     #[uniffi::constructor]
@@ -75,6 +75,7 @@ impl RuntimeController {
             None,
             None,
             None,
+            Vec::new(),
         )
     }
 
@@ -91,6 +92,7 @@ impl RuntimeController {
             Some(Arc::from(settings_executor)),
             None,
             None,
+            Vec::new(),
         )
     }
 
@@ -108,6 +110,7 @@ impl RuntimeController {
             Some(Arc::from(settings_executor)),
             None,
             None,
+            Vec::new(),
         )
     }
 
@@ -126,6 +129,7 @@ impl RuntimeController {
             Some(Arc::from(settings_executor)),
             Some(Arc::from(inc_action_executor)),
             None,
+            Vec::new(),
         )
     }
 
@@ -145,6 +149,7 @@ impl RuntimeController {
             Some(Arc::from(settings_executor)),
             Some(Arc::from(inc_action_executor)),
             Some(Arc::from(intent_activation_executor)),
+            Vec::new(),
         )
     }
 }
@@ -156,6 +161,7 @@ pub(super) fn open_runtime_controller(
     settings_executor: Option<Arc<dyn NativeSettingsExecutor>>,
     inc_action_executor: Option<Arc<dyn NativeIncActionExecutor>>,
     intent_activation_executor: Option<Arc<dyn NativeIntentActivationExecutor>>,
+    extra_providers: Vec<Arc<dyn Provider>>,
 ) -> Result<Arc<RuntimeController>, RuntimeOpenError> {
     let mut config = config.validated()?;
     let runtime_store = Arc::new(
@@ -353,6 +359,7 @@ pub(super) fn open_runtime_controller(
         let provider: Arc<dyn Provider> = provider.clone();
         providers.push(provider);
     }
+    providers.extend(extra_providers);
     let app_limits = AppLimits::default();
     let maximum_envelope_bytes = app_limits.maximum_envelope_bytes;
     let app = RuntimeApp::open(RuntimeAppConfig {

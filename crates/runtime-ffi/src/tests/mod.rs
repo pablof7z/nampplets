@@ -13,6 +13,7 @@ mod permissions;
 mod profile_preferences;
 mod receipt_slot;
 mod receipts;
+mod rust_provider_composition;
 mod snapshot_delivery;
 mod snapshot_integrity;
 mod test_support;

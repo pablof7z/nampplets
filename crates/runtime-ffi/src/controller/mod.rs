@@ -10,6 +10,7 @@ mod permission_changes;
 mod permissions;
 mod preferences;
 mod providers;
+mod rust_providers;
 mod session;
 mod snapshot;
 pub(crate) mod support;
