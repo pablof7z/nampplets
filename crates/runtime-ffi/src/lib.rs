@@ -7,6 +7,7 @@
 
 mod activity;
 mod catalog;
+mod catalog_coordinate;
 mod config;
 mod controller;
 mod diagnostics;

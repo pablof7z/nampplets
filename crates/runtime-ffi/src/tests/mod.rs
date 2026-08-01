@@ -40,9 +40,8 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 use crate::{
-    projection::{parse_catalog_coordinate, project_event},
-    workspace::workspace_record_from_ffi,
-    *,
+    catalog_coordinate::parse_catalog_coordinate, projection::project_event,
+    workspace::workspace_record_from_ffi, *,
 };
 
 use test_support::*;

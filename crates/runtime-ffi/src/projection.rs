@@ -83,43 +83,6 @@ pub(crate) fn map_coordinate(coordinate: ArtifactCoordinate) -> Result<ManifestC
     .map_err(|error| error.to_string())
 }
 
-pub(crate) fn parse_catalog_coordinate(value: &str) -> Result<ManifestCoordinate, String> {
-    if value.is_empty()
-        || value.len() > 2_048
-        || value.chars().any(char::is_control)
-        || value.trim() != value
-    {
-        return Err(
-            "coordinate must be 1..=2048 UTF-8 bytes without controls or surrounding whitespace"
-                .to_owned(),
-        );
-    }
-    let mut fields = value.splitn(3, ':');
-    let kind = fields.next().unwrap_or_default();
-    let first = fields
-        .next()
-        .ok_or_else(|| "coordinate is missing its author or event identifier".to_owned())?;
-    let second = fields.next();
-    let coordinate = match (kind, second) {
-        ("5129", Some(author)) => ManifestCoordinate::snapshot(first, author),
-        ("15129", None) => ManifestCoordinate::root(first),
-        ("35129", Some(d_tag)) => ManifestCoordinate::named(first, d_tag),
-        ("5129", None) => {
-            return Err("snapshot coordinate must be 5129:event-id:author".to_owned());
-        }
-        ("35129", None) => {
-            return Err("named coordinate must be 35129:author:d-tag".to_owned());
-        }
-        _ => {
-            return Err(
-                "supported coordinates are 5129:event-id:author, 15129:author, and 35129:author:d-tag"
-                    .to_owned(),
-            );
-        }
-    };
-    coordinate.map_err(|error| error.to_string())
-}
-
 pub(crate) fn runtime_catalog_failure(
     code: impl Into<String>,
     detail: impl Into<String>,

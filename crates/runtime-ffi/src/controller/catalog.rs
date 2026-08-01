@@ -20,9 +20,8 @@ use super::{
 use crate::{
     RuntimeCatalogCancellationResult, RuntimeCatalogConfirmationResult, RuntimeCatalogFailure,
     RuntimeCatalogFeedSnapshot, RuntimeCatalogPageResult, RuntimeCatalogReviewResult,
-    RuntimeExactBuildCoordinate, VerifiedArtifact,
-    catalog::project_catalog_error,
-    projection::{parse_catalog_coordinate, runtime_catalog_failure},
+    RuntimeExactBuildCoordinate, VerifiedArtifact, catalog::project_catalog_error,
+    catalog_coordinate::parse_catalog_coordinate, projection::runtime_catalog_failure,
 };
 
 #[uniffi::export]
