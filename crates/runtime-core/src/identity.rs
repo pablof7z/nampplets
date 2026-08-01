@@ -97,6 +97,8 @@ pub enum PublicIdentityError {
     QueryUnavailable { query: Arc<str> },
     #[error("identity query was cancelled")]
     Cancelled,
+    #[error("identity cancellation wake capacity {capacity} is full")]
+    CancellationCapacity { capacity: usize },
     #[error("identity projection exceeded its negotiated bound")]
     LimitExceeded,
     #[error("identity source returned invalid public data")]

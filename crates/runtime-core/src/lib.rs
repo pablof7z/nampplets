@@ -13,7 +13,9 @@ mod lists;
 mod principal;
 mod resources;
 
-pub use cancellation::{Cancellation, Cancelled};
+pub use cancellation::{
+    Cancellation, CancellationWakeError, CancellationWakeRegistration, Cancelled,
+};
 pub use grants::{
     Capability, CapabilityRequest, CapabilityRequirement, GrantBatchError, GrantDecision,
     GrantError, GrantLedger, GrantLimits, Sensitivity,

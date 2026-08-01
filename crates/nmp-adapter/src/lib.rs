@@ -36,8 +36,10 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod catalog;
+mod debug;
 pub mod diagnostics;
 mod identity;
+mod identity_refresh;
 use identity::{
     identity_read_without_account, map_identity_engine_error, project_identity_frame,
     public_identity_query_name, supported_identity_kind, validate_identity_read_limits,
@@ -63,6 +65,7 @@ pub struct NmpDataPlane {
     workers: Arc<WorkerAdmission>,
     accounts: Mutex<AccountState>,
     identity: Arc<Mutex<IdentityState>>,
+    identity_network_refresh: bool,
     closed: AtomicBool,
 }
 
@@ -144,21 +147,6 @@ struct IdentityState {
     observers: BTreeMap<u64, Arc<dyn PublicIdentityChangeSink>>,
 }
 
-impl fmt::Debug for NmpDataPlane {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("NmpDataPlane")
-            .field(
-                "active_workers",
-                &self.workers.active.load(Ordering::Acquire),
-            )
-            .field("maximum_workers", &self.workers.maximum)
-            .field("identity_observers", &self.identity.lock().observers.len())
-            .field("closed", &self.closed.load(Ordering::Acquire))
-            .finish()
-    }
-}
-
 impl NmpDataPlane {
     pub fn open(
         config: EngineConfig,
@@ -169,8 +157,13 @@ impl NmpDataPlane {
                 reason: Arc::from("maximum bridge workers must be non-zero"),
             });
         }
+        let identity_network_refresh = !config.indexer_relays.is_empty()
+            || !config.app_relays.is_empty()
+            || !config.fallback_relays.is_empty();
         let engine = Engine::new(config).map_err(map_open_engine_error)?;
-        Ok(Self::from_engine(Arc::new(engine), maximum_bridge_workers))
+        let mut data_plane = Self::from_engine(Arc::new(engine), maximum_bridge_workers);
+        data_plane.identity_network_refresh = identity_network_refresh;
+        Ok(data_plane)
     }
 
     pub fn from_engine(engine: Arc<Engine>, maximum_bridge_workers: usize) -> Self {
@@ -208,6 +201,7 @@ impl NmpDataPlane {
                 next_observer_id: 0,
                 observers: BTreeMap::new(),
             })),
+            identity_network_refresh: true,
             closed: AtomicBool::new(false),
         }
     }
@@ -838,7 +832,7 @@ impl PublicIdentityDataPlane for NmpDataPlane {
         let subscription = self
             .engine
             .observe(
-                LiveQuery::from_filter(filter),
+                identity_refresh::public_identity_live_query(filter)?,
                 Some(Window::Expandable {
                     initial: window_size,
                     max: window_size,
@@ -849,15 +843,12 @@ impl PublicIdentityDataPlane for NmpDataPlane {
             subscription.cancel();
             return Err(PublicIdentityError::Cancelled);
         }
-        let frame = subscription.recv().map_err(|_| {
-            if self.closed.load(Ordering::Acquire) {
-                PublicIdentityError::Closed
-            } else {
-                PublicIdentityError::Failed {
-                    reason: Arc::from("NMP identity observation closed before its first frame"),
-                }
-            }
-        })?;
+        let frame = identity_refresh::receive_identity_frame(
+            subscription,
+            cancellation,
+            &self.closed,
+            self.identity_network_refresh,
+        )?;
         if cancellation.is_cancelled() {
             return Err(PublicIdentityError::Cancelled);
         }
